@@ -1,0 +1,6 @@
+CREATE TABLE categories (
+    id UUID PRIMARY KEY,
+    name VARCHAR(120) NOT NULL UNIQUE,
+    slug VARCHAR(140) NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
