@@ -18,7 +18,7 @@ class InventoryService(
 
     @Transactional(readOnly = true)
     fun search(title: String?, categoryId: UUID?, status: InventoryStatus?, pageable: Pageable): PageResponse<InventoryItemDto> =
-        items.search(title?.takeIf { it.isNotBlank() }, categoryId, status, pageable).toPageResponse { it.toDto() }
+        items.search(title?.trim().orEmpty(), categoryId, status, pageable).toPageResponse { it.toDto() }
 
     @Transactional(readOnly = true)
     fun getById(id: UUID): InventoryItemDto = findOrThrow(id).toDto()

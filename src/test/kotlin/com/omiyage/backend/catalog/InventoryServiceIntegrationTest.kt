@@ -12,7 +12,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest
 @Transactional
 class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 

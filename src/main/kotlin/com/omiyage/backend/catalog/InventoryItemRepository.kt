@@ -13,13 +13,13 @@ interface InventoryItemRepository : JpaRepository<InventoryItem, UUID> {
         """
         SELECT DISTINCT i FROM InventoryItem i
         LEFT JOIN i.categories c
-        WHERE (:title IS NULL OR LOWER(i.title) LIKE LOWER(CONCAT('%', :title, '%')))
+        WHERE (:title = '' OR LOWER(i.title) LIKE LOWER(CONCAT('%', :title, '%')))
         AND (:categoryId IS NULL OR c.id = :categoryId)
         AND (:status IS NULL OR i.status = :status)
         """,
     )
     fun search(
-        @Param("title") title: String?,
+        @Param("title") title: String,
         @Param("categoryId") categoryId: UUID?,
         @Param("status") status: InventoryStatus?,
         pageable: Pageable,

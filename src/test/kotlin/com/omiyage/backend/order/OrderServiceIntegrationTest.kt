@@ -20,7 +20,7 @@ import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
 import java.util.UUID
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest
 @Transactional
 class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 

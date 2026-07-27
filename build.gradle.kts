@@ -4,6 +4,7 @@ plugins {
     kotlin("plugin.jpa") version "2.3.21"
     id("org.springframework.boot") version "3.3.4"
     id("io.spring.dependency-management") version "1.1.6"
+    jacoco
 }
 
 group = "com.omiyage"
@@ -14,7 +15,7 @@ repositories {
 }
 
 val awsSdkVersion = "2.28.11"
-val testcontainersVersion = "1.20.2"
+val testcontainersVersion = "1.21.3"
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
@@ -43,7 +44,6 @@ dependencies {
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:minio")
     testImplementation("software.amazon.awssdk:s3")
-    testImplementation("com.github.tomakehurst:wiremock-jre8:3.0.1")
 }
 
 kotlin {
@@ -55,4 +55,38 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    classDirectories.setFrom(
+        files(
+            classDirectories.files.map {
+                fileTree(it) {
+                    // Nothing meaningful to cover: Spring Boot entrypoint, JPA entities (getters/
+                    // setters/constructors only), and plain data-carrying DTOs/config classes.
+                    exclude(
+                        "**/OmiyageApplication*",
+                        "**/*Entity*",
+                        "**/catalog/Category.class",
+                        "**/catalog/InventoryItem*.class",
+                        "**/order/Order.class",
+                        "**/order/OrderItem.class",
+                        "**/user/UserProfile.class",
+                        "**/*Dto*.class",
+                        "**/config/*Properties.class",
+                    )
+                }
+            },
+        ),
+    )
 }
