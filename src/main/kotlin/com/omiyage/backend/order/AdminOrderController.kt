@@ -32,5 +32,5 @@ class AdminOrderController(private val service: OrderService) {
         @PathVariable id: UUID,
         @PathVariable itemId: UUID,
         @Valid @RequestBody request: UpdateOrderItemRequest,
-    ): OrderDto = service.updateItem(id, itemId, request.purchased, request.actualPrice)
+    ): OrderDto = service.updateItem(id, itemId, request.purchased, request.actualPrice, request.weight)
 }

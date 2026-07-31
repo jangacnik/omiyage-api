@@ -3,7 +3,6 @@ package com.omiyage.backend.order
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
-import com.omiyage.backend.user.UserProfileService
 import com.omiyage.backend.web.PageResponse
 import com.omiyage.backend.web.toPageResponse
 import org.springframework.data.domain.Pageable
@@ -19,13 +18,10 @@ class OrderService(
     private val orders: OrderRepository,
     private val orderItems: OrderItemRepository,
     private val inventoryItems: InventoryItemRepository,
-    private val userProfiles: UserProfileService,
 ) {
 
     @Transactional
     fun create(principal: MeishiPrincipal, request: CreateOrderRequest): OrderDto {
-        userProfiles.ensureProfile(principal)
-
         val order = Order(userId = principal.id, notes = request.notes)
         request.items.forEach { order.items.add(buildOrderItem(order, it)) }
         return orders.save(order).toDto()
@@ -58,7 +54,7 @@ class OrderService(
     }
 
     @Transactional
-    fun updateItem(orderId: UUID, itemId: UUID, purchased: Boolean, actualPrice: java.math.BigDecimal?): OrderDto {
+    fun updateItem(orderId: UUID, itemId: UUID, purchased: Boolean, actualPrice: java.math.BigDecimal?, weight: java.math.BigDecimal? = null): OrderDto {
         val item = orderItems.findById(itemId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
         if (item.order.id != orderId) {
@@ -67,8 +63,33 @@ class OrderService(
         item.purchased = purchased
         item.purchasedAt = if (purchased) OffsetDateTime.now() else null
         item.actualPrice = actualPrice
+        item.weight = weight
         item.updatedAt = OffsetDateTime.now()
         return item.order.toDto()
+    }
+
+    @Transactional
+    fun updateOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal, request: UpdateOwnOrderItemRequest): OrderDto {
+        val order = findOrThrow(orderId)
+        if (order.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        if (order.status != OrderStatus.REQUESTED && order.status != OrderStatus.IN_PROGRESS) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "order is no longer editable")
+        }
+        val item = orderItems.findById(itemId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
+        if (item.order.id != orderId) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found")
+        }
+
+        request.title?.let { item.customTitle = it }
+        request.description?.let { item.customDescription = it }
+        request.imageKey?.let { item.customImageKey = it }
+        request.maxPrice?.let { item.maxPrice = it }
+        request.quantity?.let { item.quantity = it }
+        item.updatedAt = OffsetDateTime.now()
+        return order.toDto()
     }
 
     private fun buildOrderItem(order: Order, request: CreateOrderItemRequest): OrderItem {

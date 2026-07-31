@@ -24,6 +24,7 @@ data class OrderItemDto(
     val purchased: Boolean,
     val purchasedAt: OffsetDateTime?,
     val quantity: Int,
+    val weight: BigDecimal?,
 )
 
 fun OrderItem.toDto(): OrderItemDto {
@@ -41,6 +42,7 @@ fun OrderItem.toDto(): OrderItemDto {
         purchased = purchased,
         purchasedAt = purchasedAt,
         quantity = quantity,
+        weight = weight,
     )
 }
 
@@ -85,4 +87,13 @@ data class UpdateOrderStatusRequest(@field:NotNull val status: OrderStatus)
 data class UpdateOrderItemRequest(
     @field:NotNull val purchased: Boolean,
     @field:DecimalMin("0.0") val actualPrice: BigDecimal? = null,
+    val weight: BigDecimal? = null,
+)
+
+data class UpdateOwnOrderItemRequest(
+    val title: String? = null,
+    val description: String? = null,
+    val imageKey: String? = null,
+    @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
+    @field:Min(1) val quantity: Int? = null,
 )
