@@ -1,0 +1,94 @@
+# __IMAGE__ is substituted by the deploy CI job (see .gitlab-ci.yml) with
+# $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA before kubectl apply.
+#
+# Needs, created once out of band (not by CI):
+#   kubectl create secret generic omiyage-api-secrets \
+#     --from-literal=db-host='...' --from-literal=db-port='5432' \
+#     --from-literal=db-name='omiyage' --from-literal=db-user='...' \
+#     --from-literal=db-password='...' --from-literal=meishi-jwt-secret='...' \
+#     --from-literal=meishi-api-url='http://meishi-api.default.svc.cluster.local:8080' \
+#     --from-literal=minio-endpoint='http://minio.default.svc.cluster.local:9000' \
+#     --from-literal=minio-access-key='...' --from-literal=minio-secret-key='...' \
+#     --from-literal=minio-bucket='omiyage'
+#
+# Also needs "regcred" (shared cluster-wide docker-registry secret, already
+# created for meishi-api/tcg-accumulator) so the cluster can pull the image.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omiyage-api
+  labels:
+    app: omiyage-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: omiyage-api
+  template:
+    metadata:
+      labels:
+        app: omiyage-api
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: app
+          image: __IMAGE__
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: db-host }
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: db-port }
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: db-name }
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: db-user }
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: db-password }
+            - name: MEISHI_JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: meishi-jwt-secret }
+            - name: MEISHI_API_URL
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: meishi-api-url }
+            - name: MINIO_ENDPOINT
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: minio-endpoint }
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: minio-access-key }
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: minio-secret-key }
+            - name: MINIO_BUCKET
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: minio-bucket }
+            - name: FRONTEND_ORIGIN
+              value: "https://omiyage.gacnikhome.duckdns.org"
+          resources:
+            requests:
+              cpu: 150m
+              memory: 384Mi
+            limits:
+              cpu: 750m
+              memory: 896Mi
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 25
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 15

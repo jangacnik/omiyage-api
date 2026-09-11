@@ -31,6 +31,8 @@ omiyage:
     access-key: ${MINIO_ACCESS_KEY:omiyage}
     secret-key: ${MINIO_SECRET_KEY:omiyage123}
     bucket: ${MINIO_BUCKET:omiyage}
+  cors:
+    allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
 
 management:
   endpoints:
