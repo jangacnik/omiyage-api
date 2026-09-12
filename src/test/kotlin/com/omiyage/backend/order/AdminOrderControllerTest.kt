@@ -52,6 +52,7 @@ class AdminOrderControllerTest {
         userId = UUID.randomUUID(),
         status = status,
         notes = null,
+        nickname = null,
         shipmentId = shipmentId,
         createdAt = OffsetDateTime.now(),
         updatedAt = OffsetDateTime.now(),

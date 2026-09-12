@@ -15,6 +15,8 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OrderBy
 import jakarta.persistence.Table
+import org.hibernate.annotations.SQLDelete
+import org.hibernate.annotations.SQLRestriction
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -22,6 +24,8 @@ enum class OrderStatus { REQUESTED, IN_PROGRESS, PURCHASED, SENT, DELIVERED, CAN
 
 @Entity
 @Table(name = "orders")
+@SQLDelete(sql = "UPDATE orders SET deleted_at = now() WHERE id = ?")
+@SQLRestriction("deleted_at IS NULL")
 class Order(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -52,4 +56,7 @@ class Order(
     @OneToMany(mappedBy = "order", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("createdAt ASC")
     val items: MutableList<OrderItem> = mutableListOf(),
+
+    @Column(name = "deleted_at")
+    var deletedAt: OffsetDateTime? = null,
 )

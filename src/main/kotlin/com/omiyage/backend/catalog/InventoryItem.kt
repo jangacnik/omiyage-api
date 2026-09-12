@@ -16,6 +16,8 @@ import jakarta.persistence.ManyToMany
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OrderBy
 import jakarta.persistence.Table
+import org.hibernate.annotations.SQLDelete
+import org.hibernate.annotations.SQLRestriction
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -24,6 +26,8 @@ enum class InventoryStatus { ACTIVE, ARCHIVED }
 
 @Entity
 @Table(name = "inventory_items")
+@SQLDelete(sql = "UPDATE inventory_items SET deleted_at = now() WHERE id = ?")
+@SQLRestriction("deleted_at IS NULL")
 class InventoryItem(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -69,4 +73,7 @@ class InventoryItem(
         inverseJoinColumns = [JoinColumn(name = "category_id")],
     )
     val categories: MutableSet<Category> = mutableSetOf(),
+
+    @Column(name = "deleted_at")
+    var deletedAt: OffsetDateTime? = null,
 )
