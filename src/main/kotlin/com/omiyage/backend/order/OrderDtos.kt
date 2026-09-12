@@ -23,6 +23,9 @@ data class OrderItemDto(
     val maxPrice: BigDecimal?,
     val actualPrice: BigDecimal?,
     val status: OrderItemStatus,
+    val paid: Boolean,
+    val paidAt: OffsetDateTime?,
+    val link: String?,
     val purchasedAt: OffsetDateTime?,
     val quantity: Int,
     val weight: BigDecimal?,
@@ -41,6 +44,9 @@ fun OrderItem.toDto(): OrderItemDto {
         maxPrice = maxPrice,
         actualPrice = actualPrice,
         status = status,
+        paid = paid,
+        paidAt = paidAt,
+        link = link ?: linked?.link,
         purchasedAt = purchasedAt,
         quantity = quantity,
         weight = weight,
@@ -64,9 +70,10 @@ data class OrderDto(
     val shippingCostShareJpy: Int? = null,
 )
 
-// Once an order has shipped (or been cancelled) its contents are settled - only REQUESTED,
-// IN_PROGRESS and PURCHASED are still open to being edited or added to by the owner.
-private val CLOSED_ORDER_STATUSES = setOf(OrderStatus.SENT, OrderStatus.DELIVERED, OrderStatus.CANCELLED)
+// Once an order is being prepared for shipping (or has shipped/been cancelled) its contents are
+// settled - only REQUESTED, IN_PROGRESS and PURCHASED are still open to being edited or added to.
+private val CLOSED_ORDER_STATUSES =
+    setOf(OrderStatus.PREPARING_SHIPPING, OrderStatus.SENT, OrderStatus.DELIVERED, OrderStatus.CANCELLED)
 
 val Order.isOpen: Boolean get() = status !in CLOSED_ORDER_STATUSES
 
@@ -96,6 +103,7 @@ data class CreateOrderItemRequest(
     @field:NotNull val currency: Currency,
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
     @field:Min(1) val quantity: Int = 1,
+    @field:Size(max = 2048) val link: String? = null,
 )
 
 data class CreateOrderRequest(
@@ -117,7 +125,10 @@ data class UpdateOwnOrderItemRequest(
     val imageKey: String? = null,
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
     @field:Min(1) val quantity: Int? = null,
+    @field:Size(max = 2048) val link: String? = null,
 )
+
+data class MarkItemPaidRequest(@field:NotNull val paid: Boolean)
 
 data class MergeOrdersRequest(@field:NotEmpty val orderIds: List<UUID>)
 

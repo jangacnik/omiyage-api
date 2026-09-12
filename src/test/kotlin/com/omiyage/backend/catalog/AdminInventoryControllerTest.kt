@@ -59,6 +59,7 @@ class AdminInventoryControllerTest {
         id = UUID.randomUUID(),
         title = req.title,
         description = req.description,
+        link = req.link,
         condition = req.condition,
         priceAmount = req.priceAmount,
         currency = req.currency,

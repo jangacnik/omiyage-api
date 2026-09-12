@@ -11,6 +11,15 @@ import java.util.UUID
 
 class ShipmentDtosTest {
 
+    // toDto() no longer looks up rates itself (that's ShippingRateService, backed by the DB) - a
+    // small in-memory stub is enough to exercise the cost-sharing/rounding math these tests cover.
+    private fun stubRates(method: ShippingMethod, destination: ShipmentDestination, grams: Int): ShippingQuote? =
+        when (method) {
+            ShippingMethod.EMS -> if (grams <= 1000) ShippingQuote(4400, 7) else null
+            ShippingMethod.SMALL_PACKET -> if (grams <= 2000) ShippingQuote(3930, 12) else null
+            ShippingMethod.SURFACE_MAIL -> null
+        }
+
     private fun orderWeighing(grams: Int): Order {
         val order = Order(id = UUID.randomUUID(), userId = UUID.randomUUID())
         order.items.add(
@@ -31,7 +40,7 @@ class ShipmentDtosTest {
         val shipment = Shipment(id = UUID.randomUUID())
         shipment.orders.add(orderWeighing(500))
 
-        val dto = shipment.toDto()
+        val dto = shipment.toDto(::stubRates)
 
         assertEquals(BigDecimal(500), dto.totalWeightGrams)
         assertNull(dto.shippingCostJpy)
@@ -44,7 +53,7 @@ class ShipmentDtosTest {
         shipment.orders.add(orderWeighing(300))
         shipment.orders.add(orderWeighing(700))
 
-        val dto = shipment.toDto()
+        val dto = shipment.toDto(::stubRates)
 
         assertEquals(BigDecimal(1000), dto.totalWeightGrams)
         assertEquals(4400, dto.shippingCostJpy) // EMS, Third Zone, up to 1kg
@@ -59,7 +68,7 @@ class ShipmentDtosTest {
         val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.SLOVENIA, shippingMethod = ShippingMethod.SMALL_PACKET)
         shipment.orders.add(orderWeighing(2500)) // over Small Packet's 2kg cap
 
-        val dto = shipment.toDto()
+        val dto = shipment.toDto(::stubRates)
 
         assertEquals(BigDecimal(2500), dto.totalWeightGrams)
         assertNull(dto.shippingCostJpy)

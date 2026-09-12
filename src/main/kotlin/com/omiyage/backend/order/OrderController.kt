@@ -52,6 +52,9 @@ class OrderController(private val service: OrderService) {
     @PostMapping("/{id}/cancel")
     fun cancelMine(@PathVariable id: UUID): OrderDto = service.cancelOwn(id, CurrentUser.principal())
 
+    @PostMapping("/{id}/submit-for-shipping")
+    fun submitForShipping(@PathVariable id: UUID): OrderDto = service.submitForShipping(id, CurrentUser.principal())
+
     @PatchMapping("/{id}/items/{itemId}")
     fun updateOwnItem(
         @PathVariable id: UUID,

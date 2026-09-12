@@ -65,6 +65,14 @@ class OrderItem(
     @Column(nullable = false)
     var status: OrderItemStatus = OrderItemStatus.REQUESTED,
 
+    @Column(nullable = false)
+    var paid: Boolean = false,
+
+    @Column(name = "paid_at")
+    var paidAt: OffsetDateTime? = null,
+
+    var link: String? = null,
+
     @Column(name = "purchased_at")
     var purchasedAt: OffsetDateTime? = null,
 

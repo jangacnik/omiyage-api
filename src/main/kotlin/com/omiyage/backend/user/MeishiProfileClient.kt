@@ -8,7 +8,7 @@ import org.springframework.web.client.RestClient
 import org.springframework.web.client.body
 import org.springframework.web.server.ResponseStatusException
 
-private data class MeishiErrorResponse(val error: String? = null)
+internal data class MeishiErrorResponse(val error: String? = null)
 
 /** Proxies /api/users/me to MeishiApi, which is now the source of truth for profile data. */
 @Component

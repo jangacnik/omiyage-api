@@ -116,6 +116,16 @@ class OrderService(
     }
 
     @Transactional
+    fun adminMarkItemPaid(orderId: UUID, itemId: UUID, paid: Boolean): OrderDto {
+        val order = findOrThrow(orderId)
+        val item = ownItemOrThrow(order, itemId)
+        item.paid = paid
+        item.paidAt = if (paid) OffsetDateTime.now() else null
+        item.updatedAt = OffsetDateTime.now()
+        return order.toDto()
+    }
+
+    @Transactional
     fun removeOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal): OrderDto {
         val order = findOrThrow(orderId)
         if (order.userId != principal.id) {
@@ -145,6 +155,27 @@ class OrderService(
         }
         order.status = OrderStatus.CANCELLED
         order.updatedAt = OffsetDateTime.now()
+        return order.toDto()
+    }
+
+    // Only the order's own owner (no shipment yet) or the shipment's owner (set when orders were
+    // combined - see ShipmentService.create) may submit it. Submitting flips every still-open
+    // order on the shipment to PREPARING_SHIPPING, not just the one the caller named, since the
+    // shipment moves as a unit even if it holds other users' orders too.
+    @Transactional
+    fun submitForShipping(orderId: UUID, principal: MeishiPrincipal): OrderDto {
+        val order = findOrThrow(orderId)
+        val shipment = order.shipment
+        val authorizedUserId = shipment?.ownerUserId ?: order.userId
+        if (authorizedUserId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        requireOpen(order)
+        val targets = shipment?.orders?.filter { it.isOpen } ?: listOf(order)
+        targets.forEach { target ->
+            target.status = OrderStatus.PREPARING_SHIPPING
+            target.updatedAt = OffsetDateTime.now()
+        }
         return order.toDto()
     }
 
@@ -244,6 +275,7 @@ class OrderService(
         request.imageKey?.let { item.customImageKey = it }
         request.maxPrice?.let { item.maxPrice = it }
         request.quantity?.let { item.quantity = it }
+        request.link?.let { item.link = it }
         item.updatedAt = OffsetDateTime.now()
     }
 
@@ -275,6 +307,7 @@ class OrderService(
                 currency = request.currency,
                 maxPrice = request.maxPrice,
                 quantity = request.quantity,
+                link = request.link,
             )
         }
 
@@ -293,6 +326,7 @@ class OrderService(
             currency = request.currency,
             maxPrice = request.maxPrice,
             quantity = request.quantity,
+            link = request.link,
         )
     }
 

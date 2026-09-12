@@ -283,18 +283,46 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun `combining orders into a shipment deletes an order's now-empty previous shipment`() {
+    fun `combining a solo order (listed first) with others absorbs them into its existing shipment`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-
-        // solo gets its own shipment first, then gets combined into a new shipment together with
-        // a and b - that first shipment should end up with zero orders and be deleted.
         val soloShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
-        shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id, a.id, b.id), notes = null))
 
-        assertFalse(orderRepository.existsByShipment_Id(soloShipment.id) || shipmentRepository.existsById(soloShipment.id))
+        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id, a.id, b.id), notes = null))
+
+        assertEquals(soloShipment.id, combined.id)
+        assertTrue(shipmentRepository.existsById(soloShipment.id))
+        assertEquals(3, combined.orders.size)
+        assertEquals(owner.id, combined.ownerUserId)
+    }
+
+    @Test
+    fun `combining two orders each already on their own shipment keeps only the absorbing (first-listed) one`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        val shipmentB = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id), notes = null))
+
+        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+
+        assertEquals(shipmentA.id, combined.id)
+        assertTrue(shipmentRepository.existsById(shipmentA.id))
+        assertFalse(shipmentRepository.existsById(shipmentB.id))
+    }
+
+    @Test
+    fun `an order that is no longer open cannot be combined into a shipment`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+        orderService.updateStatus(b.id, OrderStatus.SENT)
+
+        assertThrows(ResponseStatusException::class.java) {
+            shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        }
     }
 
     @Test
@@ -378,5 +406,84 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         // The order itself must still load cleanly - this is exactly the dangling-FK class of bug
         // fixed earlier for soft-deleted inventory items.
         assertEquals(a.id, orderService.getById(a.id, owner).id)
+    }
+
+    @Test
+    fun `a solo order's own owner can submit it for shipping`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+
+        val submitted = orderService.submitForShipping(order.id, owner)
+
+        assertEquals(OrderStatus.PREPARING_SHIPPING, submitted.status)
+        assertFalse(submitted.open)
+    }
+
+    @Test
+    fun `only the shipment's owner (the absorbing order's user) can submit a combined shipment`() {
+        val owner = user()
+        val other = user()
+        val mine = singleItemOrder(owner, "mine")
+        val theirs = singleItemOrder(other, "theirs")
+        shipmentService.create(CreateShipmentRequest(orderIds = listOf(mine.id, theirs.id), notes = null))
+
+        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(theirs.id, other) }
+
+        val submitted = orderService.submitForShipping(theirs.id, owner)
+        assertEquals(OrderStatus.PREPARING_SHIPPING, submitted.status)
+        // Submitting moves the whole shipment, not just the order the owner happened to name.
+        assertEquals(OrderStatus.PREPARING_SHIPPING, orderService.getById(mine.id, owner).status)
+    }
+
+    @Test
+    fun `submitting for shipping requires the order still be open`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+        orderService.updateStatus(order.id, OrderStatus.CANCELLED)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(order.id, owner) }
+    }
+
+    @Test
+    fun `admin can mark an item paid and unpaid, tracking paidAt`() {
+        val order = singleItemOrder()
+        val itemId = order.items[0].id
+
+        val paid = orderService.adminMarkItemPaid(order.id, itemId, true)
+        val paidItem = paid.items.first { it.id == itemId }
+        assertTrue(paidItem.paid)
+        assertEquals(paidItem.paidAt != null, true)
+
+        val unpaid = orderService.adminMarkItemPaid(order.id, itemId, false)
+        val unpaidItem = unpaid.items.first { it.id == itemId }
+        assertFalse(unpaidItem.paid)
+        assertNull(unpaidItem.paidAt)
+    }
+
+    @Test
+    fun `an item's optional link round-trips through create and edit`() {
+        val owner = user()
+        val order = orderService.create(
+            owner,
+            CreateOrderRequest(
+                items = listOf(
+                    CreateOrderItemRequest(
+                        title = "A",
+                        condition = Condition.NEW,
+                        currency = Currency.JPY,
+                        link = "https://example.com/product",
+                    ),
+                ),
+            ),
+        )
+        assertEquals("https://example.com/product", order.items[0].link)
+
+        val edited = orderService.updateOwnItem(
+            order.id,
+            order.items[0].id,
+            owner,
+            UpdateOwnOrderItemRequest(link = "https://example.com/updated"),
+        )
+        assertEquals("https://example.com/updated", edited.items[0].link)
     }
 }

@@ -20,7 +20,7 @@ import org.hibernate.annotations.SQLRestriction
 import java.time.OffsetDateTime
 import java.util.UUID
 
-enum class OrderStatus { REQUESTED, IN_PROGRESS, PURCHASED, SENT, DELIVERED, CANCELLED }
+enum class OrderStatus { REQUESTED, IN_PROGRESS, PURCHASED, PREPARING_SHIPPING, SENT, DELIVERED, CANCELLED }
 
 @Entity
 @Table(name = "orders")
