@@ -56,8 +56,12 @@ class OrderService(
     @Transactional
     fun updateStatus(id: UUID, status: OrderStatus): OrderDto {
         val order = findOrThrow(id)
-        order.status = status
-        order.updatedAt = OffsetDateTime.now()
+        if (status == OrderStatus.CANCELLED) {
+            cancelAndDetach(order)
+        } else {
+            order.status = status
+            order.updatedAt = OffsetDateTime.now()
+        }
         return order.toDto()
     }
 
@@ -154,8 +158,7 @@ class OrderService(
         if (order.items.any { it.status in LOCKED_ITEM_STATUSES }) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "order has items already bought or shipped and cannot be cancelled")
         }
-        order.status = OrderStatus.CANCELLED
-        order.updatedAt = OffsetDateTime.now()
+        cancelAndDetach(order)
         return order.toDto()
     }
 
@@ -251,6 +254,22 @@ class OrderService(
         order.nickname = nickname?.trim()?.ifBlank { null }
         order.updatedAt = OffsetDateTime.now()
         return order.toDto()
+    }
+
+    // A cancelled order has nothing left to ship - leaving it attached would keep billing it a
+    // shipping-cost share and counting its weight against the shipment (see ShipmentDtos.toDto).
+    // Shared by both the user-facing cancel and the admin status-update path so neither can
+    // leave a cancelled order dangling on a shipment.
+    private fun cancelAndDetach(order: Order) {
+        order.status = OrderStatus.CANCELLED
+        order.updatedAt = OffsetDateTime.now()
+        val shipmentId = order.shipment?.id
+        if (shipmentId != null) {
+            order.shipment = null
+            if (!orders.existsByShipment_Id(shipmentId)) {
+                shipments.deleteById(shipmentId)
+            }
+        }
     }
 
     private fun requireOpen(order: Order) {

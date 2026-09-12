@@ -19,7 +19,10 @@ class DashboardService(
 
     @Transactional(readOnly = true)
     fun userDashboard(authHeader: String): List<UserDashboardEntryDto> =
-        meishiAdmin.listUsers(authHeader).map { user -> entryFor(user) }
+        // An unactivated shell account (created via the admin "create user" flow but never
+        // activated) has no nickname and can't have placed an order under a real session - skip
+        // it rather than show a nameless, order-less row.
+        meishiAdmin.listUsers(authHeader).filter { it.activated }.map { user -> entryFor(user) }
 
     private fun entryFor(user: UserProfileDto): UserDashboardEntryDto {
         val userOrders = orders.findByUserId(user.id, Pageable.unpaged()).content

@@ -20,6 +20,12 @@ class ShipmentDtosTest {
             ShippingMethod.SURFACE_MAIL -> null
         }
 
+    // Mirrors ExchangeRateService.toEurWithMarkup's formula (rate 150 JPY/EUR, +10% markup) without
+    // needing the DB-backed service - these tests only care about the cost-sharing math above it.
+    private fun stubToEur(jpyAmount: Int): BigDecimal =
+        BigDecimal(jpyAmount).divide(BigDecimal(150), 6, java.math.RoundingMode.HALF_UP)
+            .multiply(BigDecimal("1.10")).setScale(2, java.math.RoundingMode.HALF_UP)
+
     private fun orderWeighing(grams: Int): Order {
         val order = Order(id = UUID.randomUUID(), userId = UUID.randomUUID())
         order.items.add(
@@ -40,7 +46,7 @@ class ShipmentDtosTest {
         val shipment = Shipment(id = UUID.randomUUID())
         shipment.orders.add(orderWeighing(500))
 
-        val dto = shipment.toDto(::stubRates)
+        val dto = shipment.toDto(::stubRates, ::stubToEur)
 
         assertEquals(BigDecimal(500), dto.totalWeightGrams)
         assertNull(dto.shippingCostJpy)
@@ -53,7 +59,7 @@ class ShipmentDtosTest {
         shipment.orders.add(orderWeighing(300))
         shipment.orders.add(orderWeighing(700))
 
-        val dto = shipment.toDto(::stubRates)
+        val dto = shipment.toDto(::stubRates, ::stubToEur)
 
         assertEquals(BigDecimal(1000), dto.totalWeightGrams)
         assertEquals(4400, dto.shippingCostJpy) // EMS, Third Zone, up to 1kg
@@ -61,6 +67,28 @@ class ShipmentDtosTest {
         val shares = dto.orders.map { it.shippingCostShareJpy }
         assertEquals(listOf(1320, 3080), shares) // 30% / 70% of 4400, exact split (no rounding drift here)
         assertEquals(4400, shares.sumOf { it ?: 0 })
+
+        assertEquals(stubToEur(4400), dto.shippingCostEur)
+        val eurShares = dto.orders.map { it.shippingCostShareEur }
+        assertEquals(listOf(stubToEur(1320), stubToEur(3080)), eurShares)
+    }
+
+    @Test
+    fun `a cancelled order is excluded from weight and cost share`() {
+        val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
+        val cancelled = orderWeighing(700).also { it.status = com.omiyage.backend.order.OrderStatus.CANCELLED }
+        shipment.orders.add(orderWeighing(300))
+        shipment.orders.add(cancelled)
+
+        val dto = shipment.toDto(::stubRates, ::stubToEur)
+
+        assertEquals(BigDecimal(300), dto.totalWeightGrams)
+        assertEquals(4400, dto.shippingCostJpy) // priced for 300g, not 1000g - EMS up to 1kg tier still applies
+        val cancelledDto = dto.orders.first { it.id == cancelled.id }
+        assertNull(cancelledDto.orderWeightGrams)
+        assertNull(cancelledDto.shippingCostShareJpy)
+        val activeDto = dto.orders.first { it.id != cancelled.id }
+        assertEquals(4400, activeDto.shippingCostShareJpy) // entire cost falls on the one billable order
     }
 
     @Test
@@ -68,7 +96,7 @@ class ShipmentDtosTest {
         val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.SLOVENIA, shippingMethod = ShippingMethod.SMALL_PACKET)
         shipment.orders.add(orderWeighing(2500)) // over Small Packet's 2kg cap
 
-        val dto = shipment.toDto(::stubRates)
+        val dto = shipment.toDto(::stubRates, ::stubToEur)
 
         assertEquals(BigDecimal(2500), dto.totalWeightGrams)
         assertNull(dto.shippingCostJpy)
