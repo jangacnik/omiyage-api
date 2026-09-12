@@ -124,4 +124,38 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
         assertEquals(1, entry.pendingAmounts.size)
         assertEquals(BigDecimal("1200"), entry.pendingAmounts[0].amount)
     }
+
+    @Test
+    fun `an unactivated user with no nickname yet is excluded instead of breaking the whole dashboard`() {
+        // Regression test for the real bug behind "admin dashboard shows no users": MeishiApi
+        // returns nickname=null for any not-yet-activated account, which used to fail to
+        // deserialize into a non-nullable String and 500 the whole endpoint the moment one such
+        // account existed. nickname is now nullable, and this filters the account out entirely.
+        val principal = user()
+        val unactivated = UserProfileDto(
+            id = UUID.randomUUID(),
+            nickname = null,
+            email = null,
+            phone = null,
+            firstName = null,
+            lastName = null,
+            addressLine1 = null,
+            addressLine2 = null,
+            postalCode = null,
+            city = null,
+            country = null,
+            activated = false,
+        )
+        every { meishiAdminClient.listUsers(any()) } returns listOf(profileFor(principal.id), unactivated)
+
+        orderService.create(
+            principal,
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "X", condition = Condition.NEW, currency = Currency.JPY))),
+        )
+
+        val entries = dashboardService.userDashboard("Bearer irrelevant")
+
+        assertEquals(1, entries.size)
+        assertEquals(principal.id, entries[0].user.id)
+    }
 }

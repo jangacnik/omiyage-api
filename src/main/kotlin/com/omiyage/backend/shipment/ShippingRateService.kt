@@ -7,11 +7,11 @@ import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
 @Service
-class ShippingRateService(private val rates: ShippingRateRepository) {
+class ShippingRateService(private val rates: ShippingRateRepository, private val exchangeRates: ExchangeRateService) {
 
     @Transactional(readOnly = true)
     fun listAll(): List<ShippingRateDto> =
-        rates.findAllByOrderByDestinationAscShippingMethodAscMaxWeightGramsAsc().map { it.toDto() }
+        rates.findAllByOrderByDestinationAscShippingMethodAscMaxWeightGramsAsc().map { it.toDto(exchangeRates::toEurWithMarkup) }
 
     @Transactional
     fun create(request: ShippingRateRequest): ShippingRateDto {
@@ -24,7 +24,7 @@ class ShippingRateService(private val rates: ShippingRateRepository) {
                 costJpy = request.costJpy,
                 estimatedDays = request.estimatedDays,
             ),
-        ).toDto()
+        ).toDto(exchangeRates::toEurWithMarkup)
     }
 
     @Transactional
@@ -36,7 +36,7 @@ class ShippingRateService(private val rates: ShippingRateRepository) {
         rate.maxWeightGrams = request.maxWeightGrams
         rate.costJpy = request.costJpy
         rate.estimatedDays = request.estimatedDays
-        return rate.toDto()
+        return rate.toDto(exchangeRates::toEurWithMarkup)
     }
 
     private fun requireNoDuplicate(request: ShippingRateRequest, excludingId: UUID?) {

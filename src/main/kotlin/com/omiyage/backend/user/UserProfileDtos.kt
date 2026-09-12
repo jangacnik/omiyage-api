@@ -6,7 +6,10 @@ import java.util.UUID
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class UserProfileDto(
     val id: UUID,
-    val nickname: String,
+    // Null until the user activates their account (sets their own nickname) - MeishiApi returns
+    // a real null here for any not-yet-activated user, so this must stay nullable or Jackson
+    // throws deserializing the admin user list the moment one such account exists.
+    val nickname: String?,
     val email: String?,
     val phone: String?,
     val firstName: String?,
@@ -16,4 +19,5 @@ data class UserProfileDto(
     val postalCode: String?,
     val city: String?,
     val country: String?,
+    val activated: Boolean = true,
 )

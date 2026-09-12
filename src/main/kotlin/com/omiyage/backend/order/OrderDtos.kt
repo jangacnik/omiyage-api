@@ -68,6 +68,7 @@ data class OrderDto(
     // null on every other endpoint that returns an order.
     val orderWeightGrams: BigDecimal? = null,
     val shippingCostShareJpy: Int? = null,
+    val shippingCostShareEur: BigDecimal? = null,
 )
 
 // Once an order is being prepared for shipping (or has shipped/been cancelled) its contents are

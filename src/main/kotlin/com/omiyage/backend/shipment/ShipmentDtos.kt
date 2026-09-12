@@ -1,6 +1,7 @@
 package com.omiyage.backend.shipment
 
 import com.omiyage.backend.order.OrderDto
+import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.order.totalWeightGrams
 import com.omiyage.backend.order.toDto
 import jakarta.validation.constraints.NotEmpty
@@ -21,14 +22,24 @@ data class ShipmentDto(
     // Both null until destination and shippingMethod are set and a matching admin-configured
     // rate covers the total weight - see ShippingRateService.priceFor.
     val shippingCostJpy: Int?,
+    // EUR display amount already includes the admin-configured conversion rate plus the hidden
+    // shipping markup - see ExchangeRateService.toEurWithMarkup. Never derive this on the
+    // frontend; always show exactly what's sent here.
+    val shippingCostEur: BigDecimal?,
     val estimatedDays: Int?,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
     val orders: List<OrderDto>,
 )
 
-fun Shipment.toDto(priceFor: (ShippingMethod, ShipmentDestination, Int) -> ShippingQuote?): ShipmentDto {
-    val weightByOrder = orders.associateWith { it.totalWeightGrams() }
+fun Shipment.toDto(
+    priceFor: (ShippingMethod, ShipmentDestination, Int) -> ShippingQuote?,
+    toEur: (Int) -> BigDecimal,
+): ShipmentDto {
+    // A cancelled order has nothing left to ship - it shouldn't count toward the shipment's
+    // weight or be billed a cost share, even if it's still attached (e.g. leftover from before
+    // cancelling started detaching orders automatically).
+    val weightByOrder = orders.filter { it.status != OrderStatus.CANCELLED }.associateWith { it.totalWeightGrams() }
     val totalWeight = weightByOrder.values.fold(BigDecimal.ZERO) { sum, w -> sum + w }
 
     val quote = destination?.let { dest ->
@@ -41,24 +52,30 @@ fun Shipment.toDto(priceFor: (ShippingMethod, ShipmentDestination, Int) -> Shipp
         }
     }
     val totalCostJpy = quote?.costJpy
+    val totalCostEur = totalCostJpy?.let(toEur)
 
     val ordersWithShares = orders.map { order ->
-        val weight = weightByOrder.getValue(order)
-        val share = if (totalCostJpy != null && totalWeight > BigDecimal.ZERO) {
+        val weight = weightByOrder[order]
+        val shareJpy = if (weight != null && totalCostJpy != null && totalWeight > BigDecimal.ZERO) {
             BigDecimal(totalCostJpy).multiply(weight).divide(totalWeight, 0, RoundingMode.HALF_UP).toInt()
         } else {
             null
         }
-        order.toDto().copy(orderWeightGrams = weight, shippingCostShareJpy = share)
+        order.toDto().copy(orderWeightGrams = weight, shippingCostShareJpy = shareJpy, shippingCostShareEur = shareJpy?.let(toEur))
     }
-    // Per-order shares are rounded independently and can be off by a yen or two from the total -
-    // fold that drift into the last order rather than let per-share display quietly not sum up.
-    val reconciledOrders = if (totalCostJpy != null && ordersWithShares.isNotEmpty()) {
-        val roundedSum = ordersWithShares.sumOf { it.shippingCostShareJpy ?: 0 }
-        val drift = totalCostJpy - roundedSum
+    // Per-order shares are rounded independently and can be off by a bit from the total in both
+    // currencies - fold that drift into the last billable order (a cancelled one has no share).
+    val lastBillableIndex = ordersWithShares.indexOfLast { it.shippingCostShareJpy != null }
+    val reconciledOrders = if (totalCostJpy != null && lastBillableIndex >= 0) {
+        val driftJpy = totalCostJpy - ordersWithShares.sumOf { it.shippingCostShareJpy ?: 0 }
+        val roundedSumEur = ordersWithShares.fold(BigDecimal.ZERO) { sum, dto -> sum + (dto.shippingCostShareEur ?: BigDecimal.ZERO) }
+        val driftEur = (totalCostEur ?: BigDecimal.ZERO) - roundedSumEur
         ordersWithShares.mapIndexed { index, dto ->
-            if (index == ordersWithShares.lastIndex) {
-                dto.copy(shippingCostShareJpy = (dto.shippingCostShareJpy ?: 0) + drift)
+            if (index == lastBillableIndex) {
+                dto.copy(
+                    shippingCostShareJpy = (dto.shippingCostShareJpy ?: 0) + driftJpy,
+                    shippingCostShareEur = (dto.shippingCostShareEur ?: BigDecimal.ZERO) + driftEur,
+                )
             } else {
                 dto
             }
@@ -77,6 +94,7 @@ fun Shipment.toDto(priceFor: (ShippingMethod, ShipmentDestination, Int) -> Shipp
         ownerUserId = ownerUserId,
         totalWeightGrams = totalWeight,
         shippingCostJpy = totalCostJpy,
+        shippingCostEur = totalCostEur,
         estimatedDays = quote?.estimatedDays,
         createdAt = createdAt,
         updatedAt = updatedAt,

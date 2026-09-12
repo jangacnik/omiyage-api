@@ -3,6 +3,7 @@ package com.omiyage.backend.shipment
 import com.omiyage.backend.order.Order
 import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.order.OrderRepository
+import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.order.isOpen
 import com.omiyage.backend.order.toDto
 import org.springframework.http.HttpStatus
@@ -12,18 +13,24 @@ import org.springframework.web.server.ResponseStatusException
 import java.time.OffsetDateTime
 import java.util.UUID
 
+// A shipment past PREPARING is treated as locked - nothing may join or leave its order list, and
+// it can't advance further until every member order (other than one that got cancelled along the
+// way) has itself reached PREPARING_SHIPPING or later.
+private val READY_FOR_SHIPPING_STATUSES = setOf(OrderStatus.PREPARING_SHIPPING, OrderStatus.SENT, OrderStatus.DELIVERED, OrderStatus.CANCELLED)
+
 @Service
 class ShipmentService(
     private val shipments: ShipmentRepository,
     private val orders: OrderRepository,
     private val shippingRates: ShippingRateService,
+    private val exchangeRates: ExchangeRateService,
 ) {
 
     @Transactional(readOnly = true)
-    fun listAll(): List<ShipmentDto> = shipments.findAll().map { it.toDto(shippingRates::priceFor) }
+    fun listAll(): List<ShipmentDto> = shipments.findAll().map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup) }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID): ShipmentDto = findOrThrow(id).toDto(shippingRates::priceFor)
+    fun getById(id: UUID): ShipmentDto = findOrThrow(id).toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
 
     // Combining orders never spins up a fresh shipment when one isn't needed: the first selected
     // order "absorbs" the rest - if it already has a shipment, the others fold into that one; if
@@ -41,6 +48,10 @@ class ShipmentService(
             if (!order.isOpen) {
                 throw ResponseStatusException(HttpStatus.CONFLICT, "an order that is no longer open cannot be combined into a shipment")
             }
+            val shipmentStatus = order.shipment?.status
+            if (shipmentStatus != null && shipmentStatus != ShipmentStatus.PREPARING) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "an order that has already shipped cannot be combined into another shipment")
+            }
         }
 
         val absorbing = selected.first()
@@ -52,19 +63,26 @@ class ShipmentService(
         val vacated = mutableSetOf<UUID>()
         selected.forEach { order -> attach(shipment, order, vacated) }
         deleteIfEmpty(vacated - shipment.id!!)
-        return shipment.toDto(shippingRates::priceFor)
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
     }
 
     @Transactional
     fun update(id: UUID, request: UpdateShipmentRequest): ShipmentDto {
         val shipment = findOrThrow(id)
-        request.status?.let { shipment.status = it }
+        request.status?.let { newStatus ->
+            if (newStatus in setOf(ShipmentStatus.SHIPPED, ShipmentStatus.DELIVERED) &&
+                shipment.orders.any { it.status !in READY_FOR_SHIPPING_STATUSES }
+            ) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "every order in this shipment must reach preparing-shipping before it can ship")
+            }
+            shipment.status = newStatus
+        }
         request.destination?.let { shipment.destination = it }
         request.shippingMethod?.let { shipment.shippingMethod = it }
         request.trackingNumber?.let { shipment.trackingNumber = it }
         request.notes?.let { shipment.notes = it }
         shipment.updatedAt = OffsetDateTime.now()
-        return shipment.toDto(shippingRates::priceFor)
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
     }
 
     @Transactional
@@ -85,7 +103,11 @@ class ShipmentService(
         val order = orders.findById(orderId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found") }
         val previousShipmentId = order.shipment?.id
-        order.shipment = shipmentId?.let { findOrThrow(it) }
+        val target = shipmentId?.let { findOrThrow(it) }
+        if (target != null && target.status != ShipmentStatus.PREPARING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot attach an order to a shipment that has already shipped")
+        }
+        order.shipment = target
         order.updatedAt = OffsetDateTime.now()
         val dto = order.toDto()
         if (previousShipmentId != null && previousShipmentId != shipmentId) {

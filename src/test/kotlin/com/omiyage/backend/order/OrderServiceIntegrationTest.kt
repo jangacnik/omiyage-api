@@ -10,6 +10,8 @@ import com.omiyage.backend.security.Role
 import com.omiyage.backend.shipment.CreateShipmentRequest
 import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentService
+import com.omiyage.backend.shipment.ShipmentStatus
+import com.omiyage.backend.shipment.UpdateShipmentRequest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -503,5 +505,95 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
             UpdateOwnOrderItemRequest(link = "https://example.com/updated"),
         )
         assertEquals("https://example.com/updated", edited.items[0].link)
+    }
+
+    @Test
+    fun `cannot attach an order to a shipment that has already shipped`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        orderService.submitForShipping(a.id, owner)
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        val b = singleItemOrder(owner, "b")
+
+        assertThrows(ResponseStatusException::class.java) { shipmentService.assignOrder(b.id, shipment.id) }
+    }
+
+    @Test
+    fun `cannot combine an order into a shipment forced to shipped status while still open`() {
+        // Simulates data from before shipment status was coupled to member-order readiness - a's
+        // own status still says open, but its shipment has (somehow) already shipped.
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val created = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        val shipment = shipmentRepository.findById(created.id).get()
+        shipment.status = ShipmentStatus.SHIPPED
+        shipmentRepository.save(shipment)
+        val b = singleItemOrder(owner, "b")
+
+        assertThrows(ResponseStatusException::class.java) {
+            shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        }
+    }
+
+    @Test
+    fun `cannot mark a shipment shipped while a member order is not yet ready`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+
+        assertThrows(ResponseStatusException::class.java) {
+            shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        }
+    }
+
+    @Test
+    fun `can mark a shipment shipped once every member order has reached preparing-shipping`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        orderService.submitForShipping(a.id, owner)
+
+        val updated = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+
+        assertEquals(ShipmentStatus.SHIPPED, updated.status)
+    }
+
+    @Test
+    fun `cancelling an order detaches it from its shipment, deleting the shipment once empty`() {
+        val owner = user()
+        val solo = singleItemOrder(owner, "solo")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+
+        val cancelled = orderService.cancelOwn(solo.id, owner)
+
+        assertEquals(OrderStatus.CANCELLED, cancelled.status)
+        assertNull(cancelled.shipmentId)
+        assertFalse(shipmentRepository.existsById(shipment.id))
+    }
+
+    @Test
+    fun `cancelling one of several orders on a shipment detaches only that order, keeping the shipment`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+
+        orderService.cancelOwn(a.id, owner)
+
+        assertTrue(shipmentRepository.existsById(shipment.id))
+        assertNull(orderService.getById(a.id, owner).shipmentId)
+        assertEquals(shipment.id, orderService.getById(b.id, owner).shipmentId)
+    }
+
+    @Test
+    fun `admin cancelling via status update also detaches the order from its shipment`() {
+        val owner = user()
+        val solo = singleItemOrder(owner, "solo")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+
+        orderService.updateStatus(solo.id, OrderStatus.CANCELLED)
+
+        assertFalse(shipmentRepository.existsById(shipment.id))
     }
 }

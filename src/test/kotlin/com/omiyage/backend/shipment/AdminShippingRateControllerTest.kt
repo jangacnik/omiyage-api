@@ -66,6 +66,7 @@ class AdminShippingRateControllerTest {
             shippingMethod = request.shippingMethod,
             maxWeightGrams = request.maxWeightGrams,
             costJpy = request.costJpy,
+            costEur = java.math.BigDecimal("30.25"),
             estimatedDays = request.estimatedDays,
         )
 
