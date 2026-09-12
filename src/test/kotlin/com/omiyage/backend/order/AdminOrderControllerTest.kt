@@ -116,6 +116,28 @@ class AdminOrderControllerTest {
     }
 
     @Test
+    fun `markItemPaid is rejected for a non-admin user`() {
+        mockMvc.patch("/api/admin/orders/${UUID.randomUUID()}/items/${UUID.randomUUID()}/paid") {
+            header("Authorization", "Bearer ${userToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MarkItemPaidRequest(true))
+        }.andExpect { status { isForbidden() } }
+    }
+
+    @Test
+    fun `markItemPaid succeeds for an admin`() {
+        val orderId = UUID.randomUUID()
+        val itemId = UUID.randomUUID()
+        every { service.adminMarkItemPaid(orderId, itemId, true) } returns sampleOrder()
+
+        mockMvc.patch("/api/admin/orders/$orderId/items/$itemId/paid") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MarkItemPaidRequest(true))
+        }.andExpect { status { isOk() } }
+    }
+
+    @Test
     fun `assignShipment attaches an order to a shipment`() {
         val orderId = UUID.randomUUID()
         val shipmentId = UUID.randomUUID()

@@ -77,4 +77,38 @@ class ShippingRateServiceIntegrationTest : PostgresIntegrationTest() {
             service.update(created.id, ShippingRateRequest(updated.destination, updated.shippingMethod, updated.maxWeightGrams, updated.costJpy, updated.estimatedDays))
         }
     }
+
+    @Test
+    fun `creating a rate that collides with an existing tier is a clean conflict, not a raw DB error`() {
+        assertThrows(ResponseStatusException::class.java) {
+            service.create(
+                ShippingRateRequest(
+                    destination = ShipmentDestination.SLOVENIA,
+                    shippingMethod = ShippingMethod.EMS,
+                    maxWeightGrams = 1000,
+                    costJpy = 1,
+                    estimatedDays = 1,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `updating a rate to collide with a different existing tier is a clean conflict`() {
+        val a = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 5000, 3000, 70))
+        val b = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 6000, 3200, 75))
+
+        assertThrows(ResponseStatusException::class.java) {
+            service.update(b.id, ShippingRateRequest(a.destination, a.shippingMethod, a.maxWeightGrams, b.costJpy, b.estimatedDays))
+        }
+    }
+
+    @Test
+    fun `updating a rate to its own unchanged tier is not a conflict`() {
+        val a = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 5500, 3000, 70))
+
+        val updated = service.update(a.id, ShippingRateRequest(a.destination, a.shippingMethod, a.maxWeightGrams, 3100, a.estimatedDays))
+
+        assertEquals(3100, updated.costJpy)
+    }
 }

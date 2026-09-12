@@ -10,4 +10,10 @@ interface ShippingRateRepository : JpaRepository<ShippingRate, UUID> {
     ): List<ShippingRate>
 
     fun findAllByOrderByDestinationAscShippingMethodAscMaxWeightGramsAsc(): List<ShippingRate>
+
+    fun findByDestinationAndShippingMethodAndMaxWeightGrams(
+        destination: ShipmentDestination,
+        shippingMethod: ShippingMethod,
+        maxWeightGrams: Int,
+    ): ShippingRate?
 }

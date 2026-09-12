@@ -14,25 +14,40 @@ class ShippingRateService(private val rates: ShippingRateRepository) {
         rates.findAllByOrderByDestinationAscShippingMethodAscMaxWeightGramsAsc().map { it.toDto() }
 
     @Transactional
-    fun create(request: ShippingRateRequest): ShippingRateDto = rates.save(
-        ShippingRate(
-            destination = request.destination,
-            shippingMethod = request.shippingMethod,
-            maxWeightGrams = request.maxWeightGrams,
-            costJpy = request.costJpy,
-            estimatedDays = request.estimatedDays,
-        ),
-    ).toDto()
+    fun create(request: ShippingRateRequest): ShippingRateDto {
+        requireNoDuplicate(request, excludingId = null)
+        return rates.save(
+            ShippingRate(
+                destination = request.destination,
+                shippingMethod = request.shippingMethod,
+                maxWeightGrams = request.maxWeightGrams,
+                costJpy = request.costJpy,
+                estimatedDays = request.estimatedDays,
+            ),
+        ).toDto()
+    }
 
     @Transactional
     fun update(id: UUID, request: ShippingRateRequest): ShippingRateDto {
         val rate = findOrThrow(id)
+        requireNoDuplicate(request, excludingId = id)
         rate.destination = request.destination
         rate.shippingMethod = request.shippingMethod
         rate.maxWeightGrams = request.maxWeightGrams
         rate.costJpy = request.costJpy
         rate.estimatedDays = request.estimatedDays
         return rate.toDto()
+    }
+
+    private fun requireNoDuplicate(request: ShippingRateRequest, excludingId: UUID?) {
+        val existing = rates.findByDestinationAndShippingMethodAndMaxWeightGrams(
+            request.destination,
+            request.shippingMethod,
+            request.maxWeightGrams,
+        )
+        if (existing != null && existing.id != excludingId) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "a rate already exists for this destination, method and weight tier")
+        }
     }
 
     @Transactional

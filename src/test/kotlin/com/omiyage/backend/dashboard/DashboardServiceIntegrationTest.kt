@@ -102,4 +102,26 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
         assertTrue(entry.pendingAmounts.isEmpty())
         assertEquals(2, entry.orders.size)
     }
+
+    @Test
+    fun `an already-bought item still counts as pending even if an admin force-cancels the order afterward`() {
+        val principal = user()
+        every { meishiAdminClient.listUsers(any()) } returns listOf(profileFor(principal.id))
+
+        val order = orderService.create(
+            principal,
+            CreateOrderRequest(
+                items = listOf(CreateOrderItemRequest(title = "X", condition = Condition.NEW, currency = Currency.JPY)),
+            ),
+        )
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("1200"))
+        // Admin-only path, unlike cancelOwn, has no guard against cancelling an order with
+        // already-bought items - the money spent on them must still show up as owed.
+        orderService.updateStatus(order.id, com.omiyage.backend.order.OrderStatus.CANCELLED)
+
+        val entry = dashboardService.userDashboard("Bearer irrelevant").single()
+
+        assertEquals(1, entry.pendingAmounts.size)
+        assertEquals(BigDecimal("1200"), entry.pendingAmounts[0].amount)
+    }
 }

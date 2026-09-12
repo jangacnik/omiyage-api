@@ -16,8 +16,9 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 // Once an item has actually been bought or shipped, its content/existence is settled - a user
-// can no longer edit or remove it (admin still can, to correct mistakes).
-private val LOCKED_ITEM_STATUSES = setOf(OrderItemStatus.BOUGHT, OrderItemStatus.SHIPPED)
+// can no longer edit or remove it (admin still can, to correct mistakes). Also used by
+// DashboardService to tell "money actually spent" apart from "just requested" on a cancelled order.
+internal val LOCKED_ITEM_STATUSES = setOf(OrderItemStatus.BOUGHT, OrderItemStatus.SHIPPED)
 
 @Service
 class OrderService(

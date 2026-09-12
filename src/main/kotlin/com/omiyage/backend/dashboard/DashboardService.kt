@@ -1,5 +1,6 @@
 package com.omiyage.backend.dashboard
 
+import com.omiyage.backend.order.LOCKED_ITEM_STATUSES
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.order.toDto
@@ -23,8 +24,12 @@ class DashboardService(
     private fun entryFor(user: UserProfileDto): UserDashboardEntryDto {
         val userOrders = orders.findByUserId(user.id, Pageable.unpaged()).content
         val pending = userOrders
-            .filter { it.status != OrderStatus.CANCELLED }
-            .flatMap { it.items }
+            .flatMap { order -> order.items.map { item -> order to item } }
+            // A cancelled order's items that were never actually bought owe nothing - but if an
+            // item was already BOUGHT/SHIPPED before the order got cancelled, that money was
+            // still spent and must keep showing up as owed until marked paid.
+            .filter { (order, item) -> order.status != OrderStatus.CANCELLED || item.status in LOCKED_ITEM_STATUSES }
+            .map { (_, item) -> item }
             .filter { !it.paid }
             .groupBy({ it.currency }, { it.actualPrice ?: it.maxPrice ?: BigDecimal.ZERO })
             .map { (currency, amounts) -> PendingAmountDto(currency, amounts.fold(BigDecimal.ZERO, BigDecimal::add)) }
