@@ -1,6 +1,7 @@
 package com.omiyage.backend.maintenance
 
 import com.omiyage.backend.catalog.CategoryRepository
+import com.omiyage.backend.catalog.InventoryItemImageRepository
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.order.OrderItemRepository
 import com.omiyage.backend.order.OrderRepository
@@ -19,6 +20,7 @@ class SoftDeletePurgeJob(
     private val orders: OrderRepository,
     private val shipments: ShipmentRepository,
     private val inventoryItems: InventoryItemRepository,
+    private val inventoryItemImages: InventoryItemImageRepository,
     private val categories: CategoryRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -27,19 +29,21 @@ class SoftDeletePurgeJob(
     @Transactional
     fun purgeSoftDeleted() {
         val cutoff = OffsetDateTime.now().minusDays(RETENTION_DAYS)
-        // order_items before orders (FK), orders before shipments (FK); inventory_items and
-        // categories are independent of the order/shipment chain.
+        // order_items before orders (FK), orders before shipments (FK); inventory_item_images
+        // before inventory_items; categories is independent of the rest.
         val purgedItems = orderItems.purgeDeletedBefore(cutoff)
         val purgedOrders = orders.purgeDeletedBefore(cutoff)
         val purgedShipments = shipments.purgeDeletedBefore(cutoff)
+        val purgedImages = inventoryItemImages.purgeDeletedBefore(cutoff)
         val purgedInventory = inventoryItems.purgeDeletedBefore(cutoff)
         val purgedCategories = categories.purgeDeletedBefore(cutoff)
         log.info(
-            "soft-delete purge (older than {} days): {} order items, {} orders, {} shipments, {} inventory items, {} categories",
+            "soft-delete purge (older than {} days): {} order items, {} orders, {} shipments, {} inventory item images, {} inventory items, {} categories",
             RETENTION_DAYS,
             purgedItems,
             purgedOrders,
             purgedShipments,
+            purgedImages,
             purgedInventory,
             purgedCategories,
         )

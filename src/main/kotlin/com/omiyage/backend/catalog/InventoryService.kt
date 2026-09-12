@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import com.omiyage.backend.order.OrderItemRepository
 import com.omiyage.backend.web.PageResponse
 import com.omiyage.backend.web.toPageResponse
 import org.springframework.data.domain.Pageable
@@ -14,6 +15,7 @@ import java.util.UUID
 class InventoryService(
     private val items: InventoryItemRepository,
     private val categories: CategoryRepository,
+    private val orderItems: OrderItemRepository,
 ) {
 
     @Transactional(readOnly = true)
@@ -66,6 +68,10 @@ class InventoryService(
         if (!items.existsById(id)) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "inventory item not found")
         }
+        // Soft-deleting the item makes it invisible to @SQLRestriction, so any order item still
+        // pointing at it would fail to load (EntityNotFoundException) unless detached first - the
+        // real DB's ON DELETE SET NULL only fires on a hard delete, which this no longer is.
+        orderItems.detachInventoryItem(id)
         items.deleteById(id)
     }
 
