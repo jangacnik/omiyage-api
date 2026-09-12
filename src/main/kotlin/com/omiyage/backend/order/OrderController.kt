@@ -49,6 +49,9 @@ class OrderController(private val service: OrderService) {
     ): ResponseEntity<OrderDto> =
         ResponseEntity.status(HttpStatus.CREATED).body(service.addOwnItem(id, CurrentUser.principal(), request))
 
+    @PostMapping("/{id}/cancel")
+    fun cancelMine(@PathVariable id: UUID): OrderDto = service.cancelOwn(id, CurrentUser.principal())
+
     @PatchMapping("/{id}/items/{itemId}")
     fun updateOwnItem(
         @PathVariable id: UUID,

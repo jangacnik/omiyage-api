@@ -15,6 +15,10 @@ import org.springframework.web.server.ResponseStatusException
 import java.time.OffsetDateTime
 import java.util.UUID
 
+// Once an item has actually been bought or shipped, its content/existence is settled - a user
+// can no longer edit or remove it (admin still can, to correct mistakes).
+private val LOCKED_ITEM_STATUSES = setOf(OrderItemStatus.BOUGHT, OrderItemStatus.SHIPPED)
+
 @Service
 class OrderService(
     private val orders: OrderRepository,
@@ -100,14 +104,14 @@ class OrderService(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
         requireOpen(order)
-        applyItemContentEdit(ownItemOrThrow(order, itemId), request)
+        applyItemContentEdit(ownItemOrThrow(order, itemId), request, enforceStatusGuard = true)
         return order.toDto()
     }
 
     @Transactional
     fun adminUpdateItemContent(orderId: UUID, itemId: UUID, request: UpdateOwnOrderItemRequest): OrderDto {
         val order = findOrThrow(orderId)
-        applyItemContentEdit(ownItemOrThrow(order, itemId), request)
+        applyItemContentEdit(ownItemOrThrow(order, itemId), request, enforceStatusGuard = false)
         return order.toDto()
     }
 
@@ -118,14 +122,26 @@ class OrderService(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
         requireOpen(order)
-        removeItemFromOrder(order, ownItemOrThrow(order, itemId))
+        removeItemFromOrder(order, ownItemOrThrow(order, itemId), enforceStatusGuard = true)
         return order.toDto()
     }
 
     @Transactional
     fun adminRemoveItem(orderId: UUID, itemId: UUID): OrderDto {
         val order = findOrThrow(orderId)
-        removeItemFromOrder(order, ownItemOrThrow(order, itemId))
+        removeItemFromOrder(order, ownItemOrThrow(order, itemId), enforceStatusGuard = false)
+        return order.toDto()
+    }
+
+    @Transactional
+    fun cancelOwn(orderId: UUID, principal: MeishiPrincipal): OrderDto {
+        val order = findOrThrow(orderId)
+        if (order.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        requireOpen(order)
+        order.status = OrderStatus.CANCELLED
+        order.updatedAt = OffsetDateTime.now()
         return order.toDto()
     }
 
@@ -216,9 +232,9 @@ class OrderService(
         return order.toDto()
     }
 
-    private fun applyItemContentEdit(item: OrderItem, request: UpdateOwnOrderItemRequest) {
-        if (item.status == OrderItemStatus.BOUGHT) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought and can no longer be edited")
+    private fun applyItemContentEdit(item: OrderItem, request: UpdateOwnOrderItemRequest, enforceStatusGuard: Boolean) {
+        if (enforceStatusGuard && item.status in LOCKED_ITEM_STATUSES) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought or shipped and can no longer be edited")
         }
         request.title?.let { item.customTitle = it }
         request.description?.let { item.customDescription = it }
@@ -228,9 +244,9 @@ class OrderService(
         item.updatedAt = OffsetDateTime.now()
     }
 
-    private fun removeItemFromOrder(order: Order, item: OrderItem) {
-        if (item.status == OrderItemStatus.BOUGHT) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought and can no longer be removed")
+    private fun removeItemFromOrder(order: Order, item: OrderItem, enforceStatusGuard: Boolean) {
+        if (enforceStatusGuard && item.status in LOCKED_ITEM_STATUSES) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought or shipped and can no longer be removed")
         }
         order.items.remove(item)
         orderItems.delete(item)

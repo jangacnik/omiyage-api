@@ -43,6 +43,18 @@ class ShipmentService(
         return shipment.toDto()
     }
 
+    @Transactional
+    fun adminDelete(id: UUID) {
+        if (!shipments.existsById(id)) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "shipment not found")
+        }
+        // Orders still pointing at this shipment would otherwise keep a dangling reference once
+        // it's gone - same class of bug as a soft-deleted inventory item left attached to an
+        // order item. Detach first, then delete.
+        orders.detachShipment(id)
+        shipments.deleteById(id)
+    }
+
     /** Attaches or detaches a single order to/from a shipment. Pass shipmentId = null to detach. */
     @Transactional
     fun assignOrder(orderId: UUID, shipmentId: UUID?): OrderDto {

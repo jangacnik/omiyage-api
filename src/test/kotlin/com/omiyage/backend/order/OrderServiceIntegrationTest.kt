@@ -310,4 +310,63 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         shipmentService.assignOrder(b.id, null)
         assertFalse(shipmentRepository.existsById(shipment.id))
     }
+
+    @Test
+    fun `a user can cancel their own open order`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+
+        val cancelled = orderService.cancelOwn(order.id, owner)
+
+        assertEquals(OrderStatus.CANCELLED, cancelled.status)
+        assertFalse(cancelled.open)
+    }
+
+    @Test
+    fun `a user cannot cancel someone else's order or an already-closed order`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.cancelOwn(order.id, user()) }
+
+        orderService.updateStatus(order.id, OrderStatus.DELIVERED)
+        assertThrows(ResponseStatusException::class.java) { orderService.cancelOwn(order.id, owner) }
+    }
+
+    @Test
+    fun `a user cannot edit or remove a shipped item, but an admin can`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+        val itemId = order.items[0].id
+        orderService.updateItem(order.id, itemId, OrderItemStatus.SHIPPED, null)
+
+        assertThrows(ResponseStatusException::class.java) {
+            orderService.updateOwnItem(order.id, itemId, owner, UpdateOwnOrderItemRequest(title = "Renamed"))
+        }
+        assertThrows(ResponseStatusException::class.java) {
+            orderService.removeOwnItem(order.id, itemId, owner)
+        }
+
+        val edited = orderService.adminUpdateItemContent(order.id, itemId, UpdateOwnOrderItemRequest(title = "Renamed"))
+        assertEquals("Renamed", edited.items.first { it.id == itemId }.title)
+        val afterRemoval = orderService.adminRemoveItem(order.id, itemId)
+        assertTrue(afterRemoval.items.isEmpty())
+    }
+
+    @Test
+    fun `an admin deleting a shipment detaches its orders instead of leaving a dangling reference`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+
+        shipmentService.adminDelete(shipment.id)
+
+        assertFalse(shipmentRepository.existsById(shipment.id))
+        assertNull(orderService.getById(a.id, owner).shipmentId)
+        assertNull(orderService.getById(b.id, owner).shipmentId)
+        // The order itself must still load cleanly - this is exactly the dangling-FK class of bug
+        // fixed earlier for soft-deleted inventory items.
+        assertEquals(a.id, orderService.getById(a.id, owner).id)
+    }
 }
