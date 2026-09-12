@@ -27,7 +27,7 @@ class ShipmentDtosTest {
 
     @Test
     fun `no destination or method means no cost, but weight is still reported`() {
-        val shipment = Shipment()
+        val shipment = Shipment(id = UUID.randomUUID())
         shipment.orders.add(orderWeighing(500))
 
         val dto = shipment.toDto()
@@ -39,7 +39,7 @@ class ShipmentDtosTest {
 
     @Test
     fun `splits shipping cost proportionally by each order's weight and reconciles rounding`() {
-        val shipment = Shipment(destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
+        val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
         shipment.orders.add(orderWeighing(300))
         shipment.orders.add(orderWeighing(700))
 
@@ -55,7 +55,7 @@ class ShipmentDtosTest {
 
     @Test
     fun `a shipment heavier than the chosen method's limit reports no cost`() {
-        val shipment = Shipment(destination = ShipmentDestination.SLOVENIA, shippingMethod = ShippingMethod.SMALL_PACKET)
+        val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.SLOVENIA, shippingMethod = ShippingMethod.SMALL_PACKET)
         shipment.orders.add(orderWeighing(2500)) // over Small Packet's 2kg cap
 
         val dto = shipment.toDto()
