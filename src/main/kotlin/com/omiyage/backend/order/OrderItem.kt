@@ -14,6 +14,8 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
+import org.hibernate.annotations.SQLDelete
+import org.hibernate.annotations.SQLRestriction
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -22,6 +24,8 @@ enum class OrderItemStatus { REQUESTED, CONFIRMING, BUYING, BOUGHT, SHIPPED }
 
 @Entity
 @Table(name = "order_items")
+@SQLDelete(sql = "UPDATE order_items SET deleted_at = now() WHERE id = ?")
+@SQLRestriction("deleted_at IS NULL")
 class OrderItem(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -74,6 +78,9 @@ class OrderItem(
 
     @Column(name = "updated_at", nullable = false)
     var updatedAt: OffsetDateTime = OffsetDateTime.now(),
+
+    @Column(name = "deleted_at")
+    var deletedAt: OffsetDateTime? = null,
 ) {
     init {
         require(inventoryItem != null || customTitle != null) {

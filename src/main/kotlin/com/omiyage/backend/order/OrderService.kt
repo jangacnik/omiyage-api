@@ -3,6 +3,7 @@ package com.omiyage.backend.order
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
+import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentStatus
 import com.omiyage.backend.web.PageResponse
 import com.omiyage.backend.web.toPageResponse
@@ -19,6 +20,7 @@ class OrderService(
     private val orders: OrderRepository,
     private val orderItems: OrderItemRepository,
     private val inventoryItems: InventoryItemRepository,
+    private val shipments: ShipmentRepository,
 ) {
 
     @Transactional
@@ -133,7 +135,11 @@ class OrderService(
         }
 
         val target = selected.first()
-        selected.drop(1).forEach { source ->
+        val sources = selected.drop(1)
+        val vacatedShipmentIds = sources.mapNotNull { it.shipment?.id }
+            .distinct()
+            .filter { it != target.shipment?.id }
+        sources.forEach { source ->
             source.items.toList().forEach { item ->
                 source.items.remove(item)
                 item.order = target
@@ -144,7 +150,14 @@ class OrderService(
                 source.notes?.takeIf { it.isNotBlank() },
             ).joinToString("\n").ifBlank { null }
         }
-        orders.deleteAll(selected.drop(1))
+        orders.deleteAll(sources)
+        // A source order's shipment can end up referenced by no order at all once its orders
+        // are merged away — delete it too instead of leaving an empty shipment behind.
+        vacatedShipmentIds.forEach { shipmentId ->
+            if (!orders.existsByShipment_Id(shipmentId)) {
+                shipments.deleteById(shipmentId)
+            }
+        }
         target.updatedAt = OffsetDateTime.now()
         return target.toDto()
     }
