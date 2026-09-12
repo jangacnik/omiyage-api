@@ -1,6 +1,7 @@
 package com.omiyage.backend.user
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import jakarta.validation.constraints.NotBlank
 import java.util.UUID
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -20,4 +21,11 @@ data class UserProfileDto(
     val city: String?,
     val country: String?,
     val activated: Boolean = true,
+)
+
+data class ChangeNicknameRequest(@field:NotBlank val nickname: String)
+
+data class ChangePasswordRequest(
+    @field:NotBlank val oldPassword: String,
+    @field:NotBlank val newPassword: String,
 )

@@ -24,17 +24,36 @@ class MeishiProfileClient(props: MeishiProperties, private val objectMapper: Obj
         client.patch().uri("/api/users/me").header("Authorization", authHeader).body(updates).retrieve()
     }
 
+    fun changeNickname(authHeader: String, nickname: String): UserProfileDto = execute {
+        client.patch().uri("/api/users/me/nickname").header("Authorization", authHeader)
+            .body(mapOf("nickname" to nickname)).retrieve()
+    }
+
+    fun changePassword(authHeader: String, oldPassword: String, newPassword: String) {
+        try {
+            client.patch().uri("/api/users/me/password").header("Authorization", authHeader)
+                .body(mapOf("oldPassword" to oldPassword, "newPassword" to newPassword)).retrieve()
+                .toBodilessEntity()
+        } catch (e: HttpStatusCodeException) {
+            throw toResponseStatusException(e)
+        }
+    }
+
+    private fun toResponseStatusException(e: HttpStatusCodeException): ResponseStatusException {
+        val message = try {
+            objectMapper.readValue(e.responseBodyAsByteArray, MeishiErrorResponse::class.java).error
+        } catch (parseError: Exception) {
+            null
+        } ?: e.statusText
+        return ResponseStatusException(e.statusCode, message)
+    }
+
     private fun execute(call: () -> RestClient.ResponseSpec): UserProfileDto {
         try {
             return call().body<UserProfileDto>()
                 ?: throw ResponseStatusException(org.springframework.http.HttpStatus.BAD_GATEWAY, "empty response from meishi")
         } catch (e: HttpStatusCodeException) {
-            val message = try {
-                objectMapper.readValue(e.responseBodyAsByteArray, MeishiErrorResponse::class.java).error
-            } catch (parseError: Exception) {
-                null
-            } ?: e.statusText
-            throw ResponseStatusException(e.statusCode, message)
+            throw toResponseStatusException(e)
         }
     }
 }
