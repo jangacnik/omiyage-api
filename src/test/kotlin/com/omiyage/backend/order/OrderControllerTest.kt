@@ -47,6 +47,7 @@ class OrderControllerTest {
         id = UUID.randomUUID(),
         userId = userId,
         status = OrderStatus.REQUESTED,
+        open = true,
         notes = null,
         nickname = null,
         shipmentId = null,

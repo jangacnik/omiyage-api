@@ -7,9 +7,14 @@ import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
+import com.omiyage.backend.shipment.CreateShipmentRequest
+import com.omiyage.backend.shipment.ShipmentRepository
+import com.omiyage.backend.shipment.ShipmentService
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -29,8 +34,22 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     @Autowired
     lateinit var inventoryService: InventoryService
 
+    @Autowired
+    lateinit var shipmentService: ShipmentService
+
+    @Autowired
+    lateinit var shipmentRepository: ShipmentRepository
+
+    @Autowired
+    lateinit var orderRepository: OrderRepository
+
     private fun user() = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
     private fun admin() = MeishiPrincipal(UUID.randomUUID(), "root", Role.ADMIN)
+
+    private fun singleItemOrder(principal: MeishiPrincipal = user(), title: String = "A") = orderService.create(
+        principal,
+        CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = title, condition = Condition.NEW, currency = Currency.JPY))),
+    )
 
     @Test
     fun `creates an order with a custom item and JIT-provisions the user profile`() {
@@ -142,5 +161,153 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
         assertEquals(1, page.content.size)
         assertEquals(owner.id, page.content[0].userId)
+    }
+
+    @Test
+    fun `a user can add an item to their own open order`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+
+        val updated = orderService.addOwnItem(
+            order.id,
+            owner,
+            CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY),
+        )
+
+        assertEquals(2, updated.items.size)
+    }
+
+    @Test
+    fun `a user cannot add an item to a closed order`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+        orderService.updateStatus(order.id, OrderStatus.SENT)
+
+        assertThrows(ResponseStatusException::class.java) {
+            orderService.addOwnItem(order.id, owner, CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY))
+        }
+    }
+
+    @Test
+    fun `a user cannot edit or remove items on a closed order`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+        orderService.updateStatus(order.id, OrderStatus.DELIVERED)
+        val itemId = order.items[0].id
+
+        assertThrows(ResponseStatusException::class.java) {
+            orderService.updateOwnItem(order.id, itemId, owner, UpdateOwnOrderItemRequest(title = "Renamed"))
+        }
+        assertThrows(ResponseStatusException::class.java) {
+            orderService.removeOwnItem(order.id, itemId, owner)
+        }
+    }
+
+    @Test
+    fun `an admin can add, edit and remove items on someone else's order regardless of open status`() {
+        val order = singleItemOrder()
+        orderService.updateStatus(order.id, OrderStatus.CANCELLED)
+
+        val withNewItem = orderService.adminAddItem(order.id, CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY))
+        assertEquals(2, withNewItem.items.size)
+
+        val edited = orderService.adminUpdateItemContent(order.id, order.items[0].id, UpdateOwnOrderItemRequest(title = "Renamed"))
+        assertEquals("Renamed", edited.items.first { it.id == order.items[0].id }.title)
+
+        val afterRemoval = orderService.adminRemoveItem(order.id, order.items[0].id)
+        assertEquals(1, afterRemoval.items.size)
+    }
+
+    @Test
+    fun `an admin can delete an order`() {
+        val order = singleItemOrder()
+
+        orderService.adminDelete(order.id)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.getById(order.id, admin()) }
+    }
+
+    @Test
+    fun `deleting the last order on a shipment deletes the shipment too`() {
+        val owner = user()
+        val solo = singleItemOrder(owner, "solo")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+
+        orderService.adminDelete(solo.id)
+
+        assertFalse(shipmentRepository.existsById(shipment.id))
+    }
+
+    @Test
+    fun `deleting one of several orders on a shipment keeps the shipment`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+
+        orderService.adminDelete(a.id)
+
+        assertTrue(shipmentRepository.existsById(shipment.id))
+    }
+
+    @Test
+    fun `cannot merge a closed source order into an open target`() {
+        val owner = user()
+        val target = singleItemOrder(owner, "target")
+        val source = singleItemOrder(owner, "source")
+        orderService.updateStatus(source.id, OrderStatus.CANCELLED)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.mergeMine(owner, listOf(target.id, source.id)) }
+    }
+
+    @Test
+    fun `cannot merge an open source into a closed target`() {
+        val owner = user()
+        val target = singleItemOrder(owner, "target")
+        val source = singleItemOrder(owner, "source")
+        orderService.updateStatus(target.id, OrderStatus.DELIVERED)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.mergeMine(owner, listOf(target.id, source.id)) }
+    }
+
+    @Test
+    fun `merging orders deletes a source order's shipment once it has no orders left`() {
+        val owner = user()
+        val target = singleItemOrder(owner, "target")
+        val source = singleItemOrder(owner, "source")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null))
+
+        orderService.mergeMine(owner, listOf(target.id, source.id))
+
+        assertFalse(shipmentRepository.existsById(shipment.id))
+    }
+
+    @Test
+    fun `combining orders into a shipment deletes an order's now-empty previous shipment`() {
+        val owner = user()
+        val solo = singleItemOrder(owner, "solo")
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+
+        // solo gets its own shipment first, then gets combined into a new shipment together with
+        // a and b - that first shipment should end up with zero orders and be deleted.
+        val soloShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id, a.id, b.id), notes = null))
+
+        assertFalse(orderRepository.existsByShipment_Id(soloShipment.id) || shipmentRepository.existsById(soloShipment.id))
+    }
+
+    @Test
+    fun `reassigning an order off a shipment deletes it once empty, keeps it while other orders remain`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+
+        shipmentService.assignOrder(a.id, null)
+        assertTrue(shipmentRepository.existsById(shipment.id))
+
+        shipmentService.assignOrder(b.id, null)
+        assertFalse(shipmentRepository.existsById(shipment.id))
     }
 }
