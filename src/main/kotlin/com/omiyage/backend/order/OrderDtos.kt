@@ -51,6 +51,7 @@ data class OrderDto(
     val id: UUID,
     val userId: UUID,
     val status: OrderStatus,
+    val open: Boolean,
     val notes: String?,
     val nickname: String?,
     val shipmentId: UUID?,
@@ -63,10 +64,17 @@ data class OrderDto(
     val shippingCostShareJpy: Int? = null,
 )
 
+// Once an order has shipped (or been cancelled) its contents are settled - only REQUESTED,
+// IN_PROGRESS and PURCHASED are still open to being edited or added to by the owner.
+private val CLOSED_ORDER_STATUSES = setOf(OrderStatus.SENT, OrderStatus.DELIVERED, OrderStatus.CANCELLED)
+
+val Order.isOpen: Boolean get() = status !in CLOSED_ORDER_STATUSES
+
 fun Order.toDto() = OrderDto(
     id = requireNotNull(id),
     userId = userId,
     status = status,
+    open = isOpen,
     notes = notes,
     nickname = nickname,
     shipmentId = shipment?.id,

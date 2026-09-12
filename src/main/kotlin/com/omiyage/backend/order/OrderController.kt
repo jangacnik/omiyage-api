@@ -42,6 +42,13 @@ class OrderController(private val service: OrderService) {
         @Valid @RequestBody request: UpdateOrderNicknameRequest,
     ): OrderDto = service.updateNickname(id, CurrentUser.principal(), request.nickname)
 
+    @PostMapping("/{id}/items")
+    fun addOwnItem(
+        @PathVariable id: UUID,
+        @Valid @RequestBody request: CreateOrderItemRequest,
+    ): ResponseEntity<OrderDto> =
+        ResponseEntity.status(HttpStatus.CREATED).body(service.addOwnItem(id, CurrentUser.principal(), request))
+
     @PatchMapping("/{id}/items/{itemId}")
     fun updateOwnItem(
         @PathVariable id: UUID,

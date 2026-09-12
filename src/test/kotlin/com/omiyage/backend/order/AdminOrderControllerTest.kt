@@ -51,6 +51,7 @@ class AdminOrderControllerTest {
         id = UUID.randomUUID(),
         userId = UUID.randomUUID(),
         status = status,
+        open = status !in setOf(OrderStatus.SENT, OrderStatus.DELIVERED, OrderStatus.CANCELLED),
         notes = null,
         nickname = null,
         shipmentId = shipmentId,

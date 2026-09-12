@@ -25,7 +25,9 @@ class ShipmentService(
     @Transactional
     fun create(request: CreateShipmentRequest): ShipmentDto {
         val shipment = shipments.save(Shipment(notes = request.notes))
-        request.orderIds.forEach { orderId -> attach(shipment, orderId) }
+        val vacated = mutableSetOf<UUID>()
+        request.orderIds.forEach { orderId -> attach(shipment, orderId, vacated) }
+        deleteIfEmpty(vacated)
         return shipment.toDto()
     }
 
@@ -46,20 +48,39 @@ class ShipmentService(
     fun assignOrder(orderId: UUID, shipmentId: UUID?): OrderDto {
         val order = orders.findById(orderId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found") }
+        val previousShipmentId = order.shipment?.id
         order.shipment = shipmentId?.let { findOrThrow(it) }
         order.updatedAt = OffsetDateTime.now()
-        return order.toDto()
+        val dto = order.toDto()
+        if (previousShipmentId != null && previousShipmentId != shipmentId) {
+            deleteIfEmpty(setOf(previousShipmentId))
+        }
+        return dto
     }
 
-    private fun attach(shipment: Shipment, orderId: UUID) {
+    private fun attach(shipment: Shipment, orderId: UUID, vacated: MutableSet<UUID>) {
         val order = orders.findById(orderId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found: $orderId") }
+        val previousShipmentId = order.shipment?.id
+        if (previousShipmentId != null && previousShipmentId != shipment.id) {
+            vacated += previousShipmentId
+        }
         order.shipment = shipment
         order.updatedAt = OffsetDateTime.now()
         // Setting the owning side (order.shipment) alone doesn't update this JPA session's
         // in-memory inverse collection - keep it in sync so create()'s immediate response
         // (read within the same transaction) reflects the attached orders, not a stale list.
         shipment.orders.add(order)
+    }
+
+    // An order moving off a shipment (combined elsewhere, or reassigned/detached) can leave that
+    // shipment referenced by no order at all - delete it instead of leaving it empty.
+    private fun deleteIfEmpty(shipmentIds: Set<UUID>) {
+        shipmentIds.forEach { id ->
+            if (!orders.existsByShipment_Id(id)) {
+                shipments.deleteById(id)
+            }
+        }
     }
 
     private fun findOrThrow(id: UUID): Shipment =

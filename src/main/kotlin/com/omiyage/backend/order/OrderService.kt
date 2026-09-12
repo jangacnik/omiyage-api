@@ -80,22 +80,34 @@ class OrderService(
     }
 
     @Transactional
+    fun addOwnItem(orderId: UUID, principal: MeishiPrincipal, request: CreateOrderItemRequest): OrderDto {
+        val order = findOrThrow(orderId)
+        if (order.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        requireOpen(order)
+        return addItemToOrder(order, request)
+    }
+
+    @Transactional
+    fun adminAddItem(orderId: UUID, request: CreateOrderItemRequest): OrderDto =
+        addItemToOrder(findOrThrow(orderId), request)
+
+    @Transactional
     fun updateOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal, request: UpdateOwnOrderItemRequest): OrderDto {
         val order = findOrThrow(orderId)
         if (order.userId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
-        val item = ownItemOrThrow(order, itemId)
-        if (item.status == OrderItemStatus.BOUGHT) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought and can no longer be edited")
-        }
+        requireOpen(order)
+        applyItemContentEdit(ownItemOrThrow(order, itemId), request)
+        return order.toDto()
+    }
 
-        request.title?.let { item.customTitle = it }
-        request.description?.let { item.customDescription = it }
-        request.imageKey?.let { item.customImageKey = it }
-        request.maxPrice?.let { item.maxPrice = it }
-        request.quantity?.let { item.quantity = it }
-        item.updatedAt = OffsetDateTime.now()
+    @Transactional
+    fun adminUpdateItemContent(orderId: UUID, itemId: UUID, request: UpdateOwnOrderItemRequest): OrderDto {
+        val order = findOrThrow(orderId)
+        applyItemContentEdit(ownItemOrThrow(order, itemId), request)
         return order.toDto()
     }
 
@@ -105,15 +117,24 @@ class OrderService(
         if (order.userId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
-        val item = ownItemOrThrow(order, itemId)
-        if (item.status == OrderItemStatus.BOUGHT) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought and can no longer be removed")
-        }
-
-        order.items.remove(item)
-        orderItems.delete(item)
-        order.updatedAt = OffsetDateTime.now()
+        requireOpen(order)
+        removeItemFromOrder(order, ownItemOrThrow(order, itemId))
         return order.toDto()
+    }
+
+    @Transactional
+    fun adminRemoveItem(orderId: UUID, itemId: UUID): OrderDto {
+        val order = findOrThrow(orderId)
+        removeItemFromOrder(order, ownItemOrThrow(order, itemId))
+        return order.toDto()
+    }
+
+    @Transactional
+    fun adminDelete(orderId: UUID) {
+        if (!orders.existsById(orderId)) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        orders.deleteById(orderId)
     }
 
     @Transactional
@@ -171,6 +192,44 @@ class OrderService(
         order.nickname = nickname?.trim()?.ifBlank { null }
         order.updatedAt = OffsetDateTime.now()
         return order.toDto()
+    }
+
+    private fun requireOpen(order: Order) {
+        if (!order.isOpen) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "order is closed and can no longer be edited")
+        }
+    }
+
+    private fun addItemToOrder(order: Order, request: CreateOrderItemRequest): OrderDto {
+        val item = buildOrderItem(order, request)
+        order.items.add(item)
+        // order is already persistent here (unlike create(), which persists a brand-new Order and
+        // gets cascaded inserts for free) - save explicitly so the new item's id is generated now,
+        // not deferred to flush, since toDto() below needs it immediately.
+        orderItems.save(item)
+        order.updatedAt = OffsetDateTime.now()
+        return order.toDto()
+    }
+
+    private fun applyItemContentEdit(item: OrderItem, request: UpdateOwnOrderItemRequest) {
+        if (item.status == OrderItemStatus.BOUGHT) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought and can no longer be edited")
+        }
+        request.title?.let { item.customTitle = it }
+        request.description?.let { item.customDescription = it }
+        request.imageKey?.let { item.customImageKey = it }
+        request.maxPrice?.let { item.maxPrice = it }
+        request.quantity?.let { item.quantity = it }
+        item.updatedAt = OffsetDateTime.now()
+    }
+
+    private fun removeItemFromOrder(order: Order, item: OrderItem) {
+        if (item.status == OrderItemStatus.BOUGHT) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought and can no longer be removed")
+        }
+        order.items.remove(item)
+        orderItems.delete(item)
+        order.updatedAt = OffsetDateTime.now()
     }
 
     private fun ownItemOrThrow(order: Order, itemId: UUID): OrderItem {
