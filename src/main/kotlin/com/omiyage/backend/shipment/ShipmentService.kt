@@ -54,6 +54,10 @@ class ShipmentService(
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found: $orderId") }
         order.shipment = shipment
         order.updatedAt = OffsetDateTime.now()
+        // Setting the owning side (order.shipment) alone doesn't update this JPA session's
+        // in-memory inverse collection - keep it in sync so create()'s immediate response
+        // (read within the same transaction) reflects the attached orders, not a stale list.
+        shipment.orders.add(order)
     }
 
     private fun findOrThrow(id: UUID): Shipment =
