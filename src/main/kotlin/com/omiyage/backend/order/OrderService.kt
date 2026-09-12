@@ -30,7 +30,7 @@ class OrderService(
 
     @Transactional
     fun create(principal: MeishiPrincipal, request: CreateOrderRequest): OrderDto {
-        val order = Order(userId = principal.id, notes = request.notes)
+        val order = Order(userId = principal.id, notes = request.notes, nickname = request.nickname?.trim()?.ifBlank { null })
         request.items.forEach { order.items.add(buildOrderItem(order, it)) }
         return orders.save(order).toDto()
     }
