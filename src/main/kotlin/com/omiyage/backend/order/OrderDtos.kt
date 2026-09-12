@@ -6,6 +6,7 @@ import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Size
 import jakarta.validation.Valid
 import java.math.BigDecimal
 import java.time.OffsetDateTime
@@ -51,6 +52,7 @@ data class OrderDto(
     val userId: UUID,
     val status: OrderStatus,
     val notes: String?,
+    val nickname: String?,
     val shipmentId: UUID?,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
@@ -66,6 +68,7 @@ fun Order.toDto() = OrderDto(
     userId = userId,
     status = status,
     notes = notes,
+    nickname = nickname,
     shipmentId = shipment?.id,
     createdAt = createdAt,
     updatedAt = updatedAt,
@@ -109,3 +112,5 @@ data class UpdateOwnOrderItemRequest(
 )
 
 data class MergeOrdersRequest(@field:NotEmpty val orderIds: List<UUID>)
+
+data class UpdateOrderNicknameRequest(@field:Size(max = 100) val nickname: String? = null)

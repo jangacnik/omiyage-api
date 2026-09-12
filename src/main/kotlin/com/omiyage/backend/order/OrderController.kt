@@ -36,6 +36,12 @@ class OrderController(private val service: OrderService) {
     fun mergeMine(@Valid @RequestBody request: MergeOrdersRequest): OrderDto =
         service.mergeMine(CurrentUser.principal(), request.orderIds)
 
+    @PatchMapping("/{id}/nickname")
+    fun updateNickname(
+        @PathVariable id: UUID,
+        @Valid @RequestBody request: UpdateOrderNicknameRequest,
+    ): OrderDto = service.updateNickname(id, CurrentUser.principal(), request.nickname)
+
     @PatchMapping("/{id}/items/{itemId}")
     fun updateOwnItem(
         @PathVariable id: UUID,

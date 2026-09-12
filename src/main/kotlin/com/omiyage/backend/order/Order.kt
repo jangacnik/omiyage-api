@@ -36,6 +36,9 @@ class Order(
 
     var notes: String? = null,
 
+    @Column(length = 100)
+    var nickname: String? = null,
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shipment_id")
     var shipment: Shipment? = null,

@@ -149,6 +149,17 @@ class OrderService(
         return target.toDto()
     }
 
+    @Transactional
+    fun updateNickname(orderId: UUID, principal: MeishiPrincipal, nickname: String?): OrderDto {
+        val order = findOrThrow(orderId)
+        if (order.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        order.nickname = nickname?.trim()?.ifBlank { null }
+        order.updatedAt = OffsetDateTime.now()
+        return order.toDto()
+    }
+
     private fun ownItemOrThrow(order: Order, itemId: UUID): OrderItem {
         val item = orderItems.findById(itemId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
