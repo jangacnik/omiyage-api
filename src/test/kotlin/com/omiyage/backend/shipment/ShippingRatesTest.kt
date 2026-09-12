@@ -1,8 +1,8 @@
 package com.omiyage.backend.shipment
 
 import org.junit.jupiter.api.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 
 class ShippingRatesTest {
 

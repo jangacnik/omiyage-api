@@ -4,10 +4,10 @@ import com.omiyage.backend.common.Currency
 import com.omiyage.backend.order.Order
 import com.omiyage.backend.order.OrderItem
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import java.math.BigDecimal
 import java.util.UUID
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class ShipmentDtosTest {
 
