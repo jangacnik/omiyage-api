@@ -140,6 +140,9 @@ class OrderService(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
         requireOpen(order)
+        if (order.items.any { it.status in LOCKED_ITEM_STATUSES }) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "order has items already bought or shipped and cannot be cancelled")
+        }
         order.status = OrderStatus.CANCELLED
         order.updatedAt = OffsetDateTime.now()
         return order.toDto()

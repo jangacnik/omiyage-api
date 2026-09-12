@@ -334,6 +334,16 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `a user cannot cancel an order with a bought or shipped item, even while the order itself is still open`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"))
+        orderService.updateStatus(order.id, OrderStatus.PURCHASED)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.cancelOwn(order.id, owner) }
+    }
+
+    @Test
     fun `a user cannot edit or remove a shipped item, but an admin can`() {
         val owner = user()
         val order = singleItemOrder(owner)
