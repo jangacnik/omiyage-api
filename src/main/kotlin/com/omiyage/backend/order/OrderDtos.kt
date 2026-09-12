@@ -109,6 +109,7 @@ data class CreateOrderItemRequest(
 
 data class CreateOrderRequest(
     val notes: String? = null,
+    @field:Size(max = 100) val nickname: String? = null,
     @field:NotEmpty @field:Valid val items: List<CreateOrderItemRequest>,
 )
 

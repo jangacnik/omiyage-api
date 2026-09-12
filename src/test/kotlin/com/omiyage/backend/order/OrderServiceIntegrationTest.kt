@@ -76,6 +76,24 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `sets the nickname given at creation, trimmed, blank means none`() {
+        val request = CreateOrderRequest(
+            nickname = "  Grandma's gifts  ",
+            items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)),
+        )
+
+        val order = orderService.create(user(), request)
+
+        assertEquals("Grandma's gifts", order.nickname)
+
+        val blank = orderService.create(
+            user(),
+            request.copy(nickname = "   "),
+        )
+        assertNull(blank.nickname)
+    }
+
+    @Test
     fun `creates an order item linked to an existing inventory item`() {
         val item = inventoryService.create(
             InventoryItemRequest(
