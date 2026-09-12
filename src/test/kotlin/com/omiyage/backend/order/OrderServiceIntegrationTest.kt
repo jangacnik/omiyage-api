@@ -445,6 +445,24 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `a shipment with no owner assigned authorizes nobody to submit it`() {
+        // Simulates a shipment that predates owner_user_id, or one only ever touched via
+        // assignOrder (which never sets it) - must not fall back to "whoever owns the order
+        // named in the URL", or any co-member could submit by naming their own order.
+        val owner = user()
+        val other = user()
+        val mine = singleItemOrder(owner, "mine")
+        val theirs = singleItemOrder(other, "theirs")
+        val orphanOwnerShipment = com.omiyage.backend.shipment.Shipment()
+        val saved = shipmentRepository.save(orphanOwnerShipment)
+        shipmentService.assignOrder(mine.id, saved.id)
+        shipmentService.assignOrder(theirs.id, saved.id)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(mine.id, owner) }
+        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(theirs.id, other) }
+    }
+
+    @Test
     fun `admin can mark an item paid and unpaid, tracking paidAt`() {
         val order = singleItemOrder()
         val itemId = order.items[0].id

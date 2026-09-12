@@ -166,8 +166,11 @@ class OrderService(
     fun submitForShipping(orderId: UUID, principal: MeishiPrincipal): OrderDto {
         val order = findOrThrow(orderId)
         val shipment = order.shipment
-        val authorizedUserId = shipment?.ownerUserId ?: order.userId
-        if (authorizedUserId != principal.id) {
+        // A shipment with no owner assigned authorizes nobody - it must never fall back to "the
+        // order named in the URL happens to be this caller's", or any co-member of a shipment
+        // could submit it by naming their own order, bypassing the owner-only rule entirely.
+        val authorizedUserId = if (shipment == null) order.userId else shipment.ownerUserId
+        if (authorizedUserId == null || authorizedUserId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
         requireOpen(order)
