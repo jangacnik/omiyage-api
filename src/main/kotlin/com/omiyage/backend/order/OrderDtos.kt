@@ -55,6 +55,10 @@ data class OrderDto(
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
     val items: List<OrderItemDto>,
+    // Only populated when this order is read as part of a shipment (see Shipment.toDto()) -
+    // null on every other endpoint that returns an order.
+    val orderWeightGrams: BigDecimal? = null,
+    val shippingCostShareJpy: Int? = null,
 )
 
 fun Order.toDto() = OrderDto(
@@ -67,6 +71,10 @@ fun Order.toDto() = OrderDto(
     updatedAt = updatedAt,
     items = items.map { it.toDto() },
 )
+
+/** Sum of each item's weight * quantity, in grams. Items with no recorded weight count as 0. */
+fun Order.totalWeightGrams(): BigDecimal =
+    items.fold(BigDecimal.ZERO) { sum, item -> sum + (item.weight ?: BigDecimal.ZERO) * BigDecimal(item.quantity) }
 
 data class CreateOrderItemRequest(
     val inventoryItemId: UUID? = null,

@@ -27,6 +27,13 @@ class Shipment(
     @Column(nullable = false)
     var status: ShipmentStatus = ShipmentStatus.PREPARING,
 
+    @Enumerated(EnumType.STRING)
+    var destination: ShipmentDestination? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "shipping_method")
+    var shippingMethod: ShippingMethod? = null,
+
     @Column(name = "tracking_number")
     var trackingNumber: String? = null,
 

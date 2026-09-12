@@ -33,6 +33,8 @@ class ShipmentService(
     fun update(id: UUID, request: UpdateShipmentRequest): ShipmentDto {
         val shipment = findOrThrow(id)
         request.status?.let { shipment.status = it }
+        request.destination?.let { shipment.destination = it }
+        request.shippingMethod?.let { shipment.shippingMethod = it }
         request.trackingNumber?.let { shipment.trackingNumber = it }
         request.notes?.let { shipment.notes = it }
         shipment.updatedAt = OffsetDateTime.now()
