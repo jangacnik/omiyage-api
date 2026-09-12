@@ -54,14 +54,22 @@ class OrderService(
     }
 
     @Transactional
-    fun updateItem(orderId: UUID, itemId: UUID, purchased: Boolean, actualPrice: java.math.BigDecimal?, weight: java.math.BigDecimal? = null): OrderDto {
+    fun updateItem(
+        orderId: UUID,
+        itemId: UUID,
+        status: OrderItemStatus,
+        actualPrice: java.math.BigDecimal?,
+        weight: java.math.BigDecimal? = null,
+    ): OrderDto {
         val item = orderItems.findById(itemId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
         if (item.order.id != orderId) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found")
         }
-        item.purchased = purchased
-        item.purchasedAt = if (purchased) OffsetDateTime.now() else null
+        item.status = status
+        if (status == OrderItemStatus.BOUGHT && item.purchasedAt == null) {
+            item.purchasedAt = OffsetDateTime.now()
+        }
         item.actualPrice = actualPrice
         item.weight = weight
         item.updatedAt = OffsetDateTime.now()

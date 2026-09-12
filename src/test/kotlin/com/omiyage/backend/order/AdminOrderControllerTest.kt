@@ -7,6 +7,8 @@ import com.omiyage.backend.security.JwtAuthenticationFilter
 import com.omiyage.backend.security.JwtVerifier
 import com.omiyage.backend.security.SecurityConfig
 import com.omiyage.backend.security.TestJwt
+import com.omiyage.backend.shipment.AssignShipmentRequest
+import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.web.PageResponse
 import io.mockk.every
 import org.junit.jupiter.api.Test
@@ -39,14 +41,18 @@ class AdminOrderControllerTest {
     @MockkBean
     lateinit var service: OrderService
 
+    @MockkBean
+    lateinit var shipments: ShipmentService
+
     private fun userToken() = TestJwt.sign(TEST_SECRET, role = "USER")
     private fun adminToken() = TestJwt.sign(TEST_SECRET, role = "ADMIN")
 
-    private fun sampleOrder(status: OrderStatus = OrderStatus.IN_PROGRESS) = OrderDto(
+    private fun sampleOrder(status: OrderStatus = OrderStatus.IN_PROGRESS, shipmentId: UUID? = null) = OrderDto(
         id = UUID.randomUUID(),
         userId = UUID.randomUUID(),
         status = status,
         notes = null,
+        shipmentId = shipmentId,
         createdAt = OffsetDateTime.now(),
         updatedAt = OffsetDateTime.now(),
         items = emptyList(),
@@ -91,15 +97,35 @@ class AdminOrderControllerTest {
     }
 
     @Test
-    fun `updateItem marks an item purchased`() {
+    fun `updateItem changes an item's status`() {
         val orderId = UUID.randomUUID()
         val itemId = UUID.randomUUID()
-        every { service.updateItem(orderId, itemId, true, java.math.BigDecimal("999.00")) } returns sampleOrder()
+        every {
+            service.updateItem(orderId, itemId, OrderItemStatus.BOUGHT, java.math.BigDecimal("999.00"))
+        } returns sampleOrder()
 
         mockMvc.patch("/api/admin/orders/$orderId/items/$itemId") {
             header("Authorization", "Bearer ${adminToken()}")
             contentType = MediaType.APPLICATION_JSON
-            content = objectMapper.writeValueAsString(UpdateOrderItemRequest(purchased = true, actualPrice = java.math.BigDecimal("999.00")))
+            content = objectMapper.writeValueAsString(
+                UpdateOrderItemRequest(status = OrderItemStatus.BOUGHT, actualPrice = java.math.BigDecimal("999.00")),
+            )
         }.andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `assignShipment attaches an order to a shipment`() {
+        val orderId = UUID.randomUUID()
+        val shipmentId = UUID.randomUUID()
+        every { shipments.assignOrder(orderId, shipmentId) } returns sampleOrder(shipmentId = shipmentId)
+
+        mockMvc.patch("/api/admin/orders/$orderId/shipment") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(AssignShipmentRequest(shipmentId))
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.shipmentId") { value(shipmentId.toString()) }
+        }
     }
 }

@@ -18,6 +18,8 @@ import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
 
+enum class OrderItemStatus { REQUESTED, CONFIRMING, BUYING, BOUGHT, SHIPPED }
+
 @Entity
 @Table(name = "order_items")
 class OrderItem(
@@ -55,8 +57,9 @@ class OrderItem(
     @Column(name = "actual_price")
     var actualPrice: BigDecimal? = null,
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    var purchased: Boolean = false,
+    var status: OrderItemStatus = OrderItemStatus.REQUESTED,
 
     @Column(name = "purchased_at")
     var purchasedAt: OffsetDateTime? = null,

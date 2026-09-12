@@ -48,6 +48,7 @@ class OrderControllerTest {
         userId = userId,
         status = OrderStatus.REQUESTED,
         notes = null,
+        shipmentId = null,
         createdAt = OffsetDateTime.now(),
         updatedAt = OffsetDateTime.now(),
         items = emptyList(),

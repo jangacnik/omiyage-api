@@ -10,7 +10,6 @@ import com.omiyage.backend.security.Role
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -111,7 +110,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun `updateItem marks an item purchased independently and preserves order status`() {
+    fun `updateItem changes an item's status independently and preserves order status`() {
         val order = orderService.create(
             user(),
             CreateOrderRequest(
@@ -123,13 +122,13 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         )
         orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS)
 
-        val updated = orderService.updateItem(order.id, order.items[0].id, true, BigDecimal("450"))
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"))
 
-        val purchasedItem = updated.items.first { it.id == order.items[0].id }
+        val boughtItem = updated.items.first { it.id == order.items[0].id }
         val untouchedItem = updated.items.first { it.id == order.items[1].id }
-        assertTrue(purchasedItem.purchased)
-        assertEquals(BigDecimal("450"), purchasedItem.actualPrice)
-        assertTrue(!untouchedItem.purchased)
+        assertEquals(OrderItemStatus.BOUGHT, boughtItem.status)
+        assertEquals(BigDecimal("450"), boughtItem.actualPrice)
+        assertEquals(OrderItemStatus.REQUESTED, untouchedItem.status)
         assertEquals(OrderStatus.IN_PROGRESS, updated.status)
     }
 

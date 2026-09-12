@@ -6,6 +6,7 @@ import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.order.CreateOrderItemRequest
 import com.omiyage.backend.order.CreateOrderRequest
+import com.omiyage.backend.order.OrderItemStatus
 import com.omiyage.backend.order.UpdateOrderItemRequest
 import com.omiyage.backend.order.UpdateOrderStatusRequest
 import com.omiyage.backend.order.OrderStatus
@@ -88,7 +89,7 @@ class FullFlowIntegrationTest : PostgresIntegrationTest() {
     private fun adminToken() = TestJwt.sign(TEST_SECRET, subject = UUID.randomUUID().toString(), nickname = "root", role = "ADMIN")
 
     @Test
-    fun `create order with an image, admin marks it purchased, user sees the updated status`() {
+    fun `create order with an image, admin marks it bought, user sees the updated status`() {
         val admin = adminToken()
         val user = userToken()
 
@@ -140,7 +141,7 @@ class FullFlowIntegrationTest : PostgresIntegrationTest() {
         val orderId = orderJson.get("id").asText()
         val firstItemId = orderJson.get("items").get(0).get("id").asText()
 
-        // Admin sees it in the queue, marks the first item purchased, and advances the order.
+        // Admin sees it in the queue, marks the first item bought, and advances the order.
         mockMvc.perform(get("/api/admin/orders").header("Authorization", "Bearer $admin"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.totalElements").value(1))
@@ -149,9 +150,9 @@ class FullFlowIntegrationTest : PostgresIntegrationTest() {
             patch("/api/admin/orders/$orderId/items/$firstItemId")
                 .header("Authorization", "Bearer $admin")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(UpdateOrderItemRequest(purchased = true, actualPrice = BigDecimal("1150.00")))),
+                .content(objectMapper.writeValueAsString(UpdateOrderItemRequest(status = OrderItemStatus.BOUGHT, actualPrice = BigDecimal("1150.00")))),
         ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.items[?(@.id=='$firstItemId')].purchased").value(true))
+            .andExpect(jsonPath("$.items[?(@.id=='$firstItemId')].status").value("BOUGHT"))
 
         mockMvc.perform(
             patch("/api/admin/orders/$orderId")
@@ -160,14 +161,14 @@ class FullFlowIntegrationTest : PostgresIntegrationTest() {
                 .content(objectMapper.writeValueAsString(UpdateOrderStatusRequest(OrderStatus.IN_PROGRESS))),
         ).andExpect(status().isOk).andExpect(jsonPath("$.status").value("IN_PROGRESS"))
 
-        // User sees the update, and the still-unpurchased second item is untouched.
+        // User sees the update, and the still-untouched second item keeps its original status.
         val finalOrder = mockMvc.perform(get("/api/orders/$orderId").header("Authorization", "Bearer $user"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
             .andReturn()
         val items = objectMapper.readTree(finalOrder.response.contentAsString).get("items")
-        val purchasedFlags = items.map { it.get("purchased").asBoolean() }
-        assertEquals(1, purchasedFlags.count { it })
-        assertTrue(purchasedFlags.contains(false))
+        val statuses = items.map { it.get("status").asText() }
+        assertEquals(1, statuses.count { it == "BOUGHT" })
+        assertTrue(statuses.contains("REQUESTED"))
     }
 }

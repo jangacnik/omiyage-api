@@ -1,6 +1,7 @@
 package com.omiyage.backend.order
 
-import com.omiyage.backend.web.PageResponse
+import com.omiyage.backend.shipment.AssignShipmentRequest
+import com.omiyage.backend.shipment.ShipmentService
 import jakarta.validation.Valid
 import org.springframework.data.domain.Pageable
 import org.springframework.data.web.PageableDefault
@@ -15,7 +16,7 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/api/admin/orders")
-class AdminOrderController(private val service: OrderService) {
+class AdminOrderController(private val service: OrderService, private val shipments: ShipmentService) {
 
     @GetMapping
     fun list(
@@ -32,5 +33,9 @@ class AdminOrderController(private val service: OrderService) {
         @PathVariable id: UUID,
         @PathVariable itemId: UUID,
         @Valid @RequestBody request: UpdateOrderItemRequest,
-    ): OrderDto = service.updateItem(id, itemId, request.purchased, request.actualPrice, request.weight)
+    ): OrderDto = service.updateItem(id, itemId, request.status, request.actualPrice, request.weight)
+
+    @PatchMapping("/{id}/shipment")
+    fun assignShipment(@PathVariable id: UUID, @RequestBody request: AssignShipmentRequest): OrderDto =
+        shipments.assignOrder(id, request.shipmentId)
 }

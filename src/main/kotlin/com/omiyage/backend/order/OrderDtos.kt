@@ -21,7 +21,7 @@ data class OrderItemDto(
     val currency: Currency,
     val maxPrice: BigDecimal?,
     val actualPrice: BigDecimal?,
-    val purchased: Boolean,
+    val status: OrderItemStatus,
     val purchasedAt: OffsetDateTime?,
     val quantity: Int,
     val weight: BigDecimal?,
@@ -39,7 +39,7 @@ fun OrderItem.toDto(): OrderItemDto {
         currency = currency,
         maxPrice = maxPrice,
         actualPrice = actualPrice,
-        purchased = purchased,
+        status = status,
         purchasedAt = purchasedAt,
         quantity = quantity,
         weight = weight,
@@ -51,6 +51,7 @@ data class OrderDto(
     val userId: UUID,
     val status: OrderStatus,
     val notes: String?,
+    val shipmentId: UUID?,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
     val items: List<OrderItemDto>,
@@ -61,6 +62,7 @@ fun Order.toDto() = OrderDto(
     userId = userId,
     status = status,
     notes = notes,
+    shipmentId = shipment?.id,
     createdAt = createdAt,
     updatedAt = updatedAt,
     items = items.map { it.toDto() },
@@ -85,7 +87,7 @@ data class CreateOrderRequest(
 data class UpdateOrderStatusRequest(@field:NotNull val status: OrderStatus)
 
 data class UpdateOrderItemRequest(
-    @field:NotNull val purchased: Boolean,
+    @field:NotNull val status: OrderItemStatus,
     @field:DecimalMin("0.0") val actualPrice: BigDecimal? = null,
     val weight: BigDecimal? = null,
 )
