@@ -131,10 +131,14 @@ class OrderService(
 
     @Transactional
     fun adminDelete(orderId: UUID) {
-        if (!orders.existsById(orderId)) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        val order = findOrThrow(orderId)
+        val shipmentId = order.shipment?.id
+        orders.delete(order)
+        // Deleting the order can leave its shipment referenced by no order at all - same cleanup
+        // as the merge/combine/reassign paths, just triggered by the order disappearing outright.
+        if (shipmentId != null && !orders.existsByShipment_Id(shipmentId)) {
+            shipments.deleteById(shipmentId)
         }
-        orders.deleteById(orderId)
     }
 
     @Transactional

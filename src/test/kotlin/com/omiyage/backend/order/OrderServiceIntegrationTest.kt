@@ -228,6 +228,29 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `deleting the last order on a shipment deletes the shipment too`() {
+        val owner = user()
+        val solo = singleItemOrder(owner, "solo")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+
+        orderService.adminDelete(solo.id)
+
+        assertFalse(shipmentRepository.existsById(shipment.id))
+    }
+
+    @Test
+    fun `deleting one of several orders on a shipment keeps the shipment`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+
+        orderService.adminDelete(a.id)
+
+        assertTrue(shipmentRepository.existsById(shipment.id))
+    }
+
+    @Test
     fun `merging orders deletes a source order's shipment once it has no orders left`() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
