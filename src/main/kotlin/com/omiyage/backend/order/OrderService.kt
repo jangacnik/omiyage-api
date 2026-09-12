@@ -3,6 +3,7 @@ package com.omiyage.backend.order
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
+import com.omiyage.backend.shipment.ShipmentStatus
 import com.omiyage.backend.web.PageResponse
 import com.omiyage.backend.web.toPageResponse
 import org.springframework.data.domain.Pageable
@@ -82,13 +83,9 @@ class OrderService(
         if (order.userId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
-        if (order.status != OrderStatus.REQUESTED && order.status != OrderStatus.IN_PROGRESS) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "order is no longer editable")
-        }
-        val item = orderItems.findById(itemId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
-        if (item.order.id != orderId) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found")
+        val item = ownItemOrThrow(order, itemId)
+        if (item.status == OrderItemStatus.BOUGHT) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought and can no longer be edited")
         }
 
         request.title?.let { item.customTitle = it }
@@ -98,6 +95,67 @@ class OrderService(
         request.quantity?.let { item.quantity = it }
         item.updatedAt = OffsetDateTime.now()
         return order.toDto()
+    }
+
+    @Transactional
+    fun removeOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal): OrderDto {
+        val order = findOrThrow(orderId)
+        if (order.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        val item = ownItemOrThrow(order, itemId)
+        if (item.status == OrderItemStatus.BOUGHT) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought and can no longer be removed")
+        }
+
+        order.items.remove(item)
+        orderItems.delete(item)
+        order.updatedAt = OffsetDateTime.now()
+        return order.toDto()
+    }
+
+    @Transactional
+    fun mergeMine(principal: MeishiPrincipal, orderIds: List<UUID>): OrderDto {
+        val distinctIds = orderIds.distinct()
+        if (distinctIds.size < 2) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "select at least two different orders to merge")
+        }
+
+        val selected = distinctIds.map { findOrThrow(it) }
+        selected.forEach { order ->
+            if (order.userId != principal.id) {
+                throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+            }
+            val shipmentStatus = order.shipment?.status
+            if (shipmentStatus != null && shipmentStatus != ShipmentStatus.PREPARING) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "an order that has already shipped cannot be merged")
+            }
+        }
+
+        val target = selected.first()
+        selected.drop(1).forEach { source ->
+            source.items.toList().forEach { item ->
+                source.items.remove(item)
+                item.order = target
+                target.items.add(item)
+            }
+            target.notes = listOfNotNull(
+                target.notes?.takeIf { it.isNotBlank() },
+                source.notes?.takeIf { it.isNotBlank() },
+            ).joinToString("\n").ifBlank { null }
+        }
+        orders.deleteAll(selected.drop(1))
+        target.updatedAt = OffsetDateTime.now()
+        return target.toDto()
+    }
+
+    private fun ownItemOrThrow(order: Order, itemId: UUID): OrderItem {
+        val item = orderItems.findById(itemId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
+        if (item.order.id != order.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found")
+        }
+        return item
     }
 
     private fun buildOrderItem(order: Order, request: CreateOrderItemRequest): OrderItem {

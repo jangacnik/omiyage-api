@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.web.PageableDefault
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -31,10 +32,18 @@ class OrderController(private val service: OrderService) {
     @GetMapping("/{id}")
     fun getById(@PathVariable id: UUID): OrderDto = service.getById(id, CurrentUser.principal())
 
+    @PostMapping("/merge")
+    fun mergeMine(@Valid @RequestBody request: MergeOrdersRequest): OrderDto =
+        service.mergeMine(CurrentUser.principal(), request.orderIds)
+
     @PatchMapping("/{id}/items/{itemId}")
     fun updateOwnItem(
         @PathVariable id: UUID,
         @PathVariable itemId: UUID,
         @Valid @RequestBody request: UpdateOwnOrderItemRequest,
     ): OrderDto = service.updateOwnItem(id, itemId, CurrentUser.principal(), request)
+
+    @DeleteMapping("/{id}/items/{itemId}")
+    fun removeOwnItem(@PathVariable id: UUID, @PathVariable itemId: UUID): OrderDto =
+        service.removeOwnItem(id, itemId, CurrentUser.principal())
 }

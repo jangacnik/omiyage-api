@@ -107,3 +107,5 @@ data class UpdateOwnOrderItemRequest(
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
     @field:Min(1) val quantity: Int? = null,
 )
+
+data class MergeOrdersRequest(@field:NotEmpty val orderIds: List<UUID>)
