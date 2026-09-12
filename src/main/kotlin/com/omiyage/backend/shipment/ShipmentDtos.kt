@@ -16,28 +16,31 @@ data class ShipmentDto(
     val shippingMethod: ShippingMethod?,
     val trackingNumber: String?,
     val notes: String?,
+    val ownerUserId: UUID?,
     val totalWeightGrams: BigDecimal,
-    // Null until both destination and shippingMethod are set, or if the total weight exceeds
-    // what that method covers (Small Packet / Surface Mail cap at 2kg) - see ShippingRates.
+    // Both null until destination and shippingMethod are set and a matching admin-configured
+    // rate covers the total weight - see ShippingRateService.priceFor.
     val shippingCostJpy: Int?,
+    val estimatedDays: Int?,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
     val orders: List<OrderDto>,
 )
 
-fun Shipment.toDto(): ShipmentDto {
+fun Shipment.toDto(priceFor: (ShippingMethod, ShipmentDestination, Int) -> ShippingQuote?): ShipmentDto {
     val weightByOrder = orders.associateWith { it.totalWeightGrams() }
     val totalWeight = weightByOrder.values.fold(BigDecimal.ZERO) { sum, w -> sum + w }
 
-    val totalCostJpy = destination?.let { dest ->
+    val quote = destination?.let { dest ->
         shippingMethod?.let { method ->
             if (totalWeight > BigDecimal.ZERO) {
-                ShippingRates.priceJpy(method, dest, totalWeight.setScale(0, RoundingMode.CEILING).toInt())
+                priceFor(method, dest, totalWeight.setScale(0, RoundingMode.CEILING).toInt())
             } else {
                 null
             }
         }
     }
+    val totalCostJpy = quote?.costJpy
 
     val ordersWithShares = orders.map { order ->
         val weight = weightByOrder.getValue(order)
@@ -71,8 +74,10 @@ fun Shipment.toDto(): ShipmentDto {
         shippingMethod = shippingMethod,
         trackingNumber = trackingNumber,
         notes = notes,
+        ownerUserId = ownerUserId,
         totalWeightGrams = totalWeight,
         shippingCostJpy = totalCostJpy,
+        estimatedDays = quote?.estimatedDays,
         createdAt = createdAt,
         updatedAt = updatedAt,
         orders = reconciledOrders,

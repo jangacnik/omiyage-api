@@ -30,6 +30,7 @@ class InventoryService(
         val item = InventoryItem(
             title = request.title,
             description = request.description,
+            link = request.link,
             condition = request.condition,
             priceAmount = request.priceAmount,
             currency = request.currency,
@@ -44,6 +45,7 @@ class InventoryService(
         val item = findOrThrow(id)
         item.title = request.title
         item.description = request.description
+        item.link = request.link
         item.condition = request.condition
         item.priceAmount = request.priceAmount
         item.currency = request.currency

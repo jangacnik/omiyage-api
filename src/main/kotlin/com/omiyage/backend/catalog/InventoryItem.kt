@@ -38,6 +38,8 @@ class InventoryItem(
 
     var description: String? = null,
 
+    var link: String? = null,
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var condition: Condition,

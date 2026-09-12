@@ -53,6 +53,11 @@ class Shipment(
     @OrderBy("createdAt ASC")
     val orders: MutableList<Order> = mutableListOf(),
 
+    // The user whose order this shipment was created for/absorbed into when orders were combined -
+    // only they may submit it for shipping, even if other users' orders got combined in alongside.
+    @Column(name = "owner_user_id")
+    var ownerUserId: UUID? = null,
+
     @Column(name = "deleted_at")
     var deletedAt: OffsetDateTime? = null,
 )

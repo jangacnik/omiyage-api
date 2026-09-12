@@ -41,6 +41,7 @@ class InventoryControllerTest {
         id = UUID.randomUUID(),
         title = "Kit Kat matcha 12-pack",
         description = "Sealed box",
+        link = null,
         condition = Condition.NEW,
         priceAmount = BigDecimal("1200.00"),
         currency = Currency.JPY,

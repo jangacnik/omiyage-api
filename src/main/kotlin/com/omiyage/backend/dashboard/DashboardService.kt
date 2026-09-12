@@ -1,0 +1,45 @@
+package com.omiyage.backend.dashboard
+
+import com.omiyage.backend.order.LOCKED_ITEM_STATUSES
+import com.omiyage.backend.order.OrderRepository
+import com.omiyage.backend.order.OrderStatus
+import com.omiyage.backend.order.toDto
+import com.omiyage.backend.user.MeishiAdminClient
+import com.omiyage.backend.user.UserProfileDto
+import org.springframework.data.domain.Pageable
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
+
+@Service
+class DashboardService(
+    private val meishiAdmin: MeishiAdminClient,
+    private val orders: OrderRepository,
+) {
+
+    @Transactional(readOnly = true)
+    fun userDashboard(authHeader: String): List<UserDashboardEntryDto> =
+        meishiAdmin.listUsers(authHeader).map { user -> entryFor(user) }
+
+    private fun entryFor(user: UserProfileDto): UserDashboardEntryDto {
+        val userOrders = orders.findByUserId(user.id, Pageable.unpaged()).content
+        val pending = userOrders
+            .flatMap { order -> order.items.map { item -> order to item } }
+            // A cancelled order's items that were never actually bought owe nothing - but if an
+            // item was already BOUGHT/SHIPPED before the order got cancelled, that money was
+            // still spent and must keep showing up as owed until marked paid.
+            .filter { (order, item) -> order.status != OrderStatus.CANCELLED || item.status in LOCKED_ITEM_STATUSES }
+            .map { (_, item) -> item }
+            .filter { !it.paid }
+            .groupBy({ it.currency }, { it.actualPrice ?: it.maxPrice ?: BigDecimal.ZERO })
+            .map { (currency, amounts) -> PendingAmountDto(currency, amounts.fold(BigDecimal.ZERO, BigDecimal::add)) }
+            .filter { it.amount > BigDecimal.ZERO }
+            .sortedBy { it.currency }
+
+        return UserDashboardEntryDto(
+            user = user,
+            orders = userOrders.map { it.toDto() },
+            pendingAmounts = pending,
+        )
+    }
+}

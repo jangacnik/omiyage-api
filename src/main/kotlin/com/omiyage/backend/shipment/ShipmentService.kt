@@ -1,7 +1,9 @@
 package com.omiyage.backend.shipment
 
+import com.omiyage.backend.order.Order
 import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.order.OrderRepository
+import com.omiyage.backend.order.isOpen
 import com.omiyage.backend.order.toDto
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -14,21 +16,43 @@ import java.util.UUID
 class ShipmentService(
     private val shipments: ShipmentRepository,
     private val orders: OrderRepository,
+    private val shippingRates: ShippingRateService,
 ) {
 
     @Transactional(readOnly = true)
-    fun listAll(): List<ShipmentDto> = shipments.findAll().map { it.toDto() }
+    fun listAll(): List<ShipmentDto> = shipments.findAll().map { it.toDto(shippingRates::priceFor) }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID): ShipmentDto = findOrThrow(id).toDto()
+    fun getById(id: UUID): ShipmentDto = findOrThrow(id).toDto(shippingRates::priceFor)
 
+    // Combining orders never spins up a fresh shipment when one isn't needed: the first selected
+    // order "absorbs" the rest - if it already has a shipment, the others fold into that one; if
+    // not, a new shipment is created and that order becomes its owner. Any other shipment a
+    // selected order gets moved off of is deleted once empty, so two pre-existing shipments being
+    // combined end up as one, not three.
     @Transactional
     fun create(request: CreateShipmentRequest): ShipmentDto {
-        val shipment = shipments.save(Shipment(notes = request.notes))
+        val orderIds = request.orderIds.distinct()
+        if (orderIds.isEmpty()) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "select at least one order to combine")
+        }
+        val selected = orderIds.map { orderOrThrow(it) }
+        selected.forEach { order ->
+            if (!order.isOpen) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "an order that is no longer open cannot be combined into a shipment")
+            }
+        }
+
+        val absorbing = selected.first()
+        val shipment = absorbing.shipment ?: shipments.save(Shipment(notes = request.notes, ownerUserId = absorbing.userId))
+        if (shipment.ownerUserId == null) {
+            shipment.ownerUserId = absorbing.userId
+        }
+
         val vacated = mutableSetOf<UUID>()
-        request.orderIds.forEach { orderId -> attach(shipment, orderId, vacated) }
-        deleteIfEmpty(vacated)
-        return shipment.toDto()
+        selected.forEach { order -> attach(shipment, order, vacated) }
+        deleteIfEmpty(vacated - shipment.id!!)
+        return shipment.toDto(shippingRates::priceFor)
     }
 
     @Transactional
@@ -40,7 +64,7 @@ class ShipmentService(
         request.trackingNumber?.let { shipment.trackingNumber = it }
         request.notes?.let { shipment.notes = it }
         shipment.updatedAt = OffsetDateTime.now()
-        return shipment.toDto()
+        return shipment.toDto(shippingRates::priceFor)
     }
 
     @Transactional
@@ -70,11 +94,15 @@ class ShipmentService(
         return dto
     }
 
-    private fun attach(shipment: Shipment, orderId: UUID, vacated: MutableSet<UUID>) {
-        val order = orders.findById(orderId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found: $orderId") }
+    private fun attach(shipment: Shipment, order: Order, vacated: MutableSet<UUID>) {
         val previousShipmentId = order.shipment?.id
-        if (previousShipmentId != null && previousShipmentId != shipment.id) {
+        if (previousShipmentId == shipment.id) {
+            // Already attached here (e.g. the absorbing order combining into its own existing
+            // shipment) - touching shipment.orders again would duplicate it in the in-memory list,
+            // since the lazy collection load below would already contain this same entity.
+            return
+        }
+        if (previousShipmentId != null) {
             vacated += previousShipmentId
         }
         order.shipment = shipment
@@ -97,4 +125,7 @@ class ShipmentService(
 
     private fun findOrThrow(id: UUID): Shipment =
         shipments.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "shipment not found") }
+
+    private fun orderOrThrow(id: UUID): Order =
+        orders.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found: $id") }
 }
