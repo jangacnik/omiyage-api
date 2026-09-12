@@ -12,9 +12,10 @@ import java.util.UUID
 class ShipmentDtosTest {
 
     private fun orderWeighing(grams: Int): Order {
-        val order = Order(userId = UUID.randomUUID())
+        val order = Order(id = UUID.randomUUID(), userId = UUID.randomUUID())
         order.items.add(
             OrderItem(
+                id = UUID.randomUUID(),
                 order = order,
                 customTitle = "item",
                 currency = Currency.JPY,
