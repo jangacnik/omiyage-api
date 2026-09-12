@@ -153,6 +153,7 @@ class OrderService(
             if (order.userId != principal.id) {
                 throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
             }
+            requireOpen(order)
             val shipmentStatus = order.shipment?.status
             if (shipmentStatus != null && shipmentStatus != ShipmentStatus.PREPARING) {
                 throw ResponseStatusException(HttpStatus.CONFLICT, "an order that has already shipped cannot be merged")

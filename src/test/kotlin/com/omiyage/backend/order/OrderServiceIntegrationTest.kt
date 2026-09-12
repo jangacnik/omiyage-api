@@ -251,6 +251,26 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `cannot merge a closed source order into an open target`() {
+        val owner = user()
+        val target = singleItemOrder(owner, "target")
+        val source = singleItemOrder(owner, "source")
+        orderService.updateStatus(source.id, OrderStatus.CANCELLED)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.mergeMine(owner, listOf(target.id, source.id)) }
+    }
+
+    @Test
+    fun `cannot merge an open source into a closed target`() {
+        val owner = user()
+        val target = singleItemOrder(owner, "target")
+        val source = singleItemOrder(owner, "source")
+        orderService.updateStatus(target.id, OrderStatus.DELIVERED)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.mergeMine(owner, listOf(target.id, source.id)) }
+    }
+
+    @Test
     fun `merging orders deletes a source order's shipment once it has no orders left`() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
