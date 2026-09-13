@@ -26,6 +26,12 @@ enum class OrderItemStatus { REQUESTED, CONFIRMING, BUYING, BOUGHT, SHIPPED }
 @Table(name = "order_items")
 @SQLDelete(sql = "UPDATE order_items SET deleted_at = now() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
+// Admin item-edit dialog fires two PATCHes at once (details + status/price) against this same
+// row. Without dynamic-update, Hibernate's default full-column UPDATE writes back whatever each
+// request loaded for the fields it *didn't* touch, and the later-committing request silently
+// reverts the other's just-saved change. Dynamic update makes each UPDATE only touch columns this
+// transaction actually changed, so the two concurrent writes stop clobbering each other.
+@org.hibernate.annotations.DynamicUpdate
 class OrderItem(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

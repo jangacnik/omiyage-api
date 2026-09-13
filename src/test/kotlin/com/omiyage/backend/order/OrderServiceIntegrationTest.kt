@@ -46,6 +46,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     @Autowired
     lateinit var orderRepository: OrderRepository
 
+    @Autowired
+    lateinit var inventoryItemRepository: com.omiyage.backend.catalog.InventoryItemRepository
+
     private fun user() = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
     private fun admin() = MeishiPrincipal(UUID.randomUUID(), "root", Role.ADMIN)
 
@@ -74,6 +77,23 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         assertEquals(1, order.items.size)
         assertEquals("Ghibli museum ticket", order.items[0].title)
         assertNull(order.items[0].inventoryItemId)
+
+        val inventoryItem = inventoryItemRepository.findAll().single { it.title == "Ghibli museum ticket" }
+        assertEquals(0, inventoryItem.stockQuantity)
+        assertEquals(0, BigDecimal("2000").compareTo(inventoryItem.priceAmount))
+    }
+
+    @Test
+    fun `a custom request with no max price still lands in inventory, at zero price`() {
+        val request = CreateOrderRequest(
+            items = listOf(CreateOrderItemRequest(title = "Mystery snack box", condition = Condition.NEW, currency = Currency.JPY)),
+        )
+
+        orderService.create(user(), request)
+
+        val inventoryItem = inventoryItemRepository.findAll().single { it.title == "Mystery snack box" }
+        assertEquals(0, inventoryItem.stockQuantity)
+        assertEquals(0, BigDecimal.ZERO.compareTo(inventoryItem.priceAmount))
     }
 
     @Test
