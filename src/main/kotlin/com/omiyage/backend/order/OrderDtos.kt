@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import jakarta.validation.Valid
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -29,6 +30,8 @@ data class OrderItemDto(
     val purchasedAt: OffsetDateTime?,
     val quantity: Int,
     val weight: BigDecimal?,
+    val isPreorder: Boolean = false,
+    val expectedReleaseDate: LocalDate? = null,
     // Admin-only - never populated on a response a normal user can read, see toDto(includeProfit).
     val soldPrice: BigDecimal? = null,
     val profit: BigDecimal? = null,
@@ -56,6 +59,8 @@ fun OrderItem.toDto(includeProfit: Boolean = false): OrderItemDto {
         purchasedAt = purchasedAt,
         quantity = quantity,
         weight = weight,
+        isPreorder = isPreorder,
+        expectedReleaseDate = expectedReleaseDate,
         soldPrice = if (includeProfit) soldPrice else null,
         profit = if (includeProfit) profit() else null,
     )
@@ -119,6 +124,8 @@ data class CreateOrderItemRequest(
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
     @field:Min(1) val quantity: Int = 1,
     @field:Size(max = 2048) val link: String? = null,
+    val isPreorder: Boolean = false,
+    val expectedReleaseDate: LocalDate? = null,
 )
 
 data class CreateOrderRequest(
@@ -150,3 +157,7 @@ data class MarkItemPaidRequest(@field:NotNull val paid: Boolean)
 data class MergeOrdersRequest(@field:NotEmpty val orderIds: List<UUID>)
 
 data class UpdateOrderNicknameRequest(@field:Size(max = 100) val nickname: String? = null)
+
+data class SplitOrderRequest(@field:NotEmpty val itemIds: List<UUID>)
+
+data class SplitOrderResponseDto(val original: OrderDto, val created: OrderDto)

@@ -43,6 +43,15 @@ class Shipment(
 
     var notes: String? = null,
 
+    @Column(length = 100)
+    var title: String? = null,
+
+    @Column(name = "shipped_at")
+    var shippedAt: OffsetDateTime? = null,
+
+    @Column(name = "arrived_at")
+    var arrivedAt: OffsetDateTime? = null,
+
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: OffsetDateTime = OffsetDateTime.now(),
 

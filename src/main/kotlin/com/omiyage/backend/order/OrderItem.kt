@@ -84,6 +84,12 @@ class OrderItem(
 
     var weight: BigDecimal? = null,
 
+    @Column(name = "is_preorder", nullable = false)
+    var isPreorder: Boolean = false,
+
+    @Column(name = "expected_release_date")
+    var expectedReleaseDate: java.time.LocalDate? = null,
+
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: OffsetDateTime = OffsetDateTime.now(),
 
@@ -96,6 +102,9 @@ class OrderItem(
     init {
         require(inventoryItem != null || customTitle != null) {
             "order item must reference an inventory item or provide a custom title"
+        }
+        require(!isPreorder || expectedReleaseDate != null) {
+            "a preorder item must have an expected release date"
         }
     }
 }

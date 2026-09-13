@@ -170,6 +170,37 @@ class OrderService(
         return order.toDto()
     }
 
+    // Mirrors mergeMine's validation shape, in reverse: pulls the chosen items off the source order
+    // and onto a brand-new one instead of folding multiple orders together. The new order is never
+    // attached to a shipment, so splitting an item out of a combined shipment falls out of this for
+    // free - no separate "remove item from shipment" code path needed.
+    @Transactional
+    fun splitMine(principal: MeishiPrincipal, orderId: UUID, itemIds: List<UUID>): SplitOrderResponseDto {
+        val distinctIds = itemIds.distinct()
+        val source = findOrThrow(orderId)
+        if (source.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        requireOpen(source)
+        val toMove = distinctIds.map { id ->
+            source.items.find { it.id == id }
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found: $id")
+        }
+        if (toMove.isEmpty() || toMove.size == source.items.size) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "split must move at least one item and leave at least one behind")
+        }
+
+        val created = Order(userId = source.userId, status = source.status)
+        orders.save(created)
+        toMove.forEach { item ->
+            source.items.remove(item)
+            item.order = created
+            created.items.add(item)
+        }
+        source.updatedAt = OffsetDateTime.now()
+        return SplitOrderResponseDto(original = source.toDto(), created = created.toDto())
+    }
+
     // Only the order's own owner (no shipment yet) or the shipment's owner (set when orders were
     // combined - see ShipmentService.create) may submit it. Submitting flips every still-open
     // order on the shipment to PREPARING_SHIPPING, not just the one the caller named, since the
@@ -358,6 +389,11 @@ class OrderService(
                 maxPrice = request.maxPrice,
                 quantity = request.quantity,
                 link = request.link,
+                // Preorder status/date is catalog-controlled, not user-supplied - inherit from the
+                // linked item rather than trusting request.isPreorder, which would let a member
+                // spoof a preorder badge or date on a normal in-stock item.
+                isPreorder = inventoryItem.isPreorder,
+                expectedReleaseDate = inventoryItem.expectedReleaseDate,
             )
         }
 
@@ -366,6 +402,9 @@ class OrderService(
         }
         if (request.condition == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "condition is required for a custom order item")
+        }
+        if (request.isPreorder && request.expectedReleaseDate == null) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a preorder item must have an expected release date")
         }
         return OrderItem(
             order = order,
@@ -377,6 +416,8 @@ class OrderService(
             maxPrice = request.maxPrice,
             quantity = request.quantity,
             link = request.link,
+            isPreorder = request.isPreorder,
+            expectedReleaseDate = request.expectedReleaseDate,
         )
     }
 

@@ -1,6 +1,7 @@
 package com.omiyage.backend.order
 
 import com.omiyage.backend.security.CurrentUser
+import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.web.PageResponse
 import jakarta.validation.Valid
 import org.springframework.data.domain.Pageable
@@ -19,7 +20,7 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/api/orders")
-class OrderController(private val service: OrderService) {
+class OrderController(private val service: OrderService, private val shipments: ShipmentService) {
 
     @PostMapping
     fun create(@Valid @RequestBody request: CreateOrderRequest): ResponseEntity<OrderDto> =
@@ -54,6 +55,13 @@ class OrderController(private val service: OrderService) {
 
     @PostMapping("/{id}/submit-for-shipping")
     fun submitForShipping(@PathVariable id: UUID): OrderDto = service.submitForShipping(id, CurrentUser.principal())
+
+    @PostMapping("/{id}/split")
+    fun splitMine(@PathVariable id: UUID, @Valid @RequestBody request: SplitOrderRequest): SplitOrderResponseDto =
+        service.splitMine(CurrentUser.principal(), id, request.itemIds)
+
+    @PostMapping("/{id}/leave-shipment")
+    fun leaveShipment(@PathVariable id: UUID): OrderDto = shipments.leaveShipment(id, CurrentUser.principal())
 
     @PatchMapping("/{id}/items/{itemId}")
     fun updateOwnItem(

@@ -13,11 +13,14 @@ import java.util.UUID
 data class ShipmentDto(
     val id: UUID,
     val status: ShipmentStatus,
+    val title: String?,
     val destination: ShipmentDestination?,
     val shippingMethod: ShippingMethod?,
     val trackingNumber: String?,
     val notes: String?,
     val ownerUserId: UUID?,
+    val shippedAt: OffsetDateTime?,
+    val arrivedAt: OffsetDateTime?,
     val totalWeightGrams: BigDecimal,
     // Both null until destination and shippingMethod are set and a matching admin-configured
     // rate covers the total weight - see ShippingRateService.priceFor.
@@ -90,11 +93,14 @@ fun Shipment.toDto(
     return ShipmentDto(
         id = requireNotNull(id),
         status = status,
+        title = title,
         destination = destination,
         shippingMethod = shippingMethod,
         trackingNumber = trackingNumber,
         notes = notes,
         ownerUserId = ownerUserId,
+        shippedAt = shippedAt,
+        arrivedAt = arrivedAt,
         totalWeightGrams = totalWeight,
         shippingCostJpy = totalCostJpy,
         shippingCostEur = totalCostEur,
@@ -109,6 +115,7 @@ fun Shipment.toDto(
 data class CreateShipmentRequest(
     @field:NotEmpty val orderIds: List<UUID>,
     val notes: String? = null,
+    val title: String? = null,
 )
 
 data class UpdateShipmentRequest(
@@ -117,6 +124,13 @@ data class UpdateShipmentRequest(
     val shippingMethod: ShippingMethod? = null,
     val trackingNumber: String? = null,
     val notes: String? = null,
+    val title: String? = null,
 )
 
 data class AssignShipmentRequest(val shipmentId: UUID?)
+
+data class RenameShipmentRequest(@field:jakarta.validation.constraints.Size(max = 100) val title: String? = null)
+
+data class CombineShipmentsRequest(@field:NotEmpty val shipmentIds: List<UUID>, val title: String? = null)
+
+data class SplitShipmentRequest(@field:NotEmpty val orderIds: List<UUID>, val title: String? = null)

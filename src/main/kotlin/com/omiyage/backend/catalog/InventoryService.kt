@@ -33,6 +33,7 @@ class InventoryService(
 
     @Transactional
     fun create(request: InventoryItemRequest): InventoryItemDto {
+        requirePreorderDate(request)
         val item = InventoryItem(
             title = request.title,
             description = request.description,
@@ -42,6 +43,8 @@ class InventoryService(
             currency = request.currency,
             boughtPrice = request.boughtPrice,
             stockQuantity = request.stockQuantity,
+            isPreorder = request.isPreorder,
+            expectedReleaseDate = request.expectedReleaseDate,
         )
         applyImagesAndCategories(item, request)
         return items.save(item).toDto(includeCost = true)
@@ -49,6 +52,7 @@ class InventoryService(
 
     @Transactional
     fun update(id: UUID, request: InventoryItemRequest): InventoryItemDto {
+        requirePreorderDate(request)
         val item = findOrThrow(id)
         item.title = request.title
         item.description = request.description
@@ -58,11 +62,19 @@ class InventoryService(
         item.currency = request.currency
         item.boughtPrice = request.boughtPrice
         item.stockQuantity = request.stockQuantity
+        item.isPreorder = request.isPreorder
+        item.expectedReleaseDate = request.expectedReleaseDate
         item.updatedAt = OffsetDateTime.now()
         item.images.clear()
         item.categories.clear()
         applyImagesAndCategories(item, request)
         return item.toDto(includeCost = true)
+    }
+
+    private fun requirePreorderDate(request: InventoryItemRequest) {
+        if (request.isPreorder && request.expectedReleaseDate == null) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a preorder item must have an expected release date")
+        }
     }
 
     @Transactional
