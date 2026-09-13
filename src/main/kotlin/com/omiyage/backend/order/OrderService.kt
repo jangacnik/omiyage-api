@@ -5,9 +5,12 @@ import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentStatus
+import com.omiyage.backend.user.MeishiAdminClient
 import com.omiyage.backend.web.PageResponse
 import com.omiyage.backend.web.toPageResponse
+import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,6 +29,7 @@ class OrderService(
     private val orderItems: OrderItemRepository,
     private val inventoryItems: InventoryItemRepository,
     private val shipments: ShipmentRepository,
+    private val meishiAdmin: MeishiAdminClient,
 ) {
 
     @Transactional
@@ -55,9 +59,38 @@ class OrderService(
     }
 
     @Transactional(readOnly = true)
-    fun adminList(status: OrderStatus?, pageable: Pageable): PageResponse<OrderDto> =
-        (if (status == null) orders.findAll(pageable) else orders.findByStatus(status, pageable))
-            .toPageResponse { it.toDto(includeProfit = true) }
+    fun adminList(
+        status: OrderStatus?,
+        sortBy: AdminOrderSortBy,
+        direction: Sort.Direction,
+        pageable: Pageable,
+        authHeader: String,
+    ): PageResponse<OrderDto> {
+        val page = when (sortBy) {
+            AdminOrderSortBy.ITEM_COUNT ->
+                if (direction == Sort.Direction.ASC) {
+                    orders.findAllOrderByItemCountAsc(status, pageable)
+                } else {
+                    orders.findAllOrderByItemCountDesc(status, pageable)
+                }
+            else -> {
+                val property = if (sortBy == AdminOrderSortBy.CREATED_AT) "createdAt" else "updatedAt"
+                val sorted = PageRequest.of(pageable.pageNumber, pageable.pageSize, Sort.by(direction, property))
+                if (status == null) orders.findAll(sorted) else orders.findByStatus(status, sorted)
+            }
+        }
+
+        // One admin-panel-scale lookup covers every order on the page - same cost DashboardService
+        // already pays to show nicknames next to a user's orders, just reused here for order rows.
+        // Nicknames are a display nicety, not core order data - if Meishi is unreachable, the
+        // order list itself must still load, just without names for that request.
+        val nicknameByUserId = try {
+            meishiAdmin.listUsers(authHeader).associate { it.id to it.nickname }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        return page.toPageResponse { it.toDto(includeProfit = true).copy(userNickname = nicknameByUserId[it.userId]) }
+    }
 
     @Transactional
     fun updateStatus(id: UUID, status: OrderStatus): OrderDto {

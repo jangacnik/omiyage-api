@@ -14,6 +14,22 @@ interface OrderRepository : JpaRepository<Order, UUID> {
     fun findByStatus(status: OrderStatus, pageable: Pageable): Page<Order>
     fun existsByShipment_Id(shipmentId: UUID): Boolean
 
+    // "Order by item count" isn't a mapped property, so it can't ride Pageable's Sort like
+    // updatedAt/createdAt can - two explicit directions instead. LEFT JOIN so a zero-item order
+    // (shouldn't normally happen, but exists transiently) still sorts as count 0 rather than being
+    // dropped by the join.
+    @Query(
+        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) GROUP BY o ORDER BY COUNT(i) ASC",
+        countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status)",
+    )
+    fun findAllOrderByItemCountAsc(@Param("status") status: OrderStatus?, pageable: Pageable): Page<Order>
+
+    @Query(
+        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) GROUP BY o ORDER BY COUNT(i) DESC",
+        countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status)",
+    )
+    fun findAllOrderByItemCountDesc(@Param("status") status: OrderStatus?, pageable: Pageable): Page<Order>
+
     @Modifying
     @Query(value = "DELETE FROM orders WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff", nativeQuery = true)
     fun purgeDeletedBefore(cutoff: OffsetDateTime): Int
