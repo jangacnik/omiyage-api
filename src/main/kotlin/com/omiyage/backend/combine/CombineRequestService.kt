@@ -3,6 +3,7 @@ package com.omiyage.backend.combine
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.isOpen
 import com.omiyage.backend.security.MeishiPrincipal
+import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.shipment.ShipmentStatus
 import org.springframework.http.HttpStatus
@@ -16,33 +17,33 @@ import java.util.UUID
 class CombineRequestService(
     private val requests: CombineRequestRepository,
     private val orders: OrderRepository,
+    private val shipments: ShipmentRepository,
     private val shipmentService: ShipmentService,
 ) {
 
     @Transactional
-    fun create(principal: MeishiPrincipal, requesterOrderId: UUID, targetOrderId: UUID): CombineRequestDto {
-        if (requesterOrderId == targetOrderId) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "an order cannot be combined with itself")
-        }
+    fun create(principal: MeishiPrincipal, requesterOrderId: UUID, targetShipmentId: UUID): CombineRequestDto {
         val requesterOrder = orderOrThrow(requesterOrderId)
         if (requesterOrder.userId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
-        val targetOrder = orderOrThrow(targetOrderId)
-        if (targetOrder.userId == principal.id) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "cannot send a combine request to your own order")
+        val targetShipment = shipmentOrThrow(targetShipmentId)
+        if (targetShipment.orders.any { it.userId == principal.id }) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "you already have an order on this shipment")
         }
         requireOpenAndUnshipped(requesterOrder.isOpen, requesterOrder.shipment?.status)
-        requireOpenAndUnshipped(targetOrder.isOpen, targetOrder.shipment?.status)
-        if (requests.existsByRequesterOrder_IdAndTargetOrder_IdAndStatus(requesterOrderId, targetOrderId, CombineRequestStatus.PENDING)) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "a pending combine request already exists for these orders")
+        if (targetShipment.status != ShipmentStatus.PREPARING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "a shipment that has already shipped cannot be combined into")
         }
-        return requests.save(CombineRequest(requesterOrder = requesterOrder, targetOrder = targetOrder)).toDto()
+        if (requests.existsByRequesterOrder_IdAndTargetShipment_IdAndStatus(requesterOrderId, targetShipmentId, CombineRequestStatus.PENDING)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "a pending combine request already exists for this order and shipment")
+        }
+        return requests.save(CombineRequest(requesterOrder = requesterOrder, targetShipment = targetShipment)).toDto()
     }
 
     @Transactional(readOnly = true)
     fun listIncoming(principal: MeishiPrincipal): List<CombineRequestDto> =
-        requests.findByTargetOrder_UserIdAndStatus(principal.id, CombineRequestStatus.PENDING).map { it.toDto() }
+        requests.findByTargetShipment_OwnerUserIdAndStatus(principal.id, CombineRequestStatus.PENDING).map { it.toDto() }
 
     @Transactional(readOnly = true)
     fun listOutgoing(principal: MeishiPrincipal): List<CombineRequestDto> =
@@ -54,7 +55,7 @@ class CombineRequestService(
     @Transactional
     fun accept(principal: MeishiPrincipal, id: UUID): CombineRequestDto {
         val request = pendingOrThrow(id)
-        if (request.targetOrder.userId != principal.id) {
+        if (request.targetShipment.ownerUserId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "combine request not found")
         }
         return doAccept(request)
@@ -66,7 +67,7 @@ class CombineRequestService(
     @Transactional
     fun decline(principal: MeishiPrincipal, id: UUID): CombineRequestDto {
         val request = pendingOrThrow(id)
-        if (request.targetOrder.userId != principal.id) {
+        if (request.targetShipment.ownerUserId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "combine request not found")
         }
         request.status = CombineRequestStatus.DECLINED
@@ -85,17 +86,22 @@ class CombineRequestService(
         return request.toDto()
     }
 
-    // Combines exactly the two orders this request names - nothing else, per product decision:
-    // accepting only ever folds in the specific order that was asked for.
+    // Attaches exactly the requester's order onto the target shipment as-is - nothing else on
+    // either side moves. Reuses assignOrder(), the same primitive the member-facing "leave
+    // shipment" action uses, just in the attach direction.
     private fun doAccept(request: CombineRequest): CombineRequestDto {
         val requesterOrderId = requireNotNull(request.requesterOrder.id)
-        val targetOrderId = requireNotNull(request.targetOrder.id)
-        val fresh = listOf(orderOrThrow(requesterOrderId), orderOrThrow(targetOrderId))
-        fresh.forEach { requireOpenAndUnshipped(it.isOpen, it.shipment?.status) }
-        val shipment = shipmentService.combine(listOf(requesterOrderId, targetOrderId))
+        val targetShipmentId = requireNotNull(request.targetShipment.id)
+        val requesterOrder = orderOrThrow(requesterOrderId)
+        requireOpenAndUnshipped(requesterOrder.isOpen, requesterOrder.shipment?.status)
+        val targetShipment = shipmentOrThrow(targetShipmentId)
+        if (targetShipment.status != ShipmentStatus.PREPARING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "a shipment that has already shipped cannot be combined into")
+        }
+        shipmentService.assignOrder(requesterOrderId, targetShipmentId)
         request.status = CombineRequestStatus.ACCEPTED
         request.respondedAt = OffsetDateTime.now()
-        request.resultingShipmentId = shipment.id
+        request.resultingShipmentId = targetShipmentId
         return request.toDto()
     }
 
@@ -118,4 +124,7 @@ class CombineRequestService(
 
     private fun orderOrThrow(id: UUID) =
         orders.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found") }
+
+    private fun shipmentOrThrow(id: UUID) =
+        shipments.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "shipment not found") }
 }

@@ -7,6 +7,7 @@ import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.order.isOpen
 import com.omiyage.backend.order.toDto
 import com.omiyage.backend.security.MeishiPrincipal
+import com.omiyage.backend.user.MeishiNicknameClient
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -25,6 +26,7 @@ class ShipmentService(
     private val orders: OrderRepository,
     private val shippingRates: ShippingRateService,
     private val exchangeRates: ExchangeRateService,
+    private val meishiNicknames: MeishiNicknameClient,
 ) {
 
     @Transactional(readOnly = true)
@@ -32,6 +34,22 @@ class ShipmentService(
 
     @Transactional(readOnly = true)
     fun getById(id: UUID): ShipmentDto = findOrThrow(id).toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+
+    // Shipments a member could ask to combine into: still PREPARING, and not already holding one
+    // of their own orders. Owner nickname is a display nicety, not core data - degrade to null
+    // rather than fail the whole listing if Meishi is unreachable, same as the admin orders list.
+    @Transactional(readOnly = true)
+    fun browsableForMember(userId: UUID, authHeader: String): List<BrowsableShipmentDto> {
+        val nicknameByUserId = try {
+            meishiNicknames.nicknames(authHeader).associate { it.id to it.nickname }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        return shipments.findAll()
+            .filter { it.status == ShipmentStatus.PREPARING }
+            .filter { shipment -> shipment.orders.none { it.userId == userId } }
+            .map { shipment -> shipment.toBrowsableDto(shipment.ownerUserId?.let { nicknameByUserId[it] }) }
+    }
 
     // Combining orders never spins up a fresh shipment when one isn't needed: the first selected
     // order "absorbs" the rest - if it already has a shipment, the others fold into that one; if

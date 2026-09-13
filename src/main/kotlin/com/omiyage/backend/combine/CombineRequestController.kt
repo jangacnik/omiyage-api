@@ -20,7 +20,7 @@ class CombineRequestController(private val service: CombineRequestService) {
     @PostMapping
     fun create(@Valid @RequestBody request: CreateCombineRequestRequest): ResponseEntity<CombineRequestDto> =
         ResponseEntity.status(HttpStatus.CREATED)
-            .body(service.create(CurrentUser.principal(), request.requesterOrderId, request.targetOrderId))
+            .body(service.create(CurrentUser.principal(), request.requesterOrderId, request.targetShipmentId))
 
     @GetMapping("/incoming")
     fun incoming(): List<CombineRequestDto> = service.listIncoming(CurrentUser.principal())

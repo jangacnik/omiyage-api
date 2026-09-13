@@ -142,6 +142,30 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `browsable listing excludes the caller's own shipments and ones already shipped`() {
+        val me = user()
+        val other = user()
+        val myOrder = order(me)
+        val myShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(myOrder.id)))
+        val otherOpenOrder = order(other)
+        val otherOpenShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(otherOpenOrder.id), title = "Other's box"))
+        val otherShippedOrder = order(other)
+        val otherShippedShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(otherShippedOrder.id)))
+        orderService.submitForShipping(otherShippedOrder.id, other)
+        shipmentService.update(otherShippedShipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+
+        val browsable = shipmentService.browsableForMember(me.id, "Bearer irrelevant")
+
+        val browsableIds = browsable.map { it.id }
+        assertFalse(browsableIds.contains(myShipment.id))
+        assertTrue(browsableIds.contains(otherOpenShipment.id))
+        assertFalse(browsableIds.contains(otherShippedShipment.id))
+        val entry = browsable.first { it.id == otherOpenShipment.id }
+        assertEquals("Other's box", entry.title)
+        assertEquals(1, entry.itemCount)
+    }
+
+    @Test
     fun `cannot mark a shipment arrived before it has shipped`() {
         val owner = user()
         val a = order(owner)

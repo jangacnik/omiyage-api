@@ -3,6 +3,7 @@ package com.omiyage.backend.order
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
+import com.omiyage.backend.shipment.Shipment
 import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentStatus
 import com.omiyage.backend.user.MeishiAdminClient
@@ -241,16 +242,23 @@ class OrderService(
     @Transactional
     fun submitForShipping(orderId: UUID, principal: MeishiPrincipal): OrderDto {
         val order = findOrThrow(orderId)
-        val shipment = order.shipment
+        val existingShipment = order.shipment
         // A shipment with no owner assigned authorizes nobody - it must never fall back to "the
         // order named in the URL happens to be this caller's", or any co-member of a shipment
         // could submit it by naming their own order, bypassing the owner-only rule entirely.
-        val authorizedUserId = if (shipment == null) order.userId else shipment.ownerUserId
+        val authorizedUserId = if (existingShipment == null) order.userId else existingShipment.ownerUserId
         if (authorizedUserId == null || authorizedUserId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
         requireOpen(order)
-        val targets = shipment?.orders?.filter { it.isOpen } ?: listOf(order)
+        // Every submitted order needs a shipment to track it through delivery, even a solo one
+        // nobody ever explicitly combined - create one now instead of leaving it shipment-less
+        // (which used to mean it never showed up on the member's own shipments list).
+        val shipment = existingShipment ?: shipments.save(Shipment(ownerUserId = order.userId)).also {
+            order.shipment = it
+            it.orders.add(order)
+        }
+        val targets = shipment.orders.filter { it.isOpen }
         targets.forEach { target ->
             target.status = OrderStatus.PREPARING_SHIPPING
             target.updatedAt = OffsetDateTime.now()

@@ -14,6 +14,7 @@ import com.omiyage.backend.shipment.ShipmentStatus
 import com.omiyage.backend.shipment.UpdateShipmentRequest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -626,6 +627,19 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
         assertEquals(OrderStatus.PREPARING_SHIPPING, submitted.status)
         assertFalse(submitted.open)
+    }
+
+    @Test
+    fun `submitting a solo order for shipping auto-creates a shipment for it`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+        assertNull(order.shipmentId)
+
+        val submitted = orderService.submitForShipping(order.id, owner)
+
+        assertNotNull(submitted.shipmentId)
+        assertTrue(shipmentRepository.existsById(submitted.shipmentId!!))
+        assertEquals(owner.id, shipmentRepository.findById(submitted.shipmentId!!).get().ownerUserId)
     }
 
     @Test
