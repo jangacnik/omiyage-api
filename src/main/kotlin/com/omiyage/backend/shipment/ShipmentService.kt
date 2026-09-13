@@ -6,6 +6,7 @@ import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.order.isOpen
 import com.omiyage.backend.order.toDto
+import com.omiyage.backend.security.MeishiPrincipal
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -39,11 +40,22 @@ class ShipmentService(
     // combined end up as one, not three.
     @Transactional
     fun create(request: CreateShipmentRequest): ShipmentDto {
-        val orderIds = request.orderIds.distinct()
-        if (orderIds.isEmpty()) {
+        val shipment = combine(request.orderIds)
+        request.notes?.let { shipment.notes = it }
+        request.title?.let { shipment.title = it }
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+    }
+
+    /** Shared combine primitive: folds every listed order onto the first one's shipment (creating
+     *  one if it has none), reused by admin create(), member combine-request accept, and
+     *  combineShipments() below. */
+    @Transactional
+    fun combine(orderIds: List<UUID>): Shipment {
+        val distinctIds = orderIds.distinct()
+        if (distinctIds.isEmpty()) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "select at least one order to combine")
         }
-        val selected = orderIds.map { orderOrThrow(it) }
+        val selected = distinctIds.map { orderOrThrow(it) }
         selected.forEach { order ->
             if (!order.isOpen) {
                 throw ResponseStatusException(HttpStatus.CONFLICT, "an order that is no longer open cannot be combined into a shipment")
@@ -55,7 +67,7 @@ class ShipmentService(
         }
 
         val absorbing = selected.first()
-        val shipment = absorbing.shipment ?: shipments.save(Shipment(notes = request.notes, ownerUserId = absorbing.userId))
+        val shipment = absorbing.shipment ?: shipments.save(Shipment(ownerUserId = absorbing.userId))
         if (shipment.ownerUserId == null) {
             shipment.ownerUserId = absorbing.userId
         }
@@ -63,26 +75,126 @@ class ShipmentService(
         val vacated = mutableSetOf<UUID>()
         selected.forEach { order -> attach(shipment, order, vacated) }
         deleteIfEmpty(vacated - shipment.id!!)
-        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+        return shipment
+    }
+
+    // Flattens every order across the given shipments and runs them through the same combine()
+    // primitive - works for any number of shipments holding any number of users' orders.
+    @Transactional
+    fun combineShipments(shipmentIds: List<UUID>, title: String?): ShipmentDto {
+        val distinctIds = shipmentIds.distinct()
+        if (distinctIds.size < 2) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "select at least two shipments to combine")
+        }
+        val selected = distinctIds.map { findOrThrow(it) }
+        selected.forEach { shipment ->
+            if (shipment.status != ShipmentStatus.PREPARING) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "a shipment that has already shipped cannot be combined")
+            }
+        }
+        val orderIds = selected.flatMap { it.orders.map { order -> requireNotNull(order.id) } }
+        val combined = combine(orderIds)
+        title?.let { combined.title = it }
+        return combined.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+    }
+
+    // Moves a chosen subset of a shipment's orders onto a brand-new shipment - the inverse of
+    // combine(). At least one order must stay behind, otherwise this is just a rename, not a split.
+    @Transactional
+    fun splitOff(sourceShipmentId: UUID, orderIds: List<UUID>, title: String?): ShipmentDto {
+        val source = findOrThrow(sourceShipmentId)
+        if (source.status != ShipmentStatus.PREPARING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "a shipment that has already shipped cannot be split")
+        }
+        val distinctIds = orderIds.distinct()
+        val toMove = distinctIds.map { id ->
+            source.orders.find { it.id == id }
+                ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "order $id does not belong to this shipment")
+        }
+        if (toMove.isEmpty() || toMove.size == source.orders.size) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "split must move at least one order and leave at least one behind")
+        }
+
+        val destination = shipments.save(Shipment(ownerUserId = toMove.first().userId, title = title))
+        val vacated = mutableSetOf<UUID>()
+        toMove.forEach { order -> attach(destination, order, vacated) }
+        deleteIfEmpty(vacated - destination.id!!)
+        return destination.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
     }
 
     @Transactional
     fun update(id: UUID, request: UpdateShipmentRequest): ShipmentDto {
         val shipment = findOrThrow(id)
         request.status?.let { newStatus ->
-            if (newStatus in setOf(ShipmentStatus.SHIPPED, ShipmentStatus.DELIVERED) &&
-                shipment.orders.any { it.status !in READY_FOR_SHIPPING_STATUSES }
-            ) {
-                throw ResponseStatusException(HttpStatus.CONFLICT, "every order in this shipment must reach preparing-shipping before it can ship")
-            }
-            shipment.status = newStatus
+            applyStatusChange(shipment, newStatus)
         }
         request.destination?.let { shipment.destination = it }
         request.shippingMethod?.let { shipment.shippingMethod = it }
         request.trackingNumber?.let { shipment.trackingNumber = it }
         request.notes?.let { shipment.notes = it }
+        request.title?.let { shipment.title = it }
         shipment.updatedAt = OffsetDateTime.now()
         return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+    }
+
+    // Owner-only self-service rename - admins use update() above instead, which covers every field.
+    @Transactional
+    fun renameMine(id: UUID, userId: UUID, title: String?): ShipmentDto {
+        val shipment = findOrThrow(id)
+        if (shipment.ownerUserId != userId) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "only the shipment owner can rename it")
+        }
+        shipment.title = title
+        shipment.updatedAt = OffsetDateTime.now()
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+    }
+
+    // Owner-only self-service "it arrived" - members can't set SHIPPED (that needs tracking/admin
+    // confirmation) but marking a shipment that's already on its way as delivered doesn't need
+    // admin involvement.
+    @Transactional
+    fun markArrivedMine(id: UUID, userId: UUID): ShipmentDto {
+        val shipment = findOrThrow(id)
+        if (shipment.ownerUserId != userId) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "only the shipment owner can mark it as arrived")
+        }
+        if (shipment.status != ShipmentStatus.SHIPPED) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "only a shipped shipment can be marked as arrived")
+        }
+        applyStatusChange(shipment, ShipmentStatus.DELIVERED)
+        shipment.updatedAt = OffsetDateTime.now()
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+    }
+
+    // Self-service detach: a member can pull their own order back off a shipment while it's still
+    // being prepared - the same underlying move as assignOrder(orderId, null), just ownership-
+    // checked instead of admin-trusted.
+    @Transactional
+    fun leaveShipment(orderId: UUID, principal: MeishiPrincipal): OrderDto {
+        val order = orderOrThrow(orderId)
+        if (order.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        val shipment = order.shipment ?: throw ResponseStatusException(HttpStatus.CONFLICT, "order is not part of a shipment")
+        if (shipment.status != ShipmentStatus.PREPARING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot leave a shipment that has already shipped")
+        }
+        return assignOrder(orderId, null)
+    }
+
+    private fun applyStatusChange(shipment: Shipment, newStatus: ShipmentStatus) {
+        if (newStatus in setOf(ShipmentStatus.SHIPPED, ShipmentStatus.DELIVERED) &&
+            shipment.orders.any { it.status !in READY_FOR_SHIPPING_STATUSES }
+        ) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "every order in this shipment must reach preparing-shipping before it can ship")
+        }
+        if (newStatus == ShipmentStatus.SHIPPED && shipment.shippedAt == null) {
+            shipment.shippedAt = OffsetDateTime.now()
+        }
+        if (newStatus == ShipmentStatus.DELIVERED && shipment.arrivedAt == null) {
+            shipment.arrivedAt = OffsetDateTime.now()
+        }
+        shipment.status = newStatus
     }
 
     @Transactional
@@ -126,6 +238,11 @@ class ShipmentService(
         }
         if (previousShipmentId != null) {
             vacated += previousShipmentId
+            // Same staleness concern as the destination side below, in reverse: if the previous
+            // shipment's collection is already loaded in this session, leaving the order in it
+            // would make that shipment look non-empty to any in-memory read for the rest of this
+            // transaction (splitOff's own source shipment, for instance).
+            order.shipment?.orders?.remove(order)
         }
         order.shipment = shipment
         order.updatedAt = OffsetDateTime.now()

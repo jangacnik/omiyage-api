@@ -57,6 +57,12 @@ class InventoryItem(
     @Column(name = "stock_quantity", nullable = false)
     var stockQuantity: Int = 0,
 
+    @Column(name = "is_preorder", nullable = false)
+    var isPreorder: Boolean = false,
+
+    @Column(name = "expected_release_date")
+    var expectedReleaseDate: java.time.LocalDate? = null,
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var status: InventoryStatus = InventoryStatus.ACTIVE,
@@ -81,4 +87,10 @@ class InventoryItem(
 
     @Column(name = "deleted_at")
     var deletedAt: OffsetDateTime? = null,
-)
+) {
+    init {
+        require(!isPreorder || expectedReleaseDate != null) {
+            "a preorder item must have an expected release date"
+        }
+    }
+}

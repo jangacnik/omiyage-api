@@ -36,4 +36,12 @@ class AdminShipmentController(private val service: ShipmentService) {
         service.adminDelete(id)
         return ResponseEntity.noContent().build()
     }
+
+    @PostMapping("/combine")
+    fun combineShipments(@Valid @RequestBody request: CombineShipmentsRequest): ShipmentDto =
+        service.combineShipments(request.shipmentIds, request.title)
+
+    @PostMapping("/{id}/split")
+    fun split(@PathVariable id: UUID, @Valid @RequestBody request: SplitShipmentRequest): ResponseEntity<ShipmentDto> =
+        ResponseEntity.status(HttpStatus.CREATED).body(service.splitOff(id, request.orderIds, request.title))
 }

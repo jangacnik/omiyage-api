@@ -45,6 +45,24 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `a preorder item requires an expected release date`() {
+        val request = request("Upcoming set").copy(isPreorder = true)
+
+        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.web.server.ResponseStatusException::class.java) {
+            inventoryService.create(request)
+        }
+    }
+
+    @Test
+    fun `a preorder item with a release date is created and round-trips`() {
+        val date = java.time.LocalDate.of(2026, 12, 1)
+        val created = inventoryService.create(request("Upcoming set").copy(isPreorder = true, expectedReleaseDate = date))
+
+        assertTrue(created.isPreorder)
+        assertEquals(date, created.expectedReleaseDate)
+    }
+
+    @Test
     fun `search filters by category`() {
         val snacks = categoryService.create("Snacks", "snacks-${System.nanoTime()}")
         val toys = categoryService.create("Toys", "toys-${System.nanoTime()}")

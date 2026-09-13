@@ -8,6 +8,7 @@ import com.omiyage.backend.security.JwtAuthenticationFilter
 import com.omiyage.backend.security.JwtVerifier
 import com.omiyage.backend.security.SecurityConfig
 import com.omiyage.backend.security.TestJwt
+import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.web.PageResponse
 import io.mockk.every
 import org.junit.jupiter.api.Test
@@ -39,6 +40,9 @@ class OrderControllerTest {
 
     @MockkBean
     lateinit var service: OrderService
+
+    @MockkBean
+    lateinit var shipments: ShipmentService
 
     private val userId = UUID.randomUUID()
     private fun token() = TestJwt.sign(TEST_SECRET, subject = userId.toString(), role = "USER")
