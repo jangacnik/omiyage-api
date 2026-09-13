@@ -261,6 +261,12 @@ class OrderService(
     // Shared by both the user-facing cancel and the admin status-update path so neither can
     // leave a cancelled order dangling on a shipment.
     private fun cancelAndDetach(order: Order) {
+        // Nothing was actually taken for a cancelled order - restore any stock its inventory-
+        // linked items had reserved. Guarded on the prior status so re-cancelling an
+        // already-cancelled order (e.g. a redundant admin status update) can't double-restock.
+        if (order.status != OrderStatus.CANCELLED) {
+            order.items.forEach { restockIfLinked(it) }
+        }
         order.status = OrderStatus.CANCELLED
         order.updatedAt = OffsetDateTime.now()
         val shipmentId = order.shipment?.id
@@ -297,7 +303,10 @@ class OrderService(
         request.description?.let { item.customDescription = it }
         request.imageKey?.let { item.customImageKey = it }
         request.maxPrice?.let { item.maxPrice = it }
-        request.quantity?.let { item.quantity = it }
+        request.quantity?.let { newQuantity ->
+            item.inventoryItem?.let { inv -> inv.stockQuantity = (inv.stockQuantity + item.quantity - newQuantity).coerceAtLeast(0) }
+            item.quantity = newQuantity
+        }
         request.link?.let { item.link = it }
         item.updatedAt = OffsetDateTime.now()
     }
@@ -306,9 +315,16 @@ class OrderService(
         if (enforceStatusGuard && item.status in LOCKED_ITEM_STATUSES) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought or shipped and can no longer be removed")
         }
+        restockIfLinked(item)
         order.items.remove(item)
         orderItems.delete(item)
         order.updatedAt = OffsetDateTime.now()
+    }
+
+    // Mirrors buildOrderItem's decrement - removing/cancelling an inventory-linked item means
+    // nothing was actually taken, so give the stock back (never below what was actually reserved).
+    private fun restockIfLinked(item: OrderItem) {
+        item.inventoryItem?.let { it.stockQuantity += item.quantity }
     }
 
     private fun ownItemOrThrow(order: Order, itemId: UUID): OrderItem {
@@ -324,6 +340,9 @@ class OrderService(
         if (request.inventoryItemId != null) {
             val inventoryItem = inventoryItems.findById(request.inventoryItemId)
                 .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "inventory item not found") }
+            // Never go negative and never block the request over it - an item at (or now hitting)
+            // 0 stock is still requestable, it's just a signal to the admin to restock/rebuy.
+            inventoryItem.stockQuantity = (inventoryItem.stockQuantity - request.quantity).coerceAtLeast(0)
             return OrderItem(
                 order = order,
                 inventoryItem = inventoryItem,

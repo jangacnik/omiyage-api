@@ -115,6 +115,123 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `ordering an inventory-linked item decrements its stock`() {
+        val item = inventoryService.create(
+            InventoryItemRequest(
+                title = "Kit Kat matcha",
+                description = null,
+                condition = Condition.NEW,
+                priceAmount = BigDecimal("500"),
+                currency = Currency.JPY,
+                stockQuantity = 3,
+            ),
+        )
+
+        orderService.create(
+            user(),
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
+        )
+
+        assertEquals(1, inventoryService.getById(item.id).stockQuantity)
+    }
+
+    @Test
+    fun `ordering more than the available stock floors it at zero instead of going negative or failing`() {
+        val item = inventoryService.create(
+            InventoryItemRequest(
+                title = "Kit Kat matcha",
+                description = null,
+                condition = Condition.NEW,
+                priceAmount = BigDecimal("500"),
+                currency = Currency.JPY,
+                stockQuantity = 1,
+            ),
+        )
+
+        val order = orderService.create(
+            user(),
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 5))),
+        )
+
+        assertEquals(1, order.items.size)
+        assertEquals(0, inventoryService.getById(item.id).stockQuantity)
+    }
+
+    @Test
+    fun `removing an inventory-linked item restores its stock`() {
+        val item = inventoryService.create(
+            InventoryItemRequest(
+                title = "Kit Kat matcha",
+                description = null,
+                condition = Condition.NEW,
+                priceAmount = BigDecimal("500"),
+                currency = Currency.JPY,
+                stockQuantity = 5,
+            ),
+        )
+        val owner = user()
+        val order = orderService.create(
+            owner,
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
+        )
+        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+
+        orderService.removeOwnItem(order.id, order.items[0].id, owner)
+
+        assertEquals(5, inventoryService.getById(item.id).stockQuantity)
+    }
+
+    @Test
+    fun `cancelling an order restores stock for its inventory-linked items`() {
+        val item = inventoryService.create(
+            InventoryItemRequest(
+                title = "Kit Kat matcha",
+                description = null,
+                condition = Condition.NEW,
+                priceAmount = BigDecimal("500"),
+                currency = Currency.JPY,
+                stockQuantity = 5,
+            ),
+        )
+        val owner = user()
+        val order = orderService.create(
+            owner,
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
+        )
+        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+
+        orderService.cancelOwn(order.id, owner)
+
+        assertEquals(5, inventoryService.getById(item.id).stockQuantity)
+    }
+
+    @Test
+    fun `editing an inventory-linked item's quantity adjusts stock by the difference`() {
+        val item = inventoryService.create(
+            InventoryItemRequest(
+                title = "Kit Kat matcha",
+                description = null,
+                condition = Condition.NEW,
+                priceAmount = BigDecimal("500"),
+                currency = Currency.JPY,
+                stockQuantity = 5,
+            ),
+        )
+        val owner = user()
+        val order = orderService.create(
+            owner,
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
+        )
+        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+
+        orderService.updateOwnItem(order.id, order.items[0].id, owner, UpdateOwnOrderItemRequest(quantity = 4))
+        assertEquals(1, inventoryService.getById(item.id).stockQuantity)
+
+        orderService.updateOwnItem(order.id, order.items[0].id, owner, UpdateOwnOrderItemRequest(quantity = 1))
+        assertEquals(4, inventoryService.getById(item.id).stockQuantity)
+    }
+
+    @Test
     fun `rejects a custom item with no title`() {
         val request = CreateOrderRequest(items = listOf(CreateOrderItemRequest(currency = Currency.JPY)))
         assertThrows(ResponseStatusException::class.java) { orderService.create(user(), request) }
