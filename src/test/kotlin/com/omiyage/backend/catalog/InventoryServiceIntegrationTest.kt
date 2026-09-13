@@ -4,6 +4,7 @@ import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -79,5 +80,27 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
         assertEquals(2, secondPage.content.size)
         assertEquals(3, firstPage.totalPages)
         assertEquals(5, firstPage.totalElements)
+    }
+
+    @Test
+    fun `create stores the bought price but hides it unless includeCost is requested`() {
+        val created = inventoryService.create(request("Kit Kat matcha").copy(boughtPrice = BigDecimal("500.00")))
+
+        val hidden = inventoryService.getById(created.id)
+        val visible = inventoryService.getById(created.id, includeCost = true)
+
+        assertNull(hidden.boughtPrice)
+        assertEquals(BigDecimal("500.00"), visible.boughtPrice)
+    }
+
+    @Test
+    fun `search hides boughtPrice by default and includes it for admin callers`() {
+        inventoryService.create(request("Kit Kat matcha").copy(boughtPrice = BigDecimal("500.00")))
+
+        val hidden = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20))
+        val visible = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20), includeCost = true)
+
+        assertNull(hidden.content[0].boughtPrice)
+        assertEquals(BigDecimal("500.00"), visible.content[0].boughtPrice)
     }
 }

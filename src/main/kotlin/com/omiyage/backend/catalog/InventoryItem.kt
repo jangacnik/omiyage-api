@@ -51,6 +51,9 @@ class InventoryItem(
     @Column(nullable = false)
     var currency: Currency,
 
+    @Column(name = "bought_price")
+    var boughtPrice: BigDecimal? = null,
+
     @Column(name = "stock_quantity", nullable = false)
     var stockQuantity: Int = 0,
 

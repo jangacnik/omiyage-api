@@ -30,6 +30,9 @@ data class ShipmentDto(
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
     val orders: List<OrderDto>,
+    // Admin-only - sum of each order's profit. Every shipment endpoint is admin-only, so this is
+    // always populated (unlike OrderDto.profit, which needs an explicit includeProfit opt-in).
+    val profit: BigDecimal,
 )
 
 fun Shipment.toDto(
@@ -61,7 +64,7 @@ fun Shipment.toDto(
         } else {
             null
         }
-        order.toDto().copy(orderWeightGrams = weight, shippingCostShareJpy = shareJpy, shippingCostShareEur = shareJpy?.let(toEur))
+        order.toDto(includeProfit = true).copy(orderWeightGrams = weight, shippingCostShareJpy = shareJpy, shippingCostShareEur = shareJpy?.let(toEur))
     }
     // Per-order shares are rounded independently and can be off by a bit from the total in both
     // currencies - fold that drift into the last billable order (a cancelled one has no share).
@@ -99,6 +102,7 @@ fun Shipment.toDto(
         createdAt = createdAt,
         updatedAt = updatedAt,
         orders = reconciledOrders,
+        profit = reconciledOrders.mapNotNull { it.profit }.fold(BigDecimal.ZERO, BigDecimal::add),
     )
 }
 

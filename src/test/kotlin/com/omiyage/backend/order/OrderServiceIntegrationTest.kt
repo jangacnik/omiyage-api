@@ -302,6 +302,65 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `updateItem computes profit as soldPrice minus actualPrice and sums it to order level`() {
+        val order = orderService.create(
+            user(),
+            CreateOrderRequest(
+                items = listOf(
+                    CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY),
+                    CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY),
+                ),
+            ),
+        )
+
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+        val updated = orderService.updateItem(order.id, order.items[1].id, OrderItemStatus.BOUGHT, BigDecimal("300"), BigDecimal("300"))
+
+        val firstItem = updated.items.first { it.id == order.items[0].id }
+        val secondItem = updated.items.first { it.id == order.items[1].id }
+        assertEquals(BigDecimal("250"), firstItem.profit)
+        assertEquals(BigDecimal.ZERO, secondItem.profit)
+        assertEquals(BigDecimal("250"), updated.profit)
+    }
+
+    @Test
+    fun `an item with no soldPrice yet has no profit`() {
+        val order = singleItemOrder()
+        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS)
+
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"))
+
+        assertNull(updated.items[0].profit)
+        assertEquals(BigDecimal.ZERO, updated.profit)
+    }
+
+    @Test
+    fun `getById never exposes soldPrice or profit to the owning user`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+
+        val fetched = orderService.getById(order.id, owner)
+
+        assertNull(fetched.items[0].soldPrice)
+        assertNull(fetched.items[0].profit)
+        assertNull(fetched.profit)
+    }
+
+    @Test
+    fun `getById exposes soldPrice and profit to an admin`() {
+        val owner = user()
+        val order = singleItemOrder(owner)
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+
+        val fetched = orderService.getById(order.id, admin())
+
+        assertEquals(BigDecimal("700"), fetched.items[0].soldPrice)
+        assertEquals(BigDecimal("250"), fetched.items[0].profit)
+        assertEquals(BigDecimal("250"), fetched.profit)
+    }
+
+    @Test
     fun `listMine only returns the caller's orders`() {
         val owner = user()
         orderService.create(owner, CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY))))

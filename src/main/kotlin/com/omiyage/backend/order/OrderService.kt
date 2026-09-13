@@ -32,12 +32,12 @@ class OrderService(
     fun create(principal: MeishiPrincipal, request: CreateOrderRequest): OrderDto = createFor(principal.id, request)
 
     @Transactional
-    fun adminCreate(userId: UUID, request: CreateOrderRequest): OrderDto = createFor(userId, request)
+    fun adminCreate(userId: UUID, request: CreateOrderRequest): OrderDto = createFor(userId, request, includeProfit = true)
 
-    private fun createFor(userId: UUID, request: CreateOrderRequest): OrderDto {
+    private fun createFor(userId: UUID, request: CreateOrderRequest, includeProfit: Boolean = false): OrderDto {
         val order = Order(userId = userId, notes = request.notes, nickname = request.nickname?.trim()?.ifBlank { null })
         request.items.forEach { order.items.add(buildOrderItem(order, it)) }
-        return orders.save(order).toDto()
+        return orders.save(order).toDto(includeProfit)
     }
 
     @Transactional(readOnly = true)
@@ -47,16 +47,17 @@ class OrderService(
     @Transactional(readOnly = true)
     fun getById(id: UUID, principal: MeishiPrincipal): OrderDto {
         val order = findOrThrow(id)
-        if (principal.role != Role.ADMIN && order.userId != principal.id) {
+        val isAdmin = principal.role == Role.ADMIN
+        if (!isAdmin && order.userId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
-        return order.toDto()
+        return order.toDto(includeProfit = isAdmin)
     }
 
     @Transactional(readOnly = true)
     fun adminList(status: OrderStatus?, pageable: Pageable): PageResponse<OrderDto> =
         (if (status == null) orders.findAll(pageable) else orders.findByStatus(status, pageable))
-            .toPageResponse { it.toDto() }
+            .toPageResponse { it.toDto(includeProfit = true) }
 
     @Transactional
     fun updateStatus(id: UUID, status: OrderStatus): OrderDto {
@@ -67,7 +68,7 @@ class OrderService(
             order.status = status
             order.updatedAt = OffsetDateTime.now()
         }
-        return order.toDto()
+        return order.toDto(includeProfit = true)
     }
 
     @Transactional
@@ -76,6 +77,7 @@ class OrderService(
         itemId: UUID,
         status: OrderItemStatus,
         actualPrice: java.math.BigDecimal?,
+        soldPrice: java.math.BigDecimal? = null,
         weight: java.math.BigDecimal? = null,
     ): OrderDto {
         val item = orderItems.findById(itemId)
@@ -88,9 +90,10 @@ class OrderService(
             item.purchasedAt = OffsetDateTime.now()
         }
         item.actualPrice = actualPrice
+        item.soldPrice = soldPrice
         item.weight = weight
         item.updatedAt = OffsetDateTime.now()
-        return item.order.toDto()
+        return item.order.toDto(includeProfit = true)
     }
 
     @Transactional
@@ -105,7 +108,7 @@ class OrderService(
 
     @Transactional
     fun adminAddItem(orderId: UUID, request: CreateOrderItemRequest): OrderDto =
-        addItemToOrder(findOrThrow(orderId), request)
+        addItemToOrder(findOrThrow(orderId), request, includeProfit = true)
 
     @Transactional
     fun updateOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal, request: UpdateOwnOrderItemRequest): OrderDto {
@@ -122,7 +125,7 @@ class OrderService(
     fun adminUpdateItemContent(orderId: UUID, itemId: UUID, request: UpdateOwnOrderItemRequest): OrderDto {
         val order = findOrThrow(orderId)
         applyItemContentEdit(ownItemOrThrow(order, itemId), request, enforceStatusGuard = false)
-        return order.toDto()
+        return order.toDto(includeProfit = true)
     }
 
     @Transactional
@@ -132,7 +135,7 @@ class OrderService(
         item.paid = paid
         item.paidAt = if (paid) OffsetDateTime.now() else null
         item.updatedAt = OffsetDateTime.now()
-        return order.toDto()
+        return order.toDto(includeProfit = true)
     }
 
     @Transactional
@@ -150,7 +153,7 @@ class OrderService(
     fun adminRemoveItem(orderId: UUID, itemId: UUID): OrderDto {
         val order = findOrThrow(orderId)
         removeItemFromOrder(order, ownItemOrThrow(order, itemId), enforceStatusGuard = false)
-        return order.toDto()
+        return order.toDto(includeProfit = true)
     }
 
     @Transactional
@@ -289,7 +292,7 @@ class OrderService(
         }
     }
 
-    private fun addItemToOrder(order: Order, request: CreateOrderItemRequest): OrderDto {
+    private fun addItemToOrder(order: Order, request: CreateOrderItemRequest, includeProfit: Boolean = false): OrderDto {
         val item = buildOrderItem(order, request)
         order.items.add(item)
         // order is already persistent here (unlike create(), which persists a brand-new Order and
@@ -297,7 +300,7 @@ class OrderService(
         // not deferred to flush, since toDto() below needs it immediately.
         orderItems.save(item)
         order.updatedAt = OffsetDateTime.now()
-        return order.toDto()
+        return order.toDto(includeProfit)
     }
 
     private fun applyItemContentEdit(item: OrderItem, request: UpdateOwnOrderItemRequest, enforceStatusGuard: Boolean) {

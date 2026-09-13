@@ -19,11 +19,17 @@ class InventoryService(
 ) {
 
     @Transactional(readOnly = true)
-    fun search(title: String?, categoryId: UUID?, status: InventoryStatus?, pageable: Pageable): PageResponse<InventoryItemDto> =
-        items.search(title?.trim().orEmpty(), categoryId, status, pageable).toPageResponse { it.toDto() }
+    fun search(
+        title: String?,
+        categoryId: UUID?,
+        status: InventoryStatus?,
+        pageable: Pageable,
+        includeCost: Boolean = false,
+    ): PageResponse<InventoryItemDto> =
+        items.search(title?.trim().orEmpty(), categoryId, status, pageable).toPageResponse { it.toDto(includeCost) }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID): InventoryItemDto = findOrThrow(id).toDto()
+    fun getById(id: UUID, includeCost: Boolean = false): InventoryItemDto = findOrThrow(id).toDto(includeCost)
 
     @Transactional
     fun create(request: InventoryItemRequest): InventoryItemDto {
@@ -34,10 +40,11 @@ class InventoryService(
             condition = request.condition,
             priceAmount = request.priceAmount,
             currency = request.currency,
+            boughtPrice = request.boughtPrice,
             stockQuantity = request.stockQuantity,
         )
         applyImagesAndCategories(item, request)
-        return items.save(item).toDto()
+        return items.save(item).toDto(includeCost = true)
     }
 
     @Transactional
@@ -49,12 +56,13 @@ class InventoryService(
         item.condition = request.condition
         item.priceAmount = request.priceAmount
         item.currency = request.currency
+        item.boughtPrice = request.boughtPrice
         item.stockQuantity = request.stockQuantity
         item.updatedAt = OffsetDateTime.now()
         item.images.clear()
         item.categories.clear()
         applyImagesAndCategories(item, request)
-        return item.toDto()
+        return item.toDto(includeCost = true)
     }
 
     @Transactional
@@ -62,7 +70,7 @@ class InventoryService(
         val item = findOrThrow(id)
         item.status = status
         item.updatedAt = OffsetDateTime.now()
-        return item.toDto()
+        return item.toDto(includeCost = true)
     }
 
     @Transactional

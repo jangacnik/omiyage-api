@@ -25,9 +25,11 @@ data class InventoryItemDto(
     val status: InventoryStatus,
     val images: List<String>,
     val categories: List<CategoryDto>,
+    // Admin-only cost basis - never populated on a response a normal user can read, see toDto(includeCost).
+    val boughtPrice: BigDecimal? = null,
 )
 
-fun InventoryItem.toDto() = InventoryItemDto(
+fun InventoryItem.toDto(includeCost: Boolean = false) = InventoryItemDto(
     id = requireNotNull(id),
     title = title,
     description = description,
@@ -39,6 +41,7 @@ fun InventoryItem.toDto() = InventoryItemDto(
     status = status,
     images = images.sortedBy { it.sortOrder }.map { it.objectKey },
     categories = categories.map { it.toDto() }.sortedBy { it.name },
+    boughtPrice = if (includeCost) boughtPrice else null,
 )
 
 data class CreateCategoryRequest(
@@ -53,6 +56,7 @@ data class InventoryItemRequest(
     @field:NotNull val condition: Condition,
     @field:NotNull @field:DecimalMin("0.0") val priceAmount: BigDecimal,
     @field:NotNull val currency: Currency,
+    @field:DecimalMin("0.0") val boughtPrice: BigDecimal? = null,
     val stockQuantity: Int = 0,
     val imageKeys: List<String> = emptyList(),
     val categoryIds: List<UUID> = emptyList(),

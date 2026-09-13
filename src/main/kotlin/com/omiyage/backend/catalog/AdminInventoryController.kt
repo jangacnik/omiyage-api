@@ -28,7 +28,7 @@ class AdminInventoryController(private val service: InventoryService) {
         @RequestParam(required = false) categoryId: UUID?,
         @RequestParam(required = false) status: InventoryStatus?,
         @PageableDefault(size = 20) pageable: Pageable,
-    ): PageResponse<InventoryItemDto> = service.search(title, categoryId, status, pageable)
+    ): PageResponse<InventoryItemDto> = service.search(title, categoryId, status, pageable, includeCost = true)
 
     @PostMapping
     fun create(@Valid @RequestBody request: InventoryItemRequest): ResponseEntity<InventoryItemDto> =

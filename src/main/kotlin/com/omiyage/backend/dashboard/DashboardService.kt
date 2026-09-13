@@ -41,7 +41,7 @@ class DashboardService(
 
         return UserDashboardEntryDto(
             user = user,
-            orders = userOrders.map { it.toDto() },
+            orders = userOrders.map { it.toDto(includeProfit = true) },
             pendingAmounts = pending,
         )
     }
