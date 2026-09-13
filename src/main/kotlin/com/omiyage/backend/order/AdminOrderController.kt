@@ -57,7 +57,16 @@ class AdminOrderController(private val service: OrderService, private val shipme
         @PathVariable id: UUID,
         @PathVariable itemId: UUID,
         @Valid @RequestBody request: UpdateOrderItemRequest,
-    ): OrderDto = service.updateItem(id, itemId, request.status, request.actualPrice, request.soldPrice, request.weight)
+    ): OrderDto = service.updateItem(
+        orderId = id,
+        itemId = itemId,
+        status = request.status,
+        actualPrice = request.actualPrice,
+        soldPrice = request.soldPrice,
+        weight = request.weight,
+        actualPriceCurrency = request.actualPriceCurrency,
+        soldPriceCurrency = request.soldPriceCurrency,
+    )
 
     @PatchMapping("/{id}/items/{itemId}/details")
     fun updateItemContent(

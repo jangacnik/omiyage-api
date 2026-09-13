@@ -1,6 +1,7 @@
 package com.omiyage.backend.order
 
 import com.omiyage.backend.catalog.InventoryItemRepository
+import com.omiyage.backend.common.Currency
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.shipment.Shipment
@@ -113,6 +114,8 @@ class OrderService(
         actualPrice: java.math.BigDecimal?,
         soldPrice: java.math.BigDecimal? = null,
         weight: java.math.BigDecimal? = null,
+        actualPriceCurrency: Currency? = null,
+        soldPriceCurrency: Currency? = null,
     ): OrderDto {
         val item = orderItems.findById(itemId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
@@ -124,7 +127,9 @@ class OrderService(
             item.purchasedAt = OffsetDateTime.now()
         }
         item.actualPrice = actualPrice
+        item.actualPriceCurrency = actualPriceCurrency
         item.soldPrice = soldPrice
+        item.soldPriceCurrency = soldPriceCurrency
         item.weight = weight
         item.updatedAt = OffsetDateTime.now()
         return item.order.toDto(includeProfit = true)
