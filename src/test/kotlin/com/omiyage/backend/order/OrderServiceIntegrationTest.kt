@@ -76,6 +76,19 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `an admin can create an order on behalf of a specific user`() {
+        val targetUserId = UUID.randomUUID()
+        val request = CreateOrderRequest(
+            items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)),
+        )
+
+        val order = orderService.adminCreate(targetUserId, request)
+
+        assertEquals(targetUserId, order.userId)
+        assertEquals(1, orderService.listMine(MeishiPrincipal(targetUserId, "whoever", Role.USER), org.springframework.data.domain.Pageable.unpaged()).content.size)
+    }
+
+    @Test
     fun `sets the nickname given at creation, trimmed, blank means none`() {
         val request = CreateOrderRequest(
             nickname = "  Grandma's gifts  ",

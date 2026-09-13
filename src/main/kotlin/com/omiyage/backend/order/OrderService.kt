@@ -29,8 +29,13 @@ class OrderService(
 ) {
 
     @Transactional
-    fun create(principal: MeishiPrincipal, request: CreateOrderRequest): OrderDto {
-        val order = Order(userId = principal.id, notes = request.notes, nickname = request.nickname?.trim()?.ifBlank { null })
+    fun create(principal: MeishiPrincipal, request: CreateOrderRequest): OrderDto = createFor(principal.id, request)
+
+    @Transactional
+    fun adminCreate(userId: UUID, request: CreateOrderRequest): OrderDto = createFor(userId, request)
+
+    private fun createFor(userId: UUID, request: CreateOrderRequest): OrderDto {
+        val order = Order(userId = userId, notes = request.notes, nickname = request.nickname?.trim()?.ifBlank { null })
         request.items.forEach { order.items.add(buildOrderItem(order, it)) }
         return orders.save(order).toDto()
     }

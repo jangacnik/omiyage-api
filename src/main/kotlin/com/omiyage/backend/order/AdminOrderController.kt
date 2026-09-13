@@ -23,6 +23,10 @@ import java.util.UUID
 @RequestMapping("/api/admin/orders")
 class AdminOrderController(private val service: OrderService, private val shipments: ShipmentService) {
 
+    @PostMapping("/for-user/{userId}")
+    fun create(@PathVariable userId: UUID, @Valid @RequestBody request: CreateOrderRequest): ResponseEntity<OrderDto> =
+        ResponseEntity.status(HttpStatus.CREATED).body(service.adminCreate(userId, request))
+
     @GetMapping
     fun list(
         @RequestParam(required = false) status: OrderStatus?,
