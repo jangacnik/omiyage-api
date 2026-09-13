@@ -20,6 +20,7 @@ data class UserProfileDto(
     val postalCode: String?,
     val city: String?,
     val country: String?,
+    val avatarKey: String? = null,
     val activated: Boolean = true,
 )
 
