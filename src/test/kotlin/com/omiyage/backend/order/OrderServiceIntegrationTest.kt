@@ -325,6 +325,34 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `bought and sold in different currencies records both but skips profit`() {
+        val order = singleItemOrder()
+
+        val updated = orderService.updateItem(
+            order.id, order.items[0].id, OrderItemStatus.BOUGHT,
+            actualPrice = BigDecimal("450"), soldPrice = BigDecimal("700"),
+            actualPriceCurrency = Currency.JPY, soldPriceCurrency = Currency.EUR,
+        )
+
+        val item = updated.items[0]
+        assertEquals(Currency.JPY, item.actualPriceCurrency)
+        assertNull(item.profit)
+    }
+
+    @Test
+    fun `bought and sold explicitly in the same currency still computes profit`() {
+        val order = singleItemOrder()
+
+        val updated = orderService.updateItem(
+            order.id, order.items[0].id, OrderItemStatus.BOUGHT,
+            actualPrice = BigDecimal("450"), soldPrice = BigDecimal("700"),
+            actualPriceCurrency = Currency.EUR, soldPriceCurrency = Currency.EUR,
+        )
+
+        assertEquals(BigDecimal("250"), updated.items[0].profit)
+    }
+
+    @Test
     fun `an item with no soldPrice yet has no profit`() {
         val order = singleItemOrder()
         orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS)

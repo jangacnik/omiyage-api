@@ -61,8 +61,19 @@ class OrderItem(
     @Column(name = "actual_price")
     var actualPrice: BigDecimal? = null,
 
+    // Bought/sold can happen in a different currency than the item was requested in (e.g.
+    // requested in EUR, actually bought in JPY at the shop) - null means "same as `currency`",
+    // for rows written before this field existed.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actual_price_currency")
+    var actualPriceCurrency: Currency? = null,
+
     @Column(name = "sold_price")
     var soldPrice: BigDecimal? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sold_price_currency")
+    var soldPriceCurrency: Currency? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

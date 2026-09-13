@@ -23,6 +23,7 @@ data class OrderItemDto(
     val currency: Currency,
     val maxPrice: BigDecimal?,
     val actualPrice: BigDecimal?,
+    val actualPriceCurrency: Currency?,
     val status: OrderItemStatus,
     val paid: Boolean,
     val paidAt: OffsetDateTime?,
@@ -34,11 +35,22 @@ data class OrderItemDto(
     val expectedReleaseDate: LocalDate? = null,
     // Admin-only - never populated on a response a normal user can read, see toDto(includeProfit).
     val soldPrice: BigDecimal? = null,
+    val soldPriceCurrency: Currency? = null,
     val profit: BigDecimal? = null,
 )
 
-/** profit = soldPrice - actualPrice (the bought price), only when both are set. */
-private fun OrderItem.profit(): BigDecimal? = soldPrice?.let { sold -> actualPrice?.let { bought -> sold - bought } }
+/** profit = soldPrice - actualPrice (the bought price), only when both are set and in the same
+ *  currency - converting between JPY and EUR here would need a rate, and this is cost-basis
+ *  bookkeeping, not a customer-facing amount, so it's not worth guessing at. Null currency on
+ *  either side (rows from before per-price currencies existed) is treated as this item's own
+ *  `currency`. */
+private fun OrderItem.profit(): BigDecimal? = soldPrice?.let { sold ->
+    actualPrice?.let { bought ->
+        val soldCurrency = soldPriceCurrency ?: currency
+        val boughtCurrency = actualPriceCurrency ?: currency
+        if (soldCurrency == boughtCurrency) sold - bought else null
+    }
+}
 
 fun OrderItem.toDto(includeProfit: Boolean = false): OrderItemDto {
     val linked = inventoryItem
@@ -52,6 +64,7 @@ fun OrderItem.toDto(includeProfit: Boolean = false): OrderItemDto {
         currency = currency,
         maxPrice = maxPrice,
         actualPrice = actualPrice,
+        actualPriceCurrency = actualPriceCurrency,
         status = status,
         paid = paid,
         paidAt = paidAt,
@@ -62,6 +75,7 @@ fun OrderItem.toDto(includeProfit: Boolean = false): OrderItemDto {
         isPreorder = isPreorder,
         expectedReleaseDate = expectedReleaseDate,
         soldPrice = if (includeProfit) soldPrice else null,
+        soldPriceCurrency = if (includeProfit) soldPriceCurrency else null,
         profit = if (includeProfit) profit() else null,
     )
 }
@@ -143,7 +157,9 @@ data class UpdateOrderStatusRequest(@field:NotNull val status: OrderStatus)
 data class UpdateOrderItemRequest(
     @field:NotNull val status: OrderItemStatus,
     @field:DecimalMin("0.0") val actualPrice: BigDecimal? = null,
+    val actualPriceCurrency: Currency? = null,
     @field:DecimalMin("0.0") val soldPrice: BigDecimal? = null,
+    val soldPriceCurrency: Currency? = null,
     val weight: BigDecimal? = null,
 )
 
