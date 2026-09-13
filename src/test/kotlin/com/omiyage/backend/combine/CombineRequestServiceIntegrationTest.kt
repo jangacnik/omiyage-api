@@ -8,6 +8,8 @@ import com.omiyage.backend.order.CreateOrderRequest
 import com.omiyage.backend.order.OrderService
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
+import com.omiyage.backend.shipment.CreateShipmentRequest
+import com.omiyage.backend.shipment.ShipmentService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -26,6 +28,9 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
     lateinit var orderService: OrderService
 
     @Autowired
+    lateinit var shipmentService: ShipmentService
+
+    @Autowired
     lateinit var combineRequestService: CombineRequestService
 
     private fun user() = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
@@ -35,31 +40,39 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY))),
     )
 
+    // Every browsable target in this feature is an existing shipment (per the new "browse other
+    // members' shipments to combine into" flow) - give an order one via the same combine()
+    // primitive admin/member shipment creation already uses, rather than relying on submit-for-
+    // shipping's side effect (which would also lock the order itself).
+    private fun shipmentFor(order: com.omiyage.backend.order.OrderDto) =
+        shipmentService.create(CreateShipmentRequest(orderIds = listOf(order.id)))
+
     @Test
-    fun `accepting a request combines only the two named orders`() {
+    fun `accepting a request attaches only the requester's order onto the target shipment`() {
         val alice = user()
         val bob = user()
         val aliceOrder = order(alice)
         val bobOrder = order(bob)
-        val untouched = order(bob)
+        val bobOther = order(bob)
+        val bobShipment = shipmentFor(bobOrder)
 
-        val request = combineRequestService.create(alice, aliceOrder.id, bobOrder.id)
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
         val accepted = combineRequestService.accept(bob, request.id)
 
         assertEquals(CombineRequestStatus.ACCEPTED, accepted.status)
-        assertNotNull(accepted.resultingShipmentId)
-        assertEquals(accepted.resultingShipmentId, orderService.getById(aliceOrder.id, alice).shipmentId)
-        assertEquals(accepted.resultingShipmentId, orderService.getById(bobOrder.id, bob).shipmentId)
-        assertEquals(null, orderService.getById(untouched.id, bob).shipmentId)
+        assertEquals(bobShipment.id, accepted.resultingShipmentId)
+        assertEquals(bobShipment.id, orderService.getById(aliceOrder.id, alice).shipmentId)
+        assertEquals(bobShipment.id, orderService.getById(bobOrder.id, bob).shipmentId)
+        assertEquals(null, orderService.getById(bobOther.id, bob).shipmentId)
     }
 
     @Test
-    fun `only the target can accept or decline`() {
+    fun `only the shipment owner can accept or decline`() {
         val alice = user()
         val bob = user()
         val aliceOrder = order(alice)
-        val bobOrder = order(bob)
-        val request = combineRequestService.create(alice, aliceOrder.id, bobOrder.id)
+        val bobShipment = shipmentFor(order(bob))
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
 
         assertThrows(ResponseStatusException::class.java) { combineRequestService.accept(alice, request.id) }
         assertThrows(ResponseStatusException::class.java) { combineRequestService.decline(alice, request.id) }
@@ -70,8 +83,8 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val alice = user()
         val bob = user()
         val aliceOrder = order(alice)
-        val bobOrder = order(bob)
-        val request = combineRequestService.create(alice, aliceOrder.id, bobOrder.id)
+        val bobShipment = shipmentFor(order(bob))
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
 
         assertThrows(ResponseStatusException::class.java) { combineRequestService.cancel(bob, request.id) }
 
@@ -80,12 +93,13 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun `cannot send a combine request to your own order`() {
+    fun `cannot send a combine request when you already have an order on that shipment`() {
         val alice = user()
-        val order1 = order(alice)
-        val order2 = order(alice)
+        val aliceOrder = order(alice)
+        val aliceOtherOrder = order(alice)
+        val aliceShipment = shipmentFor(aliceOtherOrder)
 
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, order1.id, order2.id) }
+        assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, aliceShipment.id) }
     }
 
     @Test
@@ -93,10 +107,10 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val alice = user()
         val bob = user()
         val aliceOrder = order(alice)
-        val bobOrder = order(bob)
-        combineRequestService.create(alice, aliceOrder.id, bobOrder.id)
+        val bobShipment = shipmentFor(order(bob))
+        combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
 
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, bobOrder.id) }
+        assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, bobShipment.id) }
     }
 
     @Test
@@ -104,24 +118,37 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val alice = user()
         val bob = user()
         val aliceOrder = order(alice)
-        val bobOrder = order(bob)
-        val request = combineRequestService.create(alice, aliceOrder.id, bobOrder.id)
+        val bobShipment = shipmentFor(order(bob))
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
         combineRequestService.decline(bob, request.id)
 
         assertThrows(ResponseStatusException::class.java) { combineRequestService.accept(bob, request.id) }
     }
 
     @Test
-    fun `admin force-accept bypasses the target ownership check`() {
+    fun `admin force-accept bypasses the shipment-owner check`() {
         val alice = user()
         val bob = user()
         val aliceOrder = order(alice)
-        val bobOrder = order(bob)
-        val request = combineRequestService.create(alice, aliceOrder.id, bobOrder.id)
+        val bobShipment = shipmentFor(order(bob))
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
 
         val accepted = combineRequestService.forceAccept(request.id)
 
         assertEquals(CombineRequestStatus.ACCEPTED, accepted.status)
         assertNotNull(accepted.resultingShipmentId)
+    }
+
+    @Test
+    fun `cannot request to combine into a shipment that has already shipped`() {
+        val alice = user()
+        val bob = user()
+        val aliceOrder = order(alice)
+        val bobOrder = order(bob)
+        val bobShipment = shipmentFor(bobOrder)
+        orderService.submitForShipping(bobOrder.id, bob)
+        shipmentService.update(bobShipment.id, com.omiyage.backend.shipment.UpdateShipmentRequest(status = com.omiyage.backend.shipment.ShipmentStatus.SHIPPED))
+
+        assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, bobShipment.id) }
     }
 }

@@ -1,6 +1,7 @@
 package com.omiyage.backend.combine
 
 import com.omiyage.backend.order.Order
+import com.omiyage.backend.shipment.Shipment
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
@@ -28,8 +29,8 @@ class CombineRequest(
     val requesterOrder: Order,
 
     @ManyToOne
-    @JoinColumn(name = "target_order_id", nullable = false)
-    val targetOrder: Order,
+    @JoinColumn(name = "target_shipment_id", nullable = false)
+    val targetShipment: Shipment,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
