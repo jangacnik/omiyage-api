@@ -21,6 +21,9 @@ import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.patch
+import org.springframework.test.web.servlet.post
+import com.omiyage.backend.common.Condition
+import com.omiyage.backend.common.Currency
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -59,6 +62,34 @@ class AdminOrderControllerTest {
         updatedAt = OffsetDateTime.now(),
         items = emptyList(),
     )
+
+    @Test
+    fun `create for a user is rejected for a non-admin user`() {
+        val userId = UUID.randomUUID()
+        mockMvc.post("/api/admin/orders/for-user/$userId") {
+            header("Authorization", "Bearer ${userToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(
+                CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY))),
+            )
+        }.andExpect { status { isForbidden() } }
+    }
+
+    @Test
+    fun `create for a user succeeds for an admin`() {
+        val userId = UUID.randomUUID()
+        val request = CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)))
+        every { service.adminCreate(userId, request) } returns sampleOrder().copy(userId = userId)
+
+        mockMvc.post("/api/admin/orders/for-user/$userId") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(request)
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.userId") { value(userId.toString()) }
+        }
+    }
 
     @Test
     fun `list is rejected for a non-admin user`() {
