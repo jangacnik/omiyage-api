@@ -26,6 +26,10 @@ enum class OrderStatus { REQUESTED, IN_PROGRESS, PURCHASED, PREPARING_SHIPPING, 
 @Table(name = "orders")
 @SQLDelete(sql = "UPDATE orders SET deleted_at = now() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
+// Nickname, status, and shipment assignment are each set from a separate endpoint/transaction -
+// same multi-writer shape @DynamicUpdate was added to OrderItem for, so one save's stale
+// snapshot of a field it didn't touch can't overwrite a concurrent save's change to that field.
+@org.hibernate.annotations.DynamicUpdate
 class Order(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

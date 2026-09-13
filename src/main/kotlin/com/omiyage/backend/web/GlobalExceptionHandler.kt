@@ -32,6 +32,14 @@ class GlobalExceptionHandler {
     fun handleMethodNotAllowed(e: HttpRequestMethodNotSupportedException): ResponseEntity<Map<String, String>> =
         ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(mapOf("error" to (e.message ?: "method not allowed")))
 
+    // A soft-deleted row is invisible to its own @SQLRestriction, so an eager to-one association
+    // still pointing at it (a NOT NULL FK with no cascade) makes Hibernate throw this instead of
+    // just returning null - e.g. a CombineRequest whose target shipment got deleted after the
+    // request was created. That's a missing resource, not a server fault.
+    @ExceptionHandler(jakarta.persistence.EntityNotFoundException::class)
+    fun handleEntityNotFound(e: jakarta.persistence.EntityNotFoundException): ResponseEntity<Map<String, String>> =
+        ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("error" to "not found"))
+
     @ExceptionHandler(Exception::class)
     fun handleUnexpected(e: Exception): ResponseEntity<Map<String, String>> {
         log.error("unhandled exception", e)
