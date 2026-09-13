@@ -39,7 +39,7 @@ data class OrderItemDto(
     val profit: BigDecimal? = null,
 )
 
-/** profit = soldPrice - actualPrice (the bought price), only when both are set and in the same
+/** profit = (soldPrice - actualPrice) * quantity, only when both prices are set and in the same
  *  currency - converting between JPY and EUR here would need a rate, and this is cost-basis
  *  bookkeeping, not a customer-facing amount, so it's not worth guessing at. Null currency on
  *  either side (rows from before per-price currencies existed) is treated as this item's own
@@ -48,7 +48,7 @@ private fun OrderItem.profit(): BigDecimal? = soldPrice?.let { sold ->
     actualPrice?.let { bought ->
         val soldCurrency = soldPriceCurrency ?: currency
         val boughtCurrency = actualPriceCurrency ?: currency
-        if (soldCurrency == boughtCurrency) sold - bought else null
+        if (soldCurrency == boughtCurrency) (sold - bought) * BigDecimal(quantity) else null
     }
 }
 

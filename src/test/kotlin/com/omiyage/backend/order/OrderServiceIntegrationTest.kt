@@ -373,6 +373,21 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `profit is multiplied by quantity, not just the per-unit price difference`() {
+        val order = orderService.create(
+            user(),
+            CreateOrderRequest(
+                items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY, quantity = 3)),
+            ),
+        )
+
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+
+        assertEquals(BigDecimal("750"), updated.items[0].profit)
+        assertEquals(BigDecimal("750"), updated.profit)
+    }
+
+    @Test
     fun `an item with no soldPrice yet has no profit`() {
         val order = singleItemOrder()
         orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS)

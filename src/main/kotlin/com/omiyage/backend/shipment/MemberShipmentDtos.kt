@@ -48,8 +48,9 @@ data class BrowsableShipmentDto(
 data class ShipmentMemberDto(
     val userId: UUID,
     val orders: List<OrderDto>,
-    // Sum of each item's actualPrice (falling back to maxPrice), grouped by currency - same
-    // convention as DashboardService.pendingAmounts, just scoped to this member's own orders here.
+    // Sum of each item's actualPrice (falling back to maxPrice) times its quantity, grouped by
+    // currency - same convention as DashboardService.pendingAmounts, just scoped to this member's
+    // own orders here.
     val itemTotals: List<PendingAmountDto>,
     val shippingShareJpy: Int?,
     val shippingShareEur: BigDecimal?,
@@ -84,7 +85,7 @@ fun ShipmentDto.toMemberDto(): MemberShipmentDto {
         val billable = memberOrders.filter { it.status != OrderStatus.CANCELLED }
         val itemTotals = billable
             .flatMap { it.items }
-            .groupBy({ it.currency }, { it.actualPrice ?: it.maxPrice ?: BigDecimal.ZERO })
+            .groupBy({ it.currency }, { (it.actualPrice ?: it.maxPrice ?: BigDecimal.ZERO) * BigDecimal(it.quantity) })
             .map { (currency, amounts) -> PendingAmountDto(currency, amounts.fold(BigDecimal.ZERO, BigDecimal::add)) }
             .sortedBy { it.currency }
         ShipmentMemberDto(
