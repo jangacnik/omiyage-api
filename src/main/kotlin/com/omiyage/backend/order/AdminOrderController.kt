@@ -52,7 +52,7 @@ class AdminOrderController(private val service: OrderService, private val shipme
         @PathVariable id: UUID,
         @PathVariable itemId: UUID,
         @Valid @RequestBody request: UpdateOrderItemRequest,
-    ): OrderDto = service.updateItem(id, itemId, request.status, request.actualPrice, request.weight)
+    ): OrderDto = service.updateItem(id, itemId, request.status, request.actualPrice, request.soldPrice, request.weight)
 
     @PatchMapping("/{id}/items/{itemId}/details")
     fun updateItemContent(

@@ -61,6 +61,9 @@ class OrderItem(
     @Column(name = "actual_price")
     var actualPrice: BigDecimal? = null,
 
+    @Column(name = "sold_price")
+    var soldPrice: BigDecimal? = null,
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var status: OrderItemStatus = OrderItemStatus.REQUESTED,
