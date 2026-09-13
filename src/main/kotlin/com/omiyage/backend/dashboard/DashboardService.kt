@@ -34,7 +34,7 @@ class DashboardService(
             .filter { (order, item) -> order.status != OrderStatus.CANCELLED || item.status in LOCKED_ITEM_STATUSES }
             .map { (_, item) -> item }
             .filter { !it.paid }
-            .groupBy({ it.currency }, { it.actualPrice ?: it.maxPrice ?: BigDecimal.ZERO })
+            .groupBy({ it.currency }, { (it.actualPrice ?: it.maxPrice ?: BigDecimal.ZERO) * BigDecimal(it.quantity) })
             .map { (currency, amounts) -> PendingAmountDto(currency, amounts.fold(BigDecimal.ZERO, BigDecimal::add)) }
             .filter { it.amount > BigDecimal.ZERO }
             .sortedBy { it.currency }

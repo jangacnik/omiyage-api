@@ -1,5 +1,7 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.catalog.InventoryItem
+import com.omiyage.backend.catalog.InventoryItemImage
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.security.MeishiPrincipal
@@ -452,6 +454,7 @@ class OrderService(
         if (request.isPreorder && request.expectedReleaseDate == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a preorder item must have an expected release date")
         }
+        addRequestedItemToInventory(request)
         return OrderItem(
             order = order,
             customTitle = request.title,
@@ -465,6 +468,28 @@ class OrderService(
             isPreorder = request.isPreorder,
             expectedReleaseDate = request.expectedReleaseDate,
         )
+    }
+
+    // A custom (non-catalog) request has nothing in Inventory yet - surface it there too, at zero
+    // stock, so the next person browsing the catalog sees it exists and can request it the normal
+    // way instead of retyping it. Zero stock already means "still requestable, just signals the
+    // admin to go source it" (see the inventoryItemId branch above), so no new status is needed.
+    private fun addRequestedItemToInventory(request: CreateOrderItemRequest) {
+        val newItem = InventoryItem(
+            title = requireNotNull(request.title),
+            description = request.description,
+            link = request.link,
+            condition = requireNotNull(request.condition),
+            priceAmount = request.maxPrice ?: java.math.BigDecimal.ZERO,
+            currency = request.currency,
+            stockQuantity = 0,
+            isPreorder = request.isPreorder,
+            expectedReleaseDate = request.expectedReleaseDate,
+        )
+        if (request.imageKey != null) {
+            newItem.images.add(InventoryItemImage(inventoryItem = newItem, objectKey = request.imageKey))
+        }
+        inventoryItems.save(newItem)
     }
 
     private fun findOrThrow(id: UUID): Order =

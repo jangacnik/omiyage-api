@@ -3,6 +3,7 @@ package com.omiyage.backend.web
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -26,6 +27,10 @@ class GlobalExceptionHandler {
         val message = e.reason ?: e.statusCode.toString()
         return ResponseEntity.status(e.statusCode).body(mapOf("error" to message))
     }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
+    fun handleMethodNotAllowed(e: HttpRequestMethodNotSupportedException): ResponseEntity<Map<String, String>> =
+        ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(mapOf("error" to (e.message ?: "method not allowed")))
 
     @ExceptionHandler(Exception::class)
     fun handleUnexpected(e: Exception): ResponseEntity<Map<String, String>> {
