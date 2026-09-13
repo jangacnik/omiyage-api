@@ -74,6 +74,10 @@ data class OrderDto(
     val notes: String?,
     val nickname: String?,
     val shipmentId: UUID?,
+    // The requester's account nickname - only populated on the admin orders list (see
+    // OrderService.adminList), which is the only place a caller other than the order's own owner
+    // needs to know whose order this is; every other endpoint leaves this null.
+    val userNickname: String? = null,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
     val items: List<OrderItemDto>,
@@ -161,3 +165,5 @@ data class UpdateOrderNicknameRequest(@field:Size(max = 100) val nickname: Strin
 data class SplitOrderRequest(@field:NotEmpty val itemIds: List<UUID>)
 
 data class SplitOrderResponseDto(val original: OrderDto, val created: OrderDto)
+
+enum class AdminOrderSortBy { UPDATED_AT, CREATED_AT, ITEM_COUNT }
