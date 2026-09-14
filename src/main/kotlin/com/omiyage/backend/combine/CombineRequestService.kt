@@ -98,6 +98,13 @@ class CombineRequestService(
         if (targetShipment.status != ShipmentStatus.PREPARING) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "a shipment that has already shipped cannot be combined into")
         }
+        // create() only checked this at request time - a second pending request for a different
+        // order of the requester's, targeting the same shipment, would still have passed it back
+        // then. Re-check here so accepting two such requests can't land the same member on the
+        // same shipment twice.
+        if (targetShipment.orders.any { it.userId == requesterOrder.userId }) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "that member already has an order on this shipment")
+        }
         shipmentService.assignOrder(requesterOrderId, targetShipmentId)
         request.status = CombineRequestStatus.ACCEPTED
         request.respondedAt = OffsetDateTime.now()

@@ -10,6 +10,7 @@ import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.shipment.CreateShipmentRequest
 import com.omiyage.backend.shipment.ShipmentService
+import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -32,6 +33,9 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Autowired
     lateinit var combineRequestService: CombineRequestService
+
+    @Autowired
+    lateinit var entityManager: EntityManager
 
     private fun user() = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
 
@@ -100,6 +104,27 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val aliceShipment = shipmentFor(aliceOtherOrder)
 
         assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, aliceShipment.id) }
+    }
+
+    @Test
+    fun `accepting a second request cannot land the same member on a shipment twice`() {
+        val alice = user()
+        val bob = user()
+        val aliceOrder1 = order(alice)
+        val aliceOrder2 = order(alice)
+        val bobShipment = shipmentFor(order(bob))
+
+        // Both pass create()'s check, since neither of alice's orders is on bobShipment yet.
+        val request1 = combineRequestService.create(alice, aliceOrder1.id, bobShipment.id)
+        val request2 = combineRequestService.create(alice, aliceOrder2.id, bobShipment.id)
+
+        combineRequestService.accept(bob, request1.id)
+        // Flush + clear to drop the first-level cache - a real second accept() would arrive as
+        // its own HTTP request with a fresh persistence context, not share this test's single
+        // transaction and its already-loaded (now stale) Shipment.orders collection.
+        entityManager.flush()
+        entityManager.clear()
+        assertThrows(ResponseStatusException::class.java) { combineRequestService.accept(bob, request2.id) }
     }
 
     @Test
