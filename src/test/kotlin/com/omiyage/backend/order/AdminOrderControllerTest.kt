@@ -204,4 +204,28 @@ class AdminOrderControllerTest {
             content = objectMapper.writeValueAsString(MergeOrdersRequest(ids))
         }.andExpect { status { isOk() } }
     }
+
+    @Test
+    fun `updateNickname is rejected for a non-admin user`() {
+        mockMvc.patch("/api/admin/orders/${UUID.randomUUID()}/nickname") {
+            header("Authorization", "Bearer ${userToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(UpdateOrderNicknameRequest("Grandma's Gifts"))
+        }.andExpect { status { isForbidden() } }
+    }
+
+    @Test
+    fun `updateNickname succeeds for an admin, for any user's order`() {
+        val id = UUID.randomUUID()
+        every { service.adminUpdateNickname(id, "Grandma's Gifts") } returns sampleOrder().copy(nickname = "Grandma's Gifts")
+
+        mockMvc.patch("/api/admin/orders/$id/nickname") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(UpdateOrderNicknameRequest("Grandma's Gifts"))
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.nickname") { value("Grandma's Gifts") }
+        }
+    }
 }

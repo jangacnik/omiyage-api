@@ -94,4 +94,8 @@ class AdminOrderController(private val service: OrderService, private val shipme
 
     @PostMapping("/merge")
     fun merge(@Valid @RequestBody request: MergeOrdersRequest): OrderDto = service.adminMerge(request.orderIds)
+
+    @PatchMapping("/{id}/nickname")
+    fun updateNickname(@PathVariable id: UUID, @Valid @RequestBody request: UpdateOrderNicknameRequest): OrderDto =
+        service.adminUpdateNickname(id, request.nickname)
 }

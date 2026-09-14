@@ -623,6 +623,26 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `admin can set a nickname on any user's order`() {
+        val order = singleItemOrder(user())
+
+        val updated = orderService.adminUpdateNickname(order.id, "Grandma's Gifts")
+
+        assertEquals("Grandma's Gifts", updated.nickname)
+    }
+
+    @Test
+    fun `admin nickname is trimmed, and blank clears it`() {
+        val order = singleItemOrder(user())
+
+        val padded = orderService.adminUpdateNickname(order.id, "  Padded  ")
+        assertEquals("Padded", padded.nickname)
+
+        val cleared = orderService.adminUpdateNickname(order.id, "   ")
+        assertNull(cleared.nickname)
+    }
+
+    @Test
     fun `combining a solo order (listed first) with others absorbs them into its existing shipment`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")

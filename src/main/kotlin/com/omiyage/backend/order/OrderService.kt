@@ -407,6 +407,15 @@ class OrderService(
         if (order.userId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
+        return applyNickname(order, nickname)
+    }
+
+    // Admin equivalent of updateNickname: no ownership restriction - an admin can title any
+    // user's order, e.g. to label it for a shipment before the owner gets around to it.
+    @Transactional
+    fun adminUpdateNickname(orderId: UUID, nickname: String?): OrderDto = applyNickname(findOrThrow(orderId), nickname)
+
+    private fun applyNickname(order: Order, nickname: String?): OrderDto {
         order.nickname = nickname?.trim()?.ifBlank { null }
         order.updatedAt = OffsetDateTime.now()
         return order.toDto()
