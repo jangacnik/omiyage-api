@@ -218,6 +218,49 @@ class OrderService(
         return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
+    @Transactional(readOnly = true)
+    fun adminOrdersForUser(userId: UUID): List<OrderDto> =
+        orders.findByUserId(userId, Pageable.unpaged()).content.map { it.toDto(includeProfit = true, toEur = exchangeRates::toEur) }
+
+    // Admin equivalent of splitMine, but the items can land on an existing order of the same user
+    // instead of always spinning up a new one - targetOrderId null still creates a new order, same
+    // as splitMine does.
+    @Transactional
+    fun adminMoveItems(sourceOrderId: UUID, itemIds: List<UUID>, targetOrderId: UUID?): MoveItemsResponseDto {
+        val source = findOrThrow(sourceOrderId)
+        val distinctIds = itemIds.distinct()
+        val toMove = distinctIds.map { id ->
+            source.items.find { it.id == id }
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found: $id")
+        }
+        if (toMove.isEmpty() || toMove.size == source.items.size) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "must move at least one item and leave at least one behind")
+        }
+        val target = if (targetOrderId != null) {
+            if (targetOrderId == sourceOrderId) {
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "target order must be different from the source order")
+            }
+            val existing = findOrThrow(targetOrderId)
+            if (existing.userId != source.userId) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "cannot move items to an order belonging to a different user")
+            }
+            existing
+        } else {
+            orders.save(Order(userId = source.userId, status = source.status))
+        }
+        toMove.forEach { item ->
+            source.items.remove(item)
+            item.order = target
+            target.items.add(item)
+        }
+        source.updatedAt = OffsetDateTime.now()
+        target.updatedAt = OffsetDateTime.now()
+        return MoveItemsResponseDto(
+            source = source.toDto(includeProfit = true, toEur = exchangeRates::toEur),
+            target = target.toDto(includeProfit = true, toEur = exchangeRates::toEur),
+        )
+    }
+
     @Transactional
     fun cancelOwn(orderId: UUID, principal: MeishiPrincipal): OrderDto {
         val order = findOrThrow(orderId)

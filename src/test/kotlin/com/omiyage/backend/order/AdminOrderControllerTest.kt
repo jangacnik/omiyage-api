@@ -228,4 +228,35 @@ class AdminOrderControllerTest {
             jsonPath("$.nickname") { value("Grandma's Gifts") }
         }
     }
+
+    @Test
+    fun `moveItems is rejected for a non-admin user`() {
+        mockMvc.post("/api/admin/orders/${UUID.randomUUID()}/items/move") {
+            header("Authorization", "Bearer ${userToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MoveOrderItemsRequest(listOf(UUID.randomUUID())))
+        }.andExpect { status { isForbidden() } }
+    }
+
+    @Test
+    fun `moveItems succeeds for an admin`() {
+        val sourceId = UUID.randomUUID()
+        val itemId = UUID.randomUUID()
+        val targetId = UUID.randomUUID()
+        every { service.adminMoveItems(sourceId, listOf(itemId), targetId) } returns
+            MoveItemsResponseDto(source = sampleOrder(), target = sampleOrder())
+
+        mockMvc.post("/api/admin/orders/$sourceId/items/move") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MoveOrderItemsRequest(listOf(itemId), targetId))
+        }.andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `listForUser is rejected for a non-admin user`() {
+        mockMvc.get("/api/admin/orders/by-user/${UUID.randomUUID()}") {
+            header("Authorization", "Bearer ${userToken()}")
+        }.andExpect { status { isForbidden() } }
+    }
 }

@@ -15,6 +15,7 @@ import com.omiyage.backend.shipment.ShipmentStatus
 import com.omiyage.backend.shipment.UpdateShipmentRequest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -620,6 +621,60 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         // Neither order was touched - both still exist independently.
         assertEquals(1, orderService.getById(a.id, admin()).items.size)
         assertEquals(1, orderService.getById(b.id, admin()).items.size)
+    }
+
+    private fun twoItemOrder(principal: MeishiPrincipal) = orderService.create(
+        principal,
+        CreateOrderRequest(
+            items = listOf(
+                CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY),
+                CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY),
+            ),
+        ),
+    )
+
+    @Test
+    fun `admin can move an item onto an existing order of the same user`() {
+        val owner = user()
+        val source = twoItemOrder(owner)
+        val target = singleItemOrder(owner, "target")
+
+        val moved = orderService.adminMoveItems(source.id, listOf(source.items[0].id), target.id)
+
+        assertEquals(1, moved.source.items.size)
+        assertEquals(2, moved.target.items.size)
+        assertEquals(target.id, moved.target.id)
+    }
+
+    @Test
+    fun `admin can move an item onto a brand-new order when no target is given`() {
+        val owner = user()
+        val source = twoItemOrder(owner)
+
+        val moved = orderService.adminMoveItems(source.id, listOf(source.items[0].id), null)
+
+        assertEquals(1, moved.source.items.size)
+        assertEquals(1, moved.target.items.size)
+        assertNotEquals(source.id, moved.target.id)
+    }
+
+    @Test
+    fun `admin cannot move an item onto another user's order`() {
+        val source = twoItemOrder(user())
+        val target = singleItemOrder(user(), "target")
+
+        assertThrows(ResponseStatusException::class.java) {
+            orderService.adminMoveItems(source.id, listOf(source.items[0].id), target.id)
+        }
+    }
+
+    @Test
+    fun `admin cannot move every item out of the source order`() {
+        val source = twoItemOrder(user())
+
+        assertThrows(ResponseStatusException::class.java) {
+            orderService.adminMoveItems(source.id, source.items.map { it.id }, null)
+        }
     }
 
     @Test

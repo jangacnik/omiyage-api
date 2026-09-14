@@ -186,4 +186,10 @@ data class SplitOrderRequest(@field:NotEmpty val itemIds: List<UUID>)
 
 data class SplitOrderResponseDto(val original: OrderDto, val created: OrderDto)
 
+// targetOrderId null means "move onto a new order" - the admin equivalent of splitMine, but able
+// to land items on an existing order of the same user instead of always creating a new one.
+data class MoveOrderItemsRequest(@field:NotEmpty val itemIds: List<UUID>, val targetOrderId: UUID? = null)
+
+data class MoveItemsResponseDto(val source: OrderDto, val target: OrderDto)
+
 enum class AdminOrderSortBy { UPDATED_AT, CREATED_AT, ITEM_COUNT }

@@ -98,4 +98,11 @@ class AdminOrderController(private val service: OrderService, private val shipme
     @PatchMapping("/{id}/nickname")
     fun updateNickname(@PathVariable id: UUID, @Valid @RequestBody request: UpdateOrderNicknameRequest): OrderDto =
         service.adminUpdateNickname(id, request.nickname)
+
+    @GetMapping("/by-user/{userId}")
+    fun listForUser(@PathVariable userId: UUID): List<OrderDto> = service.adminOrdersForUser(userId)
+
+    @PostMapping("/{id}/items/move")
+    fun moveItems(@PathVariable id: UUID, @Valid @RequestBody request: MoveOrderItemsRequest): MoveItemsResponseDto =
+        service.adminMoveItems(id, request.itemIds, request.targetOrderId)
 }
