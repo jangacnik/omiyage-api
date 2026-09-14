@@ -8,6 +8,7 @@ import com.omiyage.backend.common.Currency
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.shipment.CreateShipmentRequest
+import com.omiyage.backend.shipment.ExchangeRateService
 import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.shipment.ShipmentStatus
@@ -48,6 +49,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Autowired
     lateinit var inventoryItemRepository: com.omiyage.backend.catalog.InventoryItemRepository
+
+    @Autowired
+    lateinit var exchangeRateService: ExchangeRateService
 
     private fun user() = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
     private fun admin() = MeishiPrincipal(UUID.randomUUID(), "root", Role.ADMIN)
@@ -324,6 +328,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `updateItem computes profit as soldPrice minus actualPrice and sums it to order level`() {
+        exchangeRateService.setRate(BigDecimal("1.0000")) // 1:1 - this test is about the profit arithmetic, not conversion.
         val order = orderService.create(
             user(),
             CreateOrderRequest(
@@ -339,41 +344,36 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
         val firstItem = updated.items.first { it.id == order.items[0].id }
         val secondItem = updated.items.first { it.id == order.items[1].id }
-        assertEquals(BigDecimal("250"), firstItem.profit)
-        assertEquals(BigDecimal.ZERO, secondItem.profit)
-        assertEquals(BigDecimal("250"), updated.profit)
+        assertEquals(BigDecimal("250.00"), firstItem.profit)
+        assertEquals(BigDecimal("0.00"), secondItem.profit)
+        assertEquals(BigDecimal("250.00"), updated.profit)
     }
 
     @Test
-    fun `bought and sold in different currencies records both but skips profit`() {
+    fun `actualPrice is always stored as JPY and soldPrice as EUR, regardless of the item's own currency`() {
         val order = singleItemOrder()
 
-        val updated = orderService.updateItem(
-            order.id, order.items[0].id, OrderItemStatus.BOUGHT,
-            actualPrice = BigDecimal("450"), soldPrice = BigDecimal("700"),
-            actualPriceCurrency = Currency.JPY, soldPriceCurrency = Currency.EUR,
-        )
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
 
         val item = updated.items[0]
         assertEquals(Currency.JPY, item.actualPriceCurrency)
-        assertNull(item.profit)
+        assertEquals(Currency.EUR, item.soldPriceCurrency)
     }
 
     @Test
-    fun `bought and sold explicitly in the same currency still computes profit`() {
+    fun `profit converts the JPY bought price to EUR at the admin-set rate before subtracting`() {
+        exchangeRateService.setRate(BigDecimal("100.0000"))
         val order = singleItemOrder()
 
-        val updated = orderService.updateItem(
-            order.id, order.items[0].id, OrderItemStatus.BOUGHT,
-            actualPrice = BigDecimal("450"), soldPrice = BigDecimal("700"),
-            actualPriceCurrency = Currency.EUR, soldPriceCurrency = Currency.EUR,
-        )
+        // Bought for 450 JPY = 4.50 EUR at 100 JPY/EUR, sold for 700 EUR -> profit 695.50 EUR.
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
 
-        assertEquals(BigDecimal("250"), updated.items[0].profit)
+        assertEquals(BigDecimal("695.50"), updated.items[0].profit)
     }
 
     @Test
     fun `profit is multiplied by quantity, not just the per-unit price difference`() {
+        exchangeRateService.setRate(BigDecimal("1.0000")) // 1:1 - this test is about quantity, not conversion.
         val order = orderService.create(
             user(),
             CreateOrderRequest(
@@ -383,8 +383,8 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
         val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
 
-        assertEquals(BigDecimal("750"), updated.items[0].profit)
-        assertEquals(BigDecimal("750"), updated.profit)
+        assertEquals(BigDecimal("750.00"), updated.items[0].profit)
+        assertEquals(BigDecimal("750.00"), updated.profit)
     }
 
     @Test
@@ -413,6 +413,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `getById exposes soldPrice and profit to an admin`() {
+        exchangeRateService.setRate(BigDecimal("1.0000")) // 1:1 - this test is about visibility, not conversion.
         val owner = user()
         val order = singleItemOrder(owner)
         orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
@@ -420,8 +421,8 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val fetched = orderService.getById(order.id, admin())
 
         assertEquals(BigDecimal("700"), fetched.items[0].soldPrice)
-        assertEquals(BigDecimal("250"), fetched.items[0].profit)
-        assertEquals(BigDecimal("250"), fetched.profit)
+        assertEquals(BigDecimal("250.00"), fetched.items[0].profit)
+        assertEquals(BigDecimal("250.00"), fetched.profit)
     }
 
     @Test

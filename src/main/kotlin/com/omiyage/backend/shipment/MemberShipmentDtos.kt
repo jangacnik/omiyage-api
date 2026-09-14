@@ -1,5 +1,6 @@
 package com.omiyage.backend.shipment
 
+import com.omiyage.backend.common.Currency
 import com.omiyage.backend.dashboard.PendingAmountDto
 import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.order.OrderStatus
@@ -48,9 +49,9 @@ data class BrowsableShipmentDto(
 data class ShipmentMemberDto(
     val userId: UUID,
     val orders: List<OrderDto>,
-    // Sum of each item's actualPrice (falling back to maxPrice) times its quantity, grouped by
-    // currency - same convention as DashboardService.pendingAmounts, just scoped to this member's
-    // own orders here.
+    // Sum of each item's actualPrice (JPY, converted) or maxPrice (EUR) times its quantity,
+    // normalized to EUR - same convention as DashboardService.pendingAmounts, just scoped to this
+    // member's own orders here. A list for response-shape stability, but at most one entry.
     val itemTotals: List<PendingAmountDto>,
     val shippingShareJpy: Int?,
     val shippingShareEur: BigDecimal?,
@@ -76,31 +77,32 @@ data class MemberShipmentDto(
 
 // Shipment.toDto() always computes orders with includeProfit=true (every admin shipment endpoint
 // is admin-only) - strip profit/soldPrice back out here, since this DTO is served to members.
-fun ShipmentDto.toMemberDto(): MemberShipmentDto {
+// `toEur` is the bare admin-set-rate conversion (ExchangeRateService.toEur) for turning a JPY
+// actualPrice into the EUR everything else here is already denominated in.
+fun ShipmentDto.toMemberDto(toEur: (BigDecimal) -> BigDecimal): MemberShipmentDto {
     val orders = orders.map { order ->
         order.copy(profit = null, items = order.items.map { it.copy(soldPrice = null, profit = null) })
     }
     val byUser = orders.groupBy { it.userId }
     val members = byUser.map { (userId, memberOrders) ->
         val billable = memberOrders.filter { it.status != OrderStatus.CANCELLED }
-        val itemTotals = billable
-            .flatMap { it.items }
-            .groupBy({ it.currency }, { (it.actualPrice ?: it.maxPrice ?: BigDecimal.ZERO) * BigDecimal(it.quantity) })
-            .map { (currency, amounts) -> PendingAmountDto(currency, amounts.fold(BigDecimal.ZERO, BigDecimal::add)) }
-            .sortedBy { it.currency }
+        // Explicit scale: toEur() returns scale-2, but maxPrice may not be, and BigDecimal
+        // arithmetic takes the larger of the two scales it's mixing.
+        val itemTotal = billable.flatMap { it.items }.sumOf { item ->
+            val amount = item.actualPrice?.let(toEur) ?: item.maxPrice ?: BigDecimal.ZERO
+            amount * BigDecimal(item.quantity)
+        }.setScale(2, java.math.RoundingMode.HALF_UP)
         ShipmentMemberDto(
             userId = userId,
             orders = memberOrders,
-            itemTotals = itemTotals,
+            itemTotals = if (itemTotal > BigDecimal.ZERO) listOf(PendingAmountDto(Currency.EUR, itemTotal)) else emptyList(),
             shippingShareJpy = billable.sumOf { it.shippingCostShareJpy ?: 0 }.takeIf { billable.any { o -> o.shippingCostShareJpy != null } },
             shippingShareEur = billable.mapNotNull { it.shippingCostShareEur }.takeIf { it.isNotEmpty() }?.fold(BigDecimal.ZERO, BigDecimal::add),
         )
     }.sortedBy { it.userId }
 
-    val grandTotals = members.flatMap { it.itemTotals }
-        .groupBy({ it.currency }, { it.amount })
-        .map { (currency, amounts) -> PendingAmountDto(currency, amounts.fold(BigDecimal.ZERO, BigDecimal::add)) }
-        .sortedBy { it.currency }
+    val grandTotal = members.flatMap { it.itemTotals }.fold(BigDecimal.ZERO) { sum, dto -> sum + dto.amount }
+    val grandTotals = if (grandTotal > BigDecimal.ZERO) listOf(PendingAmountDto(Currency.EUR, grandTotal)) else emptyList()
 
     return MemberShipmentDto(
         id = id,

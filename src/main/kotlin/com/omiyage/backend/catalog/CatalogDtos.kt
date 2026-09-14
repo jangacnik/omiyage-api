@@ -29,10 +29,13 @@ data class InventoryItemDto(
     val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
     // Admin-only cost basis - never populated on a response a normal user can read, see toDto(includeCost).
+    // Always JPY (that's where the admin actually buys); priceAmount above is always EUR.
     val boughtPrice: BigDecimal? = null,
+    // priceAmount[EUR] - toEur(boughtPrice[JPY]) - admin-only, same convention as boughtPrice.
+    val profitEur: BigDecimal? = null,
 )
 
-fun InventoryItem.toDto(includeCost: Boolean = false) = InventoryItemDto(
+fun InventoryItem.toDto(includeCost: Boolean = false, toEur: (BigDecimal) -> BigDecimal = { it }) = InventoryItemDto(
     id = requireNotNull(id),
     title = title,
     description = description,
@@ -47,6 +50,7 @@ fun InventoryItem.toDto(includeCost: Boolean = false) = InventoryItemDto(
     isPreorder = isPreorder,
     expectedReleaseDate = expectedReleaseDate,
     boughtPrice = if (includeCost) boughtPrice else null,
+    profitEur = if (includeCost) boughtPrice?.let { priceAmount - toEur(it) } else null,
 )
 
 data class CreateCategoryRequest(

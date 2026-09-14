@@ -39,20 +39,21 @@ data class OrderItemDto(
     val profit: BigDecimal? = null,
 )
 
-/** profit = (soldPrice - actualPrice) * quantity, only when both prices are set and in the same
- *  currency - converting between JPY and EUR here would need a rate, and this is cost-basis
- *  bookkeeping, not a customer-facing amount, so it's not worth guessing at. Null currency on
- *  either side (rows from before per-price currencies existed) is treated as this item's own
- *  `currency`. */
-private fun OrderItem.profit(): BigDecimal? = soldPrice?.let { sold ->
+/** profit = (soldPrice[EUR] - toEur(actualPrice[JPY])) * quantity, only when both are set.
+ *  Bought-for is always JPY (that's where the admin actually buys) and sold-for is always EUR
+ *  (that's what the customer is charged) - see OrderService.updateItem, which enforces this
+ *  regardless of what a caller sends. `toEur` is the bare admin-set-rate conversion
+ *  (ExchangeRateService.toEur), never the shipping markup rate. */
+private fun OrderItem.profit(toEur: (BigDecimal) -> BigDecimal): BigDecimal? = soldPrice?.let { sold ->
     actualPrice?.let { bought ->
-        val soldCurrency = soldPriceCurrency ?: currency
-        val boughtCurrency = actualPriceCurrency ?: currency
-        if (soldCurrency == boughtCurrency) (sold - bought) * BigDecimal(quantity) else null
+        // setScale explicitly: toEur() returns a scale-2 value, but sold/quantity may not be, and
+        // BigDecimal subtraction/multiplication takes the larger of the two scales - without this,
+        // profit's scale would silently depend on whether a conversion happened to run.
+        ((sold - toEur(bought)) * BigDecimal(quantity)).setScale(2, java.math.RoundingMode.HALF_UP)
     }
 }
 
-fun OrderItem.toDto(includeProfit: Boolean = false): OrderItemDto {
+fun OrderItem.toDto(includeProfit: Boolean = false, toEur: (BigDecimal) -> BigDecimal = { it }): OrderItemDto {
     val linked = inventoryItem
     return OrderItemDto(
         id = requireNotNull(id),
@@ -76,7 +77,7 @@ fun OrderItem.toDto(includeProfit: Boolean = false): OrderItemDto {
         expectedReleaseDate = expectedReleaseDate,
         soldPrice = if (includeProfit) soldPrice else null,
         soldPriceCurrency = if (includeProfit) soldPriceCurrency else null,
-        profit = if (includeProfit) profit() else null,
+        profit = if (includeProfit) profit(toEur) else null,
     )
 }
 
@@ -111,8 +112,8 @@ private val CLOSED_ORDER_STATUSES =
 
 val Order.isOpen: Boolean get() = status !in CLOSED_ORDER_STATUSES
 
-fun Order.toDto(includeProfit: Boolean = false): OrderDto {
-    val itemDtos = items.map { it.toDto(includeProfit) }
+fun Order.toDto(includeProfit: Boolean = false, toEur: (BigDecimal) -> BigDecimal = { it }): OrderDto {
+    val itemDtos = items.map { it.toDto(includeProfit, toEur) }
     return OrderDto(
         id = requireNotNull(id),
         userId = userId,
@@ -154,12 +155,12 @@ data class CreateOrderRequest(
 
 data class UpdateOrderStatusRequest(@field:NotNull val status: OrderStatus)
 
+// actualPrice is always JPY and soldPrice is always EUR - see OrderService.updateItem - so there's
+// no per-request currency choice for either.
 data class UpdateOrderItemRequest(
     @field:NotNull val status: OrderItemStatus,
     @field:DecimalMin("0.0") val actualPrice: BigDecimal? = null,
-    val actualPriceCurrency: Currency? = null,
     @field:DecimalMin("0.0") val soldPrice: BigDecimal? = null,
-    val soldPriceCurrency: Currency? = null,
     val weight: BigDecimal? = null,
 )
 

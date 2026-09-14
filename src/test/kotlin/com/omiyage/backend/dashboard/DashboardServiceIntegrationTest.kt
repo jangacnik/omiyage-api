@@ -9,6 +9,7 @@ import com.omiyage.backend.order.CreateOrderRequest
 import com.omiyage.backend.order.OrderItemStatus
 import com.omiyage.backend.order.OrderService
 import com.omiyage.backend.security.MeishiPrincipal
+import com.omiyage.backend.shipment.ExchangeRateService
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.user.MeishiAdminClient
 import com.omiyage.backend.user.UserProfileDto
@@ -32,6 +33,9 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
     @Autowired
     lateinit var orderService: OrderService
 
+    @Autowired
+    lateinit var exchangeRateService: ExchangeRateService
+
     @MockkBean
     lateinit var meishiAdminClient: MeishiAdminClient
 
@@ -53,6 +57,7 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `pending amount sums unpaid items, using actualPrice or falling back to maxPrice`() {
+        exchangeRateService.setRate(BigDecimal("1.0000")) // 1:1 - this test is about the fallback logic, not conversion.
         val principal = user()
         every { meishiAdminClient.listUsers(any()) } returns listOf(profileFor(principal.id))
 
@@ -71,9 +76,9 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
         val entry = dashboardService.userDashboard("Bearer irrelevant").single()
 
         assertEquals(1, entry.pendingAmounts.size)
-        // 800 (actual, bought) + 500 (maxPrice fallback, not yet bought) = 1300
-        assertEquals(BigDecimal("1300"), entry.pendingAmounts[0].amount)
-        assertEquals(Currency.JPY, entry.pendingAmounts[0].currency)
+        // 800 (actual, bought, JPY->EUR at 1:1) + 500 (maxPrice fallback, already EUR) = 1300
+        assertEquals(BigDecimal("1300.00"), entry.pendingAmounts[0].amount)
+        assertEquals(Currency.EUR, entry.pendingAmounts[0].currency)
     }
 
     @Test
@@ -105,6 +110,7 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `an already-bought item still counts as pending even if an admin force-cancels the order afterward`() {
+        exchangeRateService.setRate(BigDecimal("1.0000")) // 1:1 - this test is about cancellation, not conversion.
         val principal = user()
         every { meishiAdminClient.listUsers(any()) } returns listOf(profileFor(principal.id))
 
@@ -122,7 +128,7 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
         val entry = dashboardService.userDashboard("Bearer irrelevant").single()
 
         assertEquals(1, entry.pendingAmounts.size)
-        assertEquals(BigDecimal("1200"), entry.pendingAmounts[0].amount)
+        assertEquals(BigDecimal("1200.00"), entry.pendingAmounts[0].amount)
     }
 
     @Test

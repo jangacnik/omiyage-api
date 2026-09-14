@@ -23,18 +23,25 @@ class ExchangeRateServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun `converts JPY to EUR including the hidden 10 percent markup`() {
+    fun `converts JPY to EUR including the hidden 15 percent markup`() {
         service.setRate(BigDecimal("100.0000"))
 
-        // 4400 JPY at 100 JPY/EUR = 44.00 EUR, +10% markup = 48.40 EUR.
-        assertEquals(BigDecimal("48.40"), service.toEurWithMarkup(4400))
+        // 4400 JPY at 100 JPY/EUR = 44.00 EUR, +15% markup = 50.60 EUR.
+        assertEquals(BigDecimal("50.60"), service.toEurWithMarkup(4400))
     }
 
     @Test
     fun `rounds the converted amount to two decimal places`() {
         service.setRate(BigDecimal("150.0000"))
 
-        // 1000 / 150 = 6.666666..., * 1.10 = 7.333333... -> rounds to 7.33.
-        assertEquals(BigDecimal("7.33"), service.toEurWithMarkup(1000))
+        // 1000 / 150 = 6.666667, * 1.15 = 7.66667... -> rounds to 7.67.
+        assertEquals(BigDecimal("7.67"), service.toEurWithMarkup(1000))
+    }
+
+    @Test
+    fun `toEur converts without any markup, for the admin's own cost-basis bookkeeping`() {
+        service.setRate(BigDecimal("150.0000"))
+
+        assertEquals(BigDecimal("6.67"), service.toEur(BigDecimal("1000")))
     }
 }

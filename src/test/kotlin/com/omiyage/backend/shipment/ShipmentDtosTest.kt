@@ -20,11 +20,16 @@ class ShipmentDtosTest {
             ShippingMethod.SURFACE_MAIL -> null
         }
 
-    // Mirrors ExchangeRateService.toEurWithMarkup's formula (rate 150 JPY/EUR, +10% markup) without
+    // Mirrors ExchangeRateService.toEurWithMarkup's formula (rate 150 JPY/EUR, +15% markup) without
     // needing the DB-backed service - these tests only care about the cost-sharing math above it.
     private fun stubToEur(jpyAmount: Int): BigDecimal =
         BigDecimal(jpyAmount).divide(BigDecimal(150), 6, java.math.RoundingMode.HALF_UP)
-            .multiply(BigDecimal("1.10")).setScale(2, java.math.RoundingMode.HALF_UP)
+            .multiply(BigDecimal("1.15")).setScale(2, java.math.RoundingMode.HALF_UP)
+
+    // Mirrors ExchangeRateService.toEur (bare, no markup) - none of these tests set an item's
+    // actualPrice, so this is never actually invoked, just needed to satisfy toDto()'s signature.
+    private fun stubToEurBare(jpyAmount: BigDecimal): BigDecimal =
+        jpyAmount.divide(BigDecimal(150), 2, java.math.RoundingMode.HALF_UP)
 
     private fun orderWeighing(grams: Int): Order {
         val order = Order(id = UUID.randomUUID(), userId = UUID.randomUUID())
@@ -46,7 +51,7 @@ class ShipmentDtosTest {
         val shipment = Shipment(id = UUID.randomUUID())
         shipment.orders.add(orderWeighing(500))
 
-        val dto = shipment.toDto(::stubRates, ::stubToEur)
+        val dto = shipment.toDto(::stubRates, ::stubToEur, ::stubToEurBare)
 
         assertEquals(BigDecimal(500), dto.totalWeightGrams)
         assertNull(dto.shippingCostJpy)
@@ -59,7 +64,7 @@ class ShipmentDtosTest {
         shipment.orders.add(orderWeighing(300))
         shipment.orders.add(orderWeighing(700))
 
-        val dto = shipment.toDto(::stubRates, ::stubToEur)
+        val dto = shipment.toDto(::stubRates, ::stubToEur, ::stubToEurBare)
 
         assertEquals(BigDecimal(1000), dto.totalWeightGrams)
         assertEquals(4400, dto.shippingCostJpy) // EMS, Third Zone, up to 1kg
@@ -80,7 +85,7 @@ class ShipmentDtosTest {
         shipment.orders.add(orderWeighing(300))
         shipment.orders.add(cancelled)
 
-        val dto = shipment.toDto(::stubRates, ::stubToEur)
+        val dto = shipment.toDto(::stubRates, ::stubToEur, ::stubToEurBare)
 
         assertEquals(BigDecimal(300), dto.totalWeightGrams)
         assertEquals(4400, dto.shippingCostJpy) // priced for 300g, not 1000g - EMS up to 1kg tier still applies
@@ -96,7 +101,7 @@ class ShipmentDtosTest {
         val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.SLOVENIA, shippingMethod = ShippingMethod.SMALL_PACKET)
         shipment.orders.add(orderWeighing(2500)) // over Small Packet's 2kg cap
 
-        val dto = shipment.toDto(::stubRates, ::stubToEur)
+        val dto = shipment.toDto(::stubRates, ::stubToEur, ::stubToEurBare)
 
         assertEquals(BigDecimal(2500), dto.totalWeightGrams)
         assertNull(dto.shippingCostJpy)

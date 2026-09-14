@@ -1,6 +1,8 @@
 package com.omiyage.backend.catalog
 
+import com.omiyage.backend.common.Currency
 import com.omiyage.backend.order.OrderItemRepository
+import com.omiyage.backend.shipment.ExchangeRateService
 import com.omiyage.backend.web.PageResponse
 import com.omiyage.backend.web.toPageResponse
 import org.springframework.data.domain.Pageable
@@ -16,6 +18,7 @@ class InventoryService(
     private val items: InventoryItemRepository,
     private val categories: CategoryRepository,
     private val orderItems: OrderItemRepository,
+    private val exchangeRates: ExchangeRateService,
 ) {
 
     @Transactional(readOnly = true)
@@ -26,11 +29,16 @@ class InventoryService(
         pageable: Pageable,
         includeCost: Boolean = false,
     ): PageResponse<InventoryItemDto> =
-        items.search(title?.trim().orEmpty(), categoryId, status, pageable).toPageResponse { it.toDto(includeCost) }
+        items.search(title?.trim().orEmpty(), categoryId, status, pageable)
+            .toPageResponse { it.toDto(includeCost, exchangeRates::toEur) }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID, includeCost: Boolean = false): InventoryItemDto = findOrThrow(id).toDto(includeCost)
+    fun getById(id: UUID, includeCost: Boolean = false): InventoryItemDto =
+        findOrThrow(id).toDto(includeCost, exchangeRates::toEur)
 
+    // Listed price is always EUR (customer-facing) and bought price is always JPY (that's where
+    // the admin actually buys) - fixed by policy, not a per-item choice, same convention as
+    // OrderService's item prices.
     @Transactional
     fun create(request: InventoryItemRequest): InventoryItemDto {
         requirePreorderDate(request)
@@ -40,14 +48,14 @@ class InventoryService(
             link = request.link,
             condition = request.condition,
             priceAmount = request.priceAmount,
-            currency = request.currency,
+            currency = Currency.EUR,
             boughtPrice = request.boughtPrice,
             stockQuantity = request.stockQuantity,
             isPreorder = request.isPreorder,
             expectedReleaseDate = request.expectedReleaseDate,
         )
         applyImagesAndCategories(item, request)
-        return items.save(item).toDto(includeCost = true)
+        return items.save(item).toDto(includeCost = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
@@ -59,7 +67,7 @@ class InventoryService(
         item.link = request.link
         item.condition = request.condition
         item.priceAmount = request.priceAmount
-        item.currency = request.currency
+        item.currency = Currency.EUR
         item.boughtPrice = request.boughtPrice
         item.stockQuantity = request.stockQuantity
         item.isPreorder = request.isPreorder
@@ -68,7 +76,7 @@ class InventoryService(
         item.images.clear()
         item.categories.clear()
         applyImagesAndCategories(item, request)
-        return item.toDto(includeCost = true)
+        return item.toDto(includeCost = true, toEur = exchangeRates::toEur)
     }
 
     private fun requirePreorderDate(request: InventoryItemRequest) {
@@ -82,7 +90,7 @@ class InventoryService(
         val item = findOrThrow(id)
         item.status = status
         item.updatedAt = OffsetDateTime.now()
-        return item.toDto(includeCost = true)
+        return item.toDto(includeCost = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional

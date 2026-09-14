@@ -10,7 +10,8 @@ data class PendingAmountDto(val currency: Currency, val amount: BigDecimal)
 data class UserDashboardEntryDto(
     val user: UserProfileDto,
     val orders: List<OrderDto>,
-    // Unpaid items' actualPrice (fallback maxPrice while not yet bought), grouped by currency -
-    // orders can mix JPY and EUR items, so this is never collapsed into one number.
+    // Unpaid items' actualPrice (JPY, converted) or maxPrice (EUR) while not yet bought, summed
+    // into EUR - a list for response-shape stability, but always at most one entry now that every
+    // item price normalizes to EUR.
     val pendingAmounts: List<PendingAmountDto>,
 )

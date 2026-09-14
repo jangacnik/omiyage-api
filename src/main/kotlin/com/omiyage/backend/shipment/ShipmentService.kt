@@ -30,10 +30,10 @@ class ShipmentService(
 ) {
 
     @Transactional(readOnly = true)
-    fun listAll(): List<ShipmentDto> = shipments.findAll().map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup) }
+    fun listAll(): List<ShipmentDto> = shipments.findAll().map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur) }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID): ShipmentDto = findOrThrow(id).toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+    fun getById(id: UUID): ShipmentDto = findOrThrow(id).toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
 
     // Shipments a member could ask to combine into: still PREPARING, and not already holding one
     // of their own orders. Owner nickname is a display nicety, not core data - degrade to null
@@ -61,7 +61,7 @@ class ShipmentService(
         val shipment = combine(request.orderIds)
         request.notes?.let { shipment.notes = it }
         request.title?.let { shipment.title = it }
-        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
     /** Shared combine primitive: folds every listed order onto the first one's shipment (creating
@@ -113,7 +113,7 @@ class ShipmentService(
         val orderIds = selected.flatMap { it.orders.map { order -> requireNotNull(order.id) } }
         val combined = combine(orderIds)
         title?.let { combined.title = it }
-        return combined.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+        return combined.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
     // Moves a chosen subset of a shipment's orders onto a brand-new shipment - the inverse of
@@ -137,7 +137,7 @@ class ShipmentService(
         val vacated = mutableSetOf<UUID>()
         toMove.forEach { order -> attach(destination, order, vacated) }
         deleteIfEmpty(vacated - destination.id!!)
-        return destination.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+        return destination.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
     @Transactional
@@ -152,7 +152,7 @@ class ShipmentService(
         request.notes?.let { shipment.notes = it }
         request.title?.let { shipment.title = it }
         shipment.updatedAt = OffsetDateTime.now()
-        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
     // Owner-only self-service rename - admins use update() above instead, which covers every field.
@@ -164,7 +164,7 @@ class ShipmentService(
         }
         shipment.title = title
         shipment.updatedAt = OffsetDateTime.now()
-        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
     // Owner-only self-service "it arrived" - members can't set SHIPPED (that needs tracking/admin
@@ -181,7 +181,7 @@ class ShipmentService(
         }
         applyStatusChange(shipment, ShipmentStatus.DELIVERED)
         shipment.updatedAt = OffsetDateTime.now()
-        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup)
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
     // Self-service detach: a member can pull their own order back off a shipment while it's still
