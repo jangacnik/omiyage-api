@@ -19,4 +19,13 @@ class AdminExchangeRateController(private val service: ExchangeRateService) {
         service.setRate(request.jpyPerEur)
         return ExchangeRateDto(service.getRate())
     }
+
+    @GetMapping("/shipping")
+    fun getShipping(): ShippingExchangeRateDto = ShippingExchangeRateDto(service.getShippingRate())
+
+    @PutMapping("/shipping")
+    fun setShipping(@Valid @RequestBody request: SetShippingExchangeRateRequest): ShippingExchangeRateDto {
+        service.setShippingRate(request.shippingJpyPerEur)
+        return ShippingExchangeRateDto(service.getShippingRate())
+    }
 }

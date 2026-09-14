@@ -66,6 +66,31 @@ class ExchangeRateControllersTest {
     }
 
     @Test
+    fun `shipping rate endpoint is rejected for a non-admin user`() {
+        mockMvc.get("/api/admin/exchange-rate/shipping") { header("Authorization", "Bearer ${userToken()}") }
+            .andExpect { status { isForbidden() } }
+    }
+
+    @Test
+    fun `admin can read and update the shipping rate independently of the item rate`() {
+        every { service.getShippingRate() } returns BigDecimal("100.0000")
+
+        mockMvc.get("/api/admin/exchange-rate/shipping") { header("Authorization", "Bearer ${adminToken()}") }
+            .andExpect {
+                status { isOk() }
+                content { json("""{"shippingJpyPerEur":100.0000}""") }
+            }
+
+        every { service.setShippingRate(BigDecimal("105.0000")) } returns Unit
+        every { service.getShippingRate() } returns BigDecimal("105.0000")
+        mockMvc.put("/api/admin/exchange-rate/shipping") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(SetShippingExchangeRateRequest(BigDecimal("105.0000")))
+        }.andExpect { status { isOk() } }
+    }
+
+    @Test
     fun `the plain rate endpoint is reachable by any authenticated user, not just admins`() {
         every { service.getRate() } returns BigDecimal("150.0000")
 

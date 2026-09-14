@@ -26,6 +26,17 @@ class ExchangeRateService(private val settings: ExchangeRateSettingRepository) {
         setting.updatedAt = OffsetDateTime.now()
     }
 
+    /** Independent from getRate() - shipping cost no longer has to track the item-price rate. */
+    @Transactional(readOnly = true)
+    fun getShippingRate(): BigDecimal = setting().shippingJpyPerEur
+
+    @Transactional
+    fun setShippingRate(jpyPerEur: BigDecimal) {
+        val setting = setting()
+        setting.shippingJpyPerEur = jpyPerEur
+        setting.updatedAt = OffsetDateTime.now()
+    }
+
     /** Bare JPY -> EUR conversion at the admin-set rate, no markup - for converting the admin's own
      *  JPY cost-basis (item bought-price, inventory bought-price) into EUR for profit bookkeeping.
      *  Not for anything customer-facing - see toEurWithMarkup for that. */
@@ -33,11 +44,12 @@ class ExchangeRateService(private val settings: ExchangeRateSettingRepository) {
     fun toEur(jpyAmount: BigDecimal): BigDecimal =
         jpyAmount.divide(getRate(), 2, RoundingMode.HALF_UP)
 
-    /** Converts a JPY shipping cost to EUR, including the hidden markup - never expose the
-     *  intermediate (pre-markup) amount anywhere the markup could be reverse-engineered. */
+    /** Converts a JPY shipping cost to EUR, at the shipping-only rate and including the hidden
+     *  markup - never expose the intermediate (pre-markup) amount anywhere the markup could be
+     *  reverse-engineered. */
     @Transactional(readOnly = true)
     fun toEurWithMarkup(jpyAmount: Int): BigDecimal =
-        BigDecimal(jpyAmount).divide(getRate(), 6, RoundingMode.HALF_UP)
+        BigDecimal(jpyAmount).divide(getShippingRate(), 6, RoundingMode.HALF_UP)
             .multiply(SHIPPING_MARKUP)
             .setScale(2, RoundingMode.HALF_UP)
 

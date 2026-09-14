@@ -18,6 +18,9 @@ class ExchangeRateSetting(
     @Column(name = "jpy_per_eur", nullable = false)
     var jpyPerEur: BigDecimal,
 
+    @Column(name = "shipping_jpy_per_eur", nullable = false)
+    var shippingJpyPerEur: BigDecimal,
+
     @Column(name = "updated_at", nullable = false)
     var updatedAt: OffsetDateTime = OffsetDateTime.now(),
 )
