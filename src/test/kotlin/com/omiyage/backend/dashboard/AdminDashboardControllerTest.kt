@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
+import java.util.UUID
 
 private const val TEST_SECRET = "admin-dashboard-controller-secret"
 
@@ -45,5 +46,22 @@ class AdminDashboardControllerTest {
 
         mockMvc.get("/api/admin/dashboard/users") { header("Authorization", "Bearer ${adminToken()}") }
             .andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `deliveredOrders is rejected for a non-admin user`() {
+        mockMvc.get("/api/admin/dashboard/users/${UUID.randomUUID()}/delivered-orders") {
+            header("Authorization", "Bearer ${userToken()}")
+        }.andExpect { status { isForbidden() } }
+    }
+
+    @Test
+    fun `deliveredOrders succeeds for an admin`() {
+        val userId = UUID.randomUUID()
+        every { service.deliveredOrdersForUser(userId) } returns emptyList()
+
+        mockMvc.get("/api/admin/dashboard/users/$userId/delivered-orders") {
+            header("Authorization", "Bearer ${adminToken()}")
+        }.andExpect { status { isOk() } }
     }
 }

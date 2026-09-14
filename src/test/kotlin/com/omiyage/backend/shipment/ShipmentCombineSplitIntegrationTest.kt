@@ -128,6 +128,25 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `listActive excludes delivered shipments, listDelivered returns only them`() {
+        val owner = user()
+        val a = order(owner)
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
+        orderService.submitForShipping(a.id, owner)
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        shipmentService.markArrivedMine(shipment.id, owner.id)
+
+        val b = order(user())
+        val stillPreparing = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id)))
+
+        assertFalse(shipmentService.listActive().any { it.id == shipment.id })
+        assertTrue(shipmentService.listActive().any { it.id == stillPreparing.id })
+
+        assertTrue(shipmentService.listDelivered().any { it.id == shipment.id })
+        assertFalse(shipmentService.listDelivered().any { it.id == stillPreparing.id })
+    }
+
+    @Test
     fun `marking a shipment shipped moves every non-cancelled order and its items to sent-shipped`() {
         val owner = user()
         val a = order(owner)

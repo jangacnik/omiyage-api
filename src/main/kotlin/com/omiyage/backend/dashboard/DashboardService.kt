@@ -2,6 +2,7 @@ package com.omiyage.backend.dashboard
 
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.order.LOCKED_ITEM_STATUSES
+import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.order.toDto
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.util.UUID
 
 @Service
 class DashboardService(
@@ -26,6 +28,14 @@ class DashboardService(
         // activated) has no nickname and can't have placed an order under a real session - skip
         // it rather than show a nameless, order-less row.
         meishiAdmin.listUsers(authHeader).filter { it.activated }.map { user -> entryFor(user) }
+
+    // Delivered orders are settled history, not something the dashboard needs on every load -
+    // the frontend fetches this per user only once an admin actually expands that section.
+    @Transactional(readOnly = true)
+    fun deliveredOrdersForUser(userId: UUID): List<OrderDto> =
+        orders.findByUserId(userId, Pageable.unpaged()).content
+            .filter { it.status == OrderStatus.DELIVERED }
+            .map { it.toDto(includeProfit = true, toEur = exchangeRates::toEur) }
 
     private fun entryFor(user: UserProfileDto): UserDashboardEntryDto {
         val userOrders = orders.findByUserId(user.id, Pageable.unpaged()).content
@@ -48,9 +58,13 @@ class DashboardService(
             .setScale(2, java.math.RoundingMode.HALF_UP)
             .let { total -> if (total > BigDecimal.ZERO) listOf(PendingAmountDto(Currency.EUR, total)) else emptyList() }
 
+        // Delivered orders are settled - keep them out of the default payload (they're fetched
+        // lazily per user, see deliveredOrdersForUser) but still count them so the accordion can
+        // show a number before it's expanded.
         return UserDashboardEntryDto(
             user = user,
-            orders = userOrders.map { it.toDto(includeProfit = true, toEur = exchangeRates::toEur) },
+            orders = userOrders.filter { it.status != OrderStatus.DELIVERED }.map { it.toDto(includeProfit = true, toEur = exchangeRates::toEur) },
+            deliveredOrderCount = userOrders.count { it.status == OrderStatus.DELIVERED },
             pendingAmounts = pending,
         )
     }

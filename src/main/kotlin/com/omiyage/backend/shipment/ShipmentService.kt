@@ -34,6 +34,18 @@ class ShipmentService(
     @Transactional(readOnly = true)
     fun listAll(): List<ShipmentDto> = shipments.findAll().map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur) }
 
+    // The admin shipments page's default view - delivered shipments are settled history, fetched
+    // separately (listDelivered) only when an admin actually asks to see them.
+    @Transactional(readOnly = true)
+    fun listActive(): List<ShipmentDto> =
+        shipments.findAll().filter { it.status != ShipmentStatus.DELIVERED }
+            .map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur) }
+
+    @Transactional(readOnly = true)
+    fun listDelivered(): List<ShipmentDto> =
+        shipments.findAll().filter { it.status == ShipmentStatus.DELIVERED }
+            .map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur) }
+
     @Transactional(readOnly = true)
     fun getById(id: UUID): ShipmentDto = findOrThrow(id).toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
 

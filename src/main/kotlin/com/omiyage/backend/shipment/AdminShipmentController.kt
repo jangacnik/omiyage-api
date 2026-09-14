@@ -19,7 +19,10 @@ import java.util.UUID
 class AdminShipmentController(private val service: ShipmentService) {
 
     @GetMapping
-    fun list(): List<ShipmentDto> = service.listAll()
+    fun list(): List<ShipmentDto> = service.listActive()
+
+    @GetMapping("/delivered")
+    fun listDelivered(): List<ShipmentDto> = service.listDelivered()
 
     @GetMapping("/{id}")
     fun getById(@PathVariable id: UUID): ShipmentDto = service.getById(id)

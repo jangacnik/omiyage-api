@@ -8,6 +8,7 @@ import com.omiyage.backend.order.CreateOrderItemRequest
 import com.omiyage.backend.order.CreateOrderRequest
 import com.omiyage.backend.order.OrderItemStatus
 import com.omiyage.backend.order.OrderService
+import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.user.MeishiAdminClient
@@ -101,6 +102,32 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
 
         assertTrue(entry.pendingAmounts.isEmpty())
         assertEquals(2, entry.orders.size)
+    }
+
+    @Test
+    fun `delivered orders are excluded from the default entry but still counted, and fetched separately`() {
+        val principal = user()
+        every { meishiAdminClient.listUsers(any()) } returns listOf(profileFor(principal.id))
+
+        val open = orderService.create(
+            principal,
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Open", condition = Condition.NEW, currency = Currency.JPY))),
+        )
+        val delivered = orderService.create(
+            principal,
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Delivered", condition = Condition.NEW, currency = Currency.JPY))),
+        )
+        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED)
+
+        val entry = dashboardService.userDashboard("Bearer irrelevant").single()
+
+        assertEquals(1, entry.orders.size)
+        assertEquals(open.id, entry.orders[0].id)
+        assertEquals(1, entry.deliveredOrderCount)
+
+        val deliveredOrders = dashboardService.deliveredOrdersForUser(principal.id)
+        assertEquals(1, deliveredOrders.size)
+        assertEquals(delivered.id, deliveredOrders[0].id)
     }
 
     @Test
