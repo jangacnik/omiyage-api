@@ -2,6 +2,7 @@ package com.omiyage.backend.shipment
 
 import com.omiyage.backend.order.Order
 import com.omiyage.backend.order.OrderDto
+import com.omiyage.backend.order.OrderItemStatus
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.order.isOpen
@@ -209,11 +210,28 @@ class ShipmentService(
         }
         if (newStatus == ShipmentStatus.SHIPPED && shipment.shippedAt == null) {
             shipment.shippedAt = OffsetDateTime.now()
+            markOrdersSent(shipment)
         }
         if (newStatus == ShipmentStatus.DELIVERED && shipment.arrivedAt == null) {
             shipment.arrivedAt = OffsetDateTime.now()
         }
         shipment.status = newStatus
+    }
+
+    // Shipping physically moves every non-cancelled member order (and its items) on: the guard
+    // above already required each to be at PREPARING_SHIPPING or later, so this is what "later"
+    // means. A cancelled order never actually ships, so it's left exactly as it was.
+    private fun markOrdersSent(shipment: Shipment) {
+        val now = OffsetDateTime.now()
+        shipment.orders.forEach { order ->
+            if (order.status == OrderStatus.CANCELLED) return@forEach
+            order.status = OrderStatus.SENT
+            order.updatedAt = now
+            order.items.forEach { item ->
+                item.status = OrderItemStatus.SHIPPED
+                item.updatedAt = now
+            }
+        }
     }
 
     @Transactional

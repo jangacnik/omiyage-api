@@ -5,7 +5,9 @@ import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.order.CreateOrderItemRequest
 import com.omiyage.backend.order.CreateOrderRequest
+import com.omiyage.backend.order.OrderItemStatus
 import com.omiyage.backend.order.OrderService
+import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -123,6 +125,27 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val arrived = shipmentService.markArrivedMine(shipment.id, owner.id)
         assertEquals(ShipmentStatus.DELIVERED, arrived.status)
         assertNotNull(arrived.arrivedAt)
+    }
+
+    @Test
+    fun `marking a shipment shipped moves every non-cancelled order and its items to sent-shipped`() {
+        val owner = user()
+        val a = order(owner)
+        val cancelled = order(owner)
+        orderService.updateStatus(cancelled.id, OrderStatus.CANCELLED)
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
+        orderService.submitForShipping(a.id, owner)
+        shipmentService.assignOrder(cancelled.id, shipment.id)
+
+        val shipped = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+
+        val sentOrder = shipped.orders.single { it.id == a.id }
+        assertEquals(OrderStatus.SENT, sentOrder.status)
+        assertTrue(sentOrder.items.all { it.status == OrderItemStatus.SHIPPED })
+
+        val cancelledOrder = shipped.orders.single { it.id == cancelled.id }
+        assertEquals(OrderStatus.CANCELLED, cancelledOrder.status)
+        assertTrue(cancelledOrder.items.none { it.status == OrderItemStatus.SHIPPED })
     }
 
     @Test
