@@ -28,6 +28,17 @@ import java.util.UUID
 // DashboardService to tell "money actually spent" apart from "just requested" on a cancelled order.
 internal val LOCKED_ITEM_STATUSES = setOf(OrderItemStatus.BOUGHT, OrderItemStatus.SHIPPED)
 
+// Shared by adminMarkOrderPaid and ShipmentService.adminMarkPaid, which both need to flip every
+// item under a broader thing (an order, a shipment) paid/unpaid in one go.
+internal fun markItemsPaid(items: List<OrderItem>, paid: Boolean) {
+    val now = OffsetDateTime.now()
+    items.forEach { item ->
+        item.paid = paid
+        item.paidAt = if (paid) now else null
+        item.updatedAt = now
+    }
+}
+
 @Service
 class OrderService(
     private val orders: OrderRepository,
@@ -179,6 +190,13 @@ class OrderService(
         item.paid = paid
         item.paidAt = if (paid) OffsetDateTime.now() else null
         item.updatedAt = OffsetDateTime.now()
+        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+    }
+
+    @Transactional
+    fun adminMarkOrderPaid(orderId: UUID, paid: Boolean): OrderDto {
+        val order = findOrThrow(orderId)
+        markItemsPaid(order.items, paid)
         return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 

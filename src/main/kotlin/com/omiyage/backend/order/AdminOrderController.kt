@@ -84,6 +84,10 @@ class AdminOrderController(private val service: OrderService, private val shipme
         @Valid @RequestBody request: MarkItemPaidRequest,
     ): OrderDto = service.adminMarkItemPaid(id, itemId, request.paid)
 
+    @PatchMapping("/{id}/paid")
+    fun markOrderPaid(@PathVariable id: UUID, @Valid @RequestBody request: MarkItemPaidRequest): OrderDto =
+        service.adminMarkOrderPaid(id, request.paid)
+
     @PatchMapping("/{id}/shipment")
     fun assignShipment(@PathVariable id: UUID, @RequestBody request: AssignShipmentRequest): OrderDto =
         shipments.assignOrder(id, request.shipmentId)

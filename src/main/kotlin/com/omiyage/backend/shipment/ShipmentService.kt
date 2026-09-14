@@ -5,6 +5,7 @@ import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.order.isOpen
+import com.omiyage.backend.order.markItemsPaid
 import com.omiyage.backend.order.toDto
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.user.MeishiNicknameClient
@@ -213,6 +214,13 @@ class ShipmentService(
             shipment.arrivedAt = OffsetDateTime.now()
         }
         shipment.status = newStatus
+    }
+
+    @Transactional
+    fun adminMarkPaid(id: UUID, paid: Boolean): ShipmentDto {
+        val shipment = findOrThrow(id)
+        shipment.orders.forEach { order -> markItemsPaid(order.items, paid) }
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
     @Transactional

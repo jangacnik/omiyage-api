@@ -1,5 +1,6 @@
 package com.omiyage.backend.shipment
 
+import com.omiyage.backend.order.MarkItemPaidRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -44,4 +45,8 @@ class AdminShipmentController(private val service: ShipmentService) {
     @PostMapping("/{id}/split")
     fun split(@PathVariable id: UUID, @Valid @RequestBody request: SplitShipmentRequest): ResponseEntity<ShipmentDto> =
         ResponseEntity.status(HttpStatus.CREATED).body(service.splitOff(id, request.orderIds, request.title))
+
+    @PatchMapping("/{id}/paid")
+    fun markPaid(@PathVariable id: UUID, @Valid @RequestBody request: MarkItemPaidRequest): ShipmentDto =
+        service.adminMarkPaid(id, request.paid)
 }
