@@ -26,6 +26,7 @@ data class InventoryItemDto(
     val status: InventoryStatus,
     val images: List<String>,
     val categories: List<CategoryDto>,
+    val tags: List<String> = emptyList(),
     val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
     // Admin-only cost basis - never populated on a response a normal user can read, see toDto(includeCost).
@@ -47,6 +48,7 @@ fun InventoryItem.toDto(includeCost: Boolean = false, toEur: (BigDecimal) -> Big
     status = status,
     images = images.sortedBy { it.sortOrder }.map { it.objectKey },
     categories = categories.map { it.toDto() }.sortedBy { it.name },
+    tags = tags.sorted(),
     isPreorder = isPreorder,
     expectedReleaseDate = expectedReleaseDate,
     boughtPrice = if (includeCost) boughtPrice else null,
@@ -69,6 +71,7 @@ data class InventoryItemRequest(
     val stockQuantity: Int = 0,
     val imageKeys: List<String> = emptyList(),
     val categoryIds: List<UUID> = emptyList(),
+    val tags: List<String> = emptyList(),
     val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
 )

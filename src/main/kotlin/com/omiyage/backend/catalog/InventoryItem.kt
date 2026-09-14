@@ -3,7 +3,9 @@ package com.omiyage.backend.catalog
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import jakarta.persistence.CascadeType
+import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
+import jakarta.persistence.ElementCollection
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
@@ -84,6 +86,12 @@ class InventoryItem(
         inverseJoinColumns = [JoinColumn(name = "category_id")],
     )
     val categories: MutableSet<Category> = mutableSetOf(),
+
+    // Freeform, admin-entered - distinct from the curated Category taxonomy above.
+    @ElementCollection
+    @CollectionTable(name = "inventory_item_tags", joinColumns = [JoinColumn(name = "inventory_item_id")])
+    @Column(name = "tag")
+    val tags: MutableSet<String> = mutableSetOf(),
 
     @Column(name = "deleted_at")
     var deletedAt: OffsetDateTime? = null,

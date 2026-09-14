@@ -121,4 +121,25 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
         assertNull(hidden.content[0].boughtPrice)
         assertEquals(BigDecimal("500.00"), visible.content[0].boughtPrice)
     }
+
+    @Test
+    fun `create and update store tags, trimmed and blank entries dropped`() {
+        val created = inventoryService.create(request("Kit Kat matcha").copy(tags = listOf(" limited ", "matcha", "")))
+        assertEquals(setOf("limited", "matcha"), created.tags.toSet())
+
+        val updated = inventoryService.update(created.id, request("Kit Kat matcha").copy(tags = listOf("clearance")))
+        assertEquals(listOf("clearance"), updated.tags)
+    }
+
+    @Test
+    fun `inStockOnly filters out items with zero stock`() {
+        inventoryService.create(request("In stock").copy(stockQuantity = 3))
+        inventoryService.create(request("Out of stock").copy(stockQuantity = 0))
+
+        val all = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20))
+        val inStockOnly = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20), inStockOnly = true)
+
+        assertEquals(2, all.content.size)
+        assertEquals(listOf("In stock"), inStockOnly.content.map { it.title })
+    }
 }

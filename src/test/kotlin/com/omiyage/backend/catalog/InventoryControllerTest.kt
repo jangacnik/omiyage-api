@@ -58,7 +58,7 @@ class InventoryControllerTest {
 
     @Test
     fun `search only ever asks the service for ACTIVE items`() {
-        every { service.search(null, null, InventoryStatus.ACTIVE, any()) } returns
+        every { service.search(null, null, InventoryStatus.ACTIVE, any(), any(), any()) } returns
             PageResponse(listOf(sampleItem()), 0, 20, 1, 1)
 
         mockMvc.get("/api/inventory") { header("Authorization", "Bearer ${token()}") }
@@ -72,7 +72,7 @@ class InventoryControllerTest {
     @Test
     fun `search forwards title and categoryId query params`() {
         val categoryId = UUID.randomUUID()
-        every { service.search("kitkat", categoryId, InventoryStatus.ACTIVE, any()) } returns
+        every { service.search("kitkat", categoryId, InventoryStatus.ACTIVE, any(), any(), any()) } returns
             PageResponse(emptyList(), 0, 20, 0, 0)
 
         mockMvc.get("/api/inventory") {
@@ -80,6 +80,22 @@ class InventoryControllerTest {
             param("title", "kitkat")
             param("categoryId", categoryId.toString())
         }.andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `search forwards inStockOnly, defaulting to false`() {
+        every { service.search(null, null, InventoryStatus.ACTIVE, any(), any(), false) } returns
+            PageResponse(listOf(sampleItem()), 0, 20, 1, 1)
+        every { service.search(null, null, InventoryStatus.ACTIVE, any(), any(), true) } returns
+            PageResponse(emptyList(), 0, 20, 0, 0)
+
+        mockMvc.get("/api/inventory") { header("Authorization", "Bearer ${token()}") }
+            .andExpect { status { isOk() }; jsonPath("$.totalElements") { value(1) } }
+
+        mockMvc.get("/api/inventory") {
+            header("Authorization", "Bearer ${token()}")
+            param("inStockOnly", "true")
+        }.andExpect { status { isOk() }; jsonPath("$.totalElements") { value(0) } }
     }
 
     @Test

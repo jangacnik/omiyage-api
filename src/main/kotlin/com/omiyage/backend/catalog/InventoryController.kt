@@ -18,8 +18,9 @@ class InventoryController(private val service: InventoryService) {
     fun search(
         @RequestParam(required = false) title: String?,
         @RequestParam(required = false) categoryId: UUID?,
+        @RequestParam(required = false, defaultValue = "false") inStockOnly: Boolean,
         @PageableDefault(size = 20) pageable: Pageable,
-    ): PageResponse<InventoryItemDto> = service.search(title, categoryId, InventoryStatus.ACTIVE, pageable)
+    ): PageResponse<InventoryItemDto> = service.search(title, categoryId, InventoryStatus.ACTIVE, pageable, inStockOnly = inStockOnly)
 
     @GetMapping("/{id}")
     fun getById(@PathVariable id: UUID): InventoryItemDto = service.getById(id)

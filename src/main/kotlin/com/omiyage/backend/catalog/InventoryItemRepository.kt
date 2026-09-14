@@ -22,12 +22,14 @@ interface InventoryItemRepository : JpaRepository<InventoryItem, UUID> {
         WHERE (:title = '' OR LOWER(i.title) LIKE LOWER(CONCAT('%', :title, '%')))
         AND (:categoryId IS NULL OR c.id = :categoryId)
         AND (:status IS NULL OR i.status = :status)
+        AND (:inStockOnly = false OR i.stockQuantity > 0)
         """,
     )
     fun search(
         @Param("title") title: String,
         @Param("categoryId") categoryId: UUID?,
         @Param("status") status: InventoryStatus?,
+        @Param("inStockOnly") inStockOnly: Boolean,
         pageable: Pageable,
     ): Page<InventoryItem>
 }

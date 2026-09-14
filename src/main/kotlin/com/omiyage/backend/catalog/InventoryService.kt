@@ -28,8 +28,9 @@ class InventoryService(
         status: InventoryStatus?,
         pageable: Pageable,
         includeCost: Boolean = false,
+        inStockOnly: Boolean = false,
     ): PageResponse<InventoryItemDto> =
-        items.search(title?.trim().orEmpty(), categoryId, status, pageable)
+        items.search(title?.trim().orEmpty(), categoryId, status, inStockOnly, pageable)
             .toPageResponse { it.toDto(includeCost, exchangeRates::toEur) }
 
     @Transactional(readOnly = true)
@@ -55,6 +56,7 @@ class InventoryService(
             expectedReleaseDate = request.expectedReleaseDate,
         )
         applyImagesAndCategories(item, request)
+        applyTags(item, request)
         return items.save(item).toDto(includeCost = true, toEur = exchangeRates::toEur)
     }
 
@@ -76,6 +78,7 @@ class InventoryService(
         item.images.clear()
         item.categories.clear()
         applyImagesAndCategories(item, request)
+        applyTags(item, request)
         return item.toDto(includeCost = true, toEur = exchangeRates::toEur)
     }
 
@@ -116,6 +119,11 @@ class InventoryService(
             }
             item.categories.addAll(found)
         }
+    }
+
+    private fun applyTags(item: InventoryItem, request: InventoryItemRequest) {
+        item.tags.clear()
+        item.tags.addAll(request.tags.map { it.trim() }.filter { it.isNotBlank() })
     }
 
     private fun findOrThrow(id: UUID): InventoryItem =
