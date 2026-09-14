@@ -26,6 +26,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.util.UUID
 
 @SpringBootTest
@@ -770,6 +771,54 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         orderService.updateStatus(order.id, OrderStatus.CANCELLED)
 
         assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(order.id, owner) }
+    }
+
+    @Test
+    fun `an order with a preorder item cannot be submitted for shipping`() {
+        val owner = user()
+        val order = orderService.create(
+            owner,
+            CreateOrderRequest(
+                items = listOf(
+                    CreateOrderItemRequest(
+                        title = "Unreleased figure",
+                        condition = Condition.NEW,
+                        currency = Currency.JPY,
+                        isPreorder = true,
+                        expectedReleaseDate = LocalDate.now().plusMonths(1),
+                    ),
+                ),
+            ),
+        )
+
+        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(order.id, owner) }
+    }
+
+    @Test
+    fun `submitting a shipment skips a co-member's order that still has a preorder item`() {
+        val owner = user()
+        val other = user()
+        val mine = singleItemOrder(owner, "mine")
+        val theirsWithPreorder = orderService.create(
+            other,
+            CreateOrderRequest(
+                items = listOf(
+                    CreateOrderItemRequest(
+                        title = "Unreleased figure",
+                        condition = Condition.NEW,
+                        currency = Currency.JPY,
+                        isPreorder = true,
+                        expectedReleaseDate = LocalDate.now().plusMonths(1),
+                    ),
+                ),
+            ),
+        )
+        shipmentService.combine(listOf(mine.id, theirsWithPreorder.id))
+
+        val submitted = orderService.submitForShipping(mine.id, owner)
+
+        assertEquals(OrderStatus.PREPARING_SHIPPING, submitted.status)
+        assertEquals(OrderStatus.REQUESTED, orderService.getById(theirsWithPreorder.id, other).status)
     }
 
     @Test

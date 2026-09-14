@@ -279,6 +279,12 @@ class OrderService(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
         requireOpen(order)
+        // A preorder item has nothing to ship yet - it hasn't released, so there's no physical
+        // package for the courier to take. The order can still be combined with others or split
+        // off (see ShipmentService.combine/splitOff), just not submitted while this is unresolved.
+        if (order.items.any { it.isPreorder }) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "order has a preorder item that has not released yet and cannot be submitted for shipping")
+        }
         // Every submitted order needs a shipment to track it through delivery, even a solo one
         // nobody ever explicitly combined - create one now instead of leaving it shipment-less
         // (which used to mean it never showed up on the member's own shipments list).
@@ -286,7 +292,7 @@ class OrderService(
             order.shipment = it
             it.orders.add(order)
         }
-        val targets = shipment.orders.filter { it.isOpen }
+        val targets = shipment.orders.filter { it.isOpen && it.items.none { item -> item.isPreorder } }
         targets.forEach { target ->
             target.status = OrderStatus.PREPARING_SHIPPING
             target.updatedAt = OffsetDateTime.now()
