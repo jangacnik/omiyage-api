@@ -545,15 +545,56 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun `merging orders deletes a source order's shipment once it has no orders left`() {
+    fun `merging a shipment-less target with a source that has a shipment adopts that shipment`() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
         val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null))
 
-        orderService.mergeMine(owner, listOf(target.id, source.id))
+        val merged = orderService.mergeMine(owner, listOf(target.id, source.id))
 
-        assertFalse(shipmentRepository.existsById(shipment.id))
+        assertEquals(shipment.id, merged.shipmentId)
+        assertTrue(shipmentRepository.existsById(shipment.id))
+    }
+
+    @Test
+    fun `merging into a target that already has a shipment keeps that shipment and deletes the source's`() {
+        val owner = user()
+        val target = singleItemOrder(owner, "target")
+        val source = singleItemOrder(owner, "source")
+        val targetShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(target.id), notes = null))
+        val sourceShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null))
+
+        val merged = orderService.mergeMine(owner, listOf(target.id, source.id))
+
+        assertEquals(targetShipment.id, merged.shipmentId)
+        assertFalse(shipmentRepository.existsById(sourceShipment.id))
+    }
+
+    @Test
+    fun `a target that is PREPARING_SHIPPING can still absorb an open source order`() {
+        val owner = user()
+        val target = singleItemOrder(owner, "target")
+        val source = singleItemOrder(owner, "source")
+        orderService.submitForShipping(target.id, owner)
+
+        val merged = orderService.mergeMine(owner, listOf(source.id, target.id))
+
+        assertEquals(target.id, merged.id)
+        assertEquals(OrderStatus.PREPARING_SHIPPING, merged.status)
+        assertEquals(2, merged.items.size)
+        assertNotNull(merged.shipmentId)
+    }
+
+    @Test
+    fun `cannot merge two orders that are both already PREPARING_SHIPPING`() {
+        val owner = user()
+        val a = singleItemOrder(owner, "a")
+        val b = singleItemOrder(owner, "b")
+        orderService.submitForShipping(a.id, owner)
+        orderService.submitForShipping(b.id, owner)
+
+        assertThrows(ResponseStatusException::class.java) { orderService.mergeMine(owner, listOf(a.id, b.id)) }
     }
 
     @Test

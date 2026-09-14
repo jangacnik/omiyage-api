@@ -300,15 +300,33 @@ class OrderService(
             if (order.userId != principal.id) {
                 throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
             }
-            requireOpen(order)
+            requireMergeableAsTarget(order)
             val shipmentStatus = order.shipment?.status
             if (shipmentStatus != null && shipmentStatus != ShipmentStatus.PREPARING) {
                 throw ResponseStatusException(HttpStatus.CONFLICT, "an order that has already shipped cannot be merged")
             }
         }
-
-        val target = selected.first()
-        val sources = selected.drop(1)
+        val preparingShipping = selected.filter { it.status == OrderStatus.PREPARING_SHIPPING }
+        if (preparingShipping.size > 1) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot merge two orders that have both already been submitted for shipping")
+        }
+        // A submitted-but-not-yet-shipped order is always the target, whichever position the
+        // caller selected it in - it's the one order here that can't simply become a "source" and
+        // get deleted, since its own status/shipment are what the merge needs to preserve. Every
+        // other selected order still has to be a normal open order (requireOpen below).
+        val target = preparingShipping.firstOrNull() ?: selected.first()
+        val sources = selected.filter { it.id != target.id }
+        sources.forEach { requireOpen(it) }
+        // The target keeps its own shipment if it has one (this is how a PREPARING_SHIPPING target
+        // stays on its shipment). Otherwise, adopt whichever source's shipment comes first instead
+        // of letting it get vacated below - the merged items belong wherever that shipment is
+        // already headed, not nowhere.
+        if (target.shipment == null) {
+            sources.firstNotNullOfOrNull { it.shipment }?.let { donorShipment ->
+                target.shipment = donorShipment
+                donorShipment.orders.add(target)
+            }
+        }
         val vacatedShipmentIds = sources.mapNotNull { it.shipment?.id }
             .distinct()
             .filter { it != target.shipment?.id }
@@ -370,6 +388,14 @@ class OrderService(
 
     private fun requireOpen(order: Order) {
         if (!order.isOpen) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "order is closed and can no longer be edited")
+        }
+    }
+
+    // Same as requireOpen, but also allows PREPARING_SHIPPING - only for the order other orders
+    // are being merged into, never for an order being edited/added to on its own.
+    private fun requireMergeableAsTarget(order: Order) {
+        if (order.status in setOf(OrderStatus.SENT, OrderStatus.DELIVERED, OrderStatus.CANCELLED)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "order is closed and can no longer be edited")
         }
     }
