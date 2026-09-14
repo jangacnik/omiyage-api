@@ -314,16 +314,40 @@ class OrderService(
 
     @Transactional
     fun mergeMine(principal: MeishiPrincipal, orderIds: List<UUID>): OrderDto {
-        val distinctIds = orderIds.distinct()
-        if (distinctIds.size < 2) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "select at least two different orders to merge")
-        }
-
-        val selected = distinctIds.map { findOrThrow(it) }
+        val selected = loadDistinctOrThrow(orderIds)
         selected.forEach { order ->
             if (order.userId != principal.id) {
                 throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
             }
+        }
+        return mergeSelected(selected).toDto()
+    }
+
+    // Admin equivalent of mergeMine: no ownership restriction (any user's orders), but merging
+    // across different users would silently move one person's items onto another's order, so
+    // that's blocked here instead - same-user-only is the one rule mergeMine gets for free from
+    // "every selected order belongs to the calling principal" that this doesn't.
+    @Transactional
+    fun adminMerge(orderIds: List<UUID>): OrderDto {
+        val selected = loadDistinctOrThrow(orderIds)
+        if (selected.map { it.userId }.distinct().size > 1) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot merge orders belonging to different users")
+        }
+        return mergeSelected(selected).toDto(includeProfit = true, toEur = exchangeRates::toEur)
+    }
+
+    private fun loadDistinctOrThrow(orderIds: List<UUID>): List<Order> {
+        val distinctIds = orderIds.distinct()
+        if (distinctIds.size < 2) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "select at least two different orders to merge")
+        }
+        return distinctIds.map { findOrThrow(it) }
+    }
+
+    /** Folds every selected order's items onto one target order and deletes the rest. Shared by
+     *  mergeMine and adminMerge, which differ only in who may select which orders (see each). */
+    private fun mergeSelected(selected: List<Order>): Order {
+        selected.forEach { order ->
             requireMergeableAsTarget(order)
             val shipmentStatus = order.shipment?.status
             if (shipmentStatus != null && shipmentStatus != ShipmentStatus.PREPARING) {
@@ -374,7 +398,7 @@ class OrderService(
             }
         }
         target.updatedAt = OffsetDateTime.now()
-        return target.toDto()
+        return target
     }
 
     @Transactional

@@ -183,4 +183,25 @@ class AdminOrderControllerTest {
             jsonPath("$.shipmentId") { value(shipmentId.toString()) }
         }
     }
+
+    @Test
+    fun `merge is rejected for a non-admin user`() {
+        mockMvc.post("/api/admin/orders/merge") {
+            header("Authorization", "Bearer ${userToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MergeOrdersRequest(listOf(UUID.randomUUID(), UUID.randomUUID())))
+        }.andExpect { status { isForbidden() } }
+    }
+
+    @Test
+    fun `merge succeeds for an admin`() {
+        val ids = listOf(UUID.randomUUID(), UUID.randomUUID())
+        every { service.adminMerge(ids) } returns sampleOrder()
+
+        mockMvc.post("/api/admin/orders/merge") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MergeOrdersRequest(ids))
+        }.andExpect { status { isOk() } }
+    }
 }

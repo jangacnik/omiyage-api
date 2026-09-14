@@ -599,6 +599,30 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `admin can merge two orders belonging to the same user`() {
+        val owner = user()
+        val target = singleItemOrder(owner, "target")
+        val source = singleItemOrder(owner, "source")
+
+        val merged = orderService.adminMerge(listOf(target.id, source.id))
+
+        assertEquals(target.id, merged.id)
+        assertEquals(2, merged.items.size)
+        assertThrows(ResponseStatusException::class.java) { orderService.getById(source.id, admin()) }
+    }
+
+    @Test
+    fun `admin cannot merge orders belonging to different users`() {
+        val a = singleItemOrder(user(), "a")
+        val b = singleItemOrder(user(), "b")
+
+        assertThrows(ResponseStatusException::class.java) { orderService.adminMerge(listOf(a.id, b.id)) }
+        // Neither order was touched - both still exist independently.
+        assertEquals(1, orderService.getById(a.id, admin()).items.size)
+        assertEquals(1, orderService.getById(b.id, admin()).items.size)
+    }
+
+    @Test
     fun `combining a solo order (listed first) with others absorbs them into its existing shipment`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")
