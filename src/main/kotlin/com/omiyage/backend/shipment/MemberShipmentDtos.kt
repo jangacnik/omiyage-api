@@ -52,9 +52,9 @@ data class ShipmentMemberDto(
     // same convention as OrderDto.userNickname and BrowsableShipmentDto.ownerNickname.
     val nickname: String?,
     val orders: List<OrderDto>,
-    // Sum of each item's actualPrice (JPY, converted) or maxPrice (EUR) times its quantity,
-    // normalized to EUR - same convention as DashboardService.pendingAmounts, just scoped to this
-    // member's own orders here. A list for response-shape stability, but at most one entry.
+    // Sum of each item's soldPrice (what the member is actually charged) or maxPrice, both always
+    // EUR, times its quantity - same convention as DashboardService.pendingAmounts, just scoped to
+    // this member's own orders here. A list for response-shape stability, but at most one entry.
     val itemTotals: List<PendingAmountDto>,
     val shippingShareJpy: Int?,
     val shippingShareEur: BigDecimal?,
@@ -80,17 +80,17 @@ data class MemberShipmentDto(
 
 // Shipment.toDto() always computes orders with includeProfit=true (every admin shipment endpoint
 // is admin-only) - strip profit/soldPrice/actualPrice back out here, since this DTO is served to
-// members. `toEur` is the bare admin-set-rate conversion (ExchangeRateService.toEur) for turning
-// a JPY actualPrice into the EUR everything else here is already denominated in.
-fun ShipmentDto.toMemberDto(toEur: (BigDecimal) -> BigDecimal, nicknameByUserId: Map<UUID, String?> = emptyMap()): MemberShipmentDto {
+// members.
+fun ShipmentDto.toMemberDto(nicknameByUserId: Map<UUID, String?> = emptyMap()): MemberShipmentDto {
     val byUser = orders.groupBy { it.userId }
     val members = byUser.map { (userId, memberOrders) ->
         val billable = memberOrders.filter { it.status != OrderStatus.CANCELLED }
-        // Computed from the still-unstripped orders below (memberOrders), before actualPrice gets
-        // nulled out for the response - explicit scale: toEur() returns scale-2, but maxPrice may
-        // not be, and BigDecimal arithmetic takes the larger of the two scales it's mixing.
+        // What the member owes is soldPrice (what they're charged), not actualPrice (the admin's
+        // own JPY cost basis) - computed from the still-unstripped orders below (memberOrders),
+        // before soldPrice gets nulled out for the response. Explicit scale: maxPrice/soldPrice
+        // may not already be scale-2, and BigDecimal arithmetic takes the larger of the two.
         val itemTotal = billable.flatMap { it.items }.sumOf { item ->
-            val amount = item.actualPrice?.let(toEur) ?: item.maxPrice ?: BigDecimal.ZERO
+            val amount = item.soldPrice ?: item.maxPrice ?: BigDecimal.ZERO
             amount * BigDecimal(item.quantity)
         }.setScale(2, java.math.RoundingMode.HALF_UP)
         val strippedOrders = memberOrders.map { order ->

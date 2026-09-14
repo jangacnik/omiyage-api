@@ -37,14 +37,13 @@ class DashboardService(
             .filter { (order, item) -> order.status != OrderStatus.CANCELLED || item.status in LOCKED_ITEM_STATUSES }
             .map { (_, item) -> item }
             .filter { !it.paid }
-            // actualPrice is always JPY, maxPrice is always EUR (see OrderService.updateItem /
-            // buildOrderItem) - convert the JPY side before summing so this is a real EUR total,
-            // not JPY and EUR numbers added together.
+            // What's owed is what the customer is charged - soldPrice, not the JPY actualPrice
+            // (that's the admin's own cost basis). Both soldPrice and maxPrice are always EUR.
             .sumOf { item ->
-                val amount = item.actualPrice?.let(exchangeRates::toEur) ?: item.maxPrice ?: BigDecimal.ZERO
+                val amount = item.soldPrice ?: item.maxPrice ?: BigDecimal.ZERO
                 amount * BigDecimal(item.quantity)
             }
-            // Explicit scale: toEur() returns scale-2, but maxPrice may not be, and BigDecimal
+            // Explicit scale: maxPrice/soldPrice may not already be scale-2, and BigDecimal
             // arithmetic takes the larger of the two scales it's mixing.
             .setScale(2, java.math.RoundingMode.HALF_UP)
             .let { total -> if (total > BigDecimal.ZERO) listOf(PendingAmountDto(Currency.EUR, total)) else emptyList() }

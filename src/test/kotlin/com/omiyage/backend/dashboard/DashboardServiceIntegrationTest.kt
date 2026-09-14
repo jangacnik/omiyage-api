@@ -9,7 +9,6 @@ import com.omiyage.backend.order.CreateOrderRequest
 import com.omiyage.backend.order.OrderItemStatus
 import com.omiyage.backend.order.OrderService
 import com.omiyage.backend.security.MeishiPrincipal
-import com.omiyage.backend.shipment.ExchangeRateService
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.user.MeishiAdminClient
 import com.omiyage.backend.user.UserProfileDto
@@ -33,9 +32,6 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
     @Autowired
     lateinit var orderService: OrderService
 
-    @Autowired
-    lateinit var exchangeRateService: ExchangeRateService
-
     @MockkBean
     lateinit var meishiAdminClient: MeishiAdminClient
 
@@ -56,8 +52,7 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
     )
 
     @Test
-    fun `pending amount sums unpaid items, using actualPrice or falling back to maxPrice`() {
-        exchangeRateService.setRate(BigDecimal("1.0000")) // 1:1 - this test is about the fallback logic, not conversion.
+    fun `pending amount sums unpaid items, using soldPrice or falling back to maxPrice`() {
         val principal = user()
         every { meishiAdminClient.listUsers(any()) } returns listOf(profileFor(principal.id))
 
@@ -70,13 +65,13 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
                 ),
             ),
         )
-        // Simulate the first item having actually been bought for less than its budgeted max.
-        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("800"))
+        // Simulate the first item having actually been charged for less than its budgeted max.
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, actualPrice = null, soldPrice = BigDecimal("800"))
 
         val entry = dashboardService.userDashboard("Bearer irrelevant").single()
 
         assertEquals(1, entry.pendingAmounts.size)
-        // 800 (actual, bought, JPY->EUR at 1:1) + 500 (maxPrice fallback, already EUR) = 1300
+        // 800 (soldPrice, what the customer is actually charged) + 500 (maxPrice fallback) = 1300
         assertEquals(BigDecimal("1300.00"), entry.pendingAmounts[0].amount)
         assertEquals(Currency.EUR, entry.pendingAmounts[0].currency)
     }
@@ -110,7 +105,6 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `an already-bought item still counts as pending even if an admin force-cancels the order afterward`() {
-        exchangeRateService.setRate(BigDecimal("1.0000")) // 1:1 - this test is about cancellation, not conversion.
         val principal = user()
         every { meishiAdminClient.listUsers(any()) } returns listOf(profileFor(principal.id))
 
@@ -120,9 +114,9 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
                 items = listOf(CreateOrderItemRequest(title = "X", condition = Condition.NEW, currency = Currency.JPY)),
             ),
         )
-        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("1200"))
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, actualPrice = null, soldPrice = BigDecimal("1200"))
         // Admin-only path, unlike cancelOwn, has no guard against cancelling an order with
-        // already-bought items - the money spent on them must still show up as owed.
+        // already-bought items - the money charged for them must still show up as owed.
         orderService.updateStatus(order.id, com.omiyage.backend.order.OrderStatus.CANCELLED)
 
         val entry = dashboardService.userDashboard("Bearer irrelevant").single()

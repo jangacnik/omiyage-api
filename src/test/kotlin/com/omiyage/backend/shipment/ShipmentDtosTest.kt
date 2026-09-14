@@ -114,11 +114,12 @@ class ShipmentDtosTest {
         val order = orderWeighing(300)
         order.items[0].actualPrice = BigDecimal("100")
         order.items[0].actualPriceCurrency = Currency.JPY
+        order.items[0].soldPrice = BigDecimal("60")
         order.items[0].maxPrice = BigDecimal("50")
         order.items[0].status = com.omiyage.backend.order.OrderItemStatus.BOUGHT
         shipment.orders.add(order)
 
-        val dto = shipment.toDto(::stubRates, ::stubToEur, ::stubToEurBare).toMemberDto(::stubToEurBare)
+        val dto = shipment.toDto(::stubRates, ::stubToEur, ::stubToEurBare).toMemberDto()
 
         val member = dto.members.single()
         val strippedItem = member.orders.single().items.single()
@@ -126,8 +127,9 @@ class ShipmentDtosTest {
         assertNull(strippedItem.actualPriceCurrency)
         assertNull(strippedItem.soldPrice)
         assertNull(strippedItem.profit)
-        // 100 JPY -> stubToEurBare -> 0.67 EUR, not the 50 EUR maxPrice fallback - proves the total
-        // was computed from actualPrice before it got stripped out of the response above.
-        assertEquals(BigDecimal("0.67"), member.itemTotals.single().amount)
+        // 60 EUR soldPrice - what the member is actually charged - not the 100 JPY actualPrice
+        // (the admin's own cost basis) and not the 50 EUR maxPrice fallback, proving the total was
+        // computed from soldPrice before it got stripped out of the response above.
+        assertEquals(BigDecimal("60.00"), member.itemTotals.single().amount)
     }
 }
