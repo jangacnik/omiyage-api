@@ -399,14 +399,14 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun `getById never exposes soldPrice or profit to the owning user`() {
+    fun `getById exposes soldPrice but never profit to the owning user`() {
         val owner = user()
         val order = singleItemOrder(owner)
         orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
 
         val fetched = orderService.getById(order.id, owner)
 
-        assertNull(fetched.items[0].soldPrice)
+        assertEquals(BigDecimal("700"), fetched.items[0].soldPrice)
         assertNull(fetched.items[0].profit)
         assertNull(fetched.profit)
     }

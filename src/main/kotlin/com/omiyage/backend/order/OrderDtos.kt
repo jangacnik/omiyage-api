@@ -33,9 +33,10 @@ data class OrderItemDto(
     val weight: BigDecimal?,
     val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
-    // Admin-only - never populated on a response a normal user can read, see toDto(includeProfit).
+    // What the customer is charged - populated for the order's own owner too, not just admins.
     val soldPrice: BigDecimal? = null,
     val soldPriceCurrency: Currency? = null,
+    // Admin-only - never populated on a response a normal user can read, see toDto(includeProfit).
     val profit: BigDecimal? = null,
 )
 
@@ -75,8 +76,8 @@ fun OrderItem.toDto(includeProfit: Boolean = false, toEur: (BigDecimal) -> BigDe
         weight = weight,
         isPreorder = isPreorder,
         expectedReleaseDate = expectedReleaseDate,
-        soldPrice = if (includeProfit) soldPrice else null,
-        soldPriceCurrency = if (includeProfit) soldPriceCurrency else null,
+        soldPrice = soldPrice,
+        soldPriceCurrency = soldPriceCurrency,
         profit = if (includeProfit) profit(toEur) else null,
     )
 }
