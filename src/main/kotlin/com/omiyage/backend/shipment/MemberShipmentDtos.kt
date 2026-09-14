@@ -48,6 +48,9 @@ data class BrowsableShipmentDto(
 
 data class ShipmentMemberDto(
     val userId: UUID,
+    // Degrades to null (frontend falls back to a shortened userId) if Meishi is unreachable -
+    // same convention as OrderDto.userNickname and BrowsableShipmentDto.ownerNickname.
+    val nickname: String?,
     val orders: List<OrderDto>,
     // Sum of each item's actualPrice (JPY, converted) or maxPrice (EUR) times its quantity,
     // normalized to EUR - same convention as DashboardService.pendingAmounts, just scoped to this
@@ -79,7 +82,7 @@ data class MemberShipmentDto(
 // is admin-only) - strip profit/soldPrice/actualPrice back out here, since this DTO is served to
 // members. `toEur` is the bare admin-set-rate conversion (ExchangeRateService.toEur) for turning
 // a JPY actualPrice into the EUR everything else here is already denominated in.
-fun ShipmentDto.toMemberDto(toEur: (BigDecimal) -> BigDecimal): MemberShipmentDto {
+fun ShipmentDto.toMemberDto(toEur: (BigDecimal) -> BigDecimal, nicknameByUserId: Map<UUID, String?> = emptyMap()): MemberShipmentDto {
     val byUser = orders.groupBy { it.userId }
     val members = byUser.map { (userId, memberOrders) ->
         val billable = memberOrders.filter { it.status != OrderStatus.CANCELLED }
@@ -98,6 +101,7 @@ fun ShipmentDto.toMemberDto(toEur: (BigDecimal) -> BigDecimal): MemberShipmentDt
         }
         ShipmentMemberDto(
             userId = userId,
+            nickname = nicknameByUserId[userId],
             orders = strippedOrders,
             itemTotals = if (itemTotal > BigDecimal.ZERO) listOf(PendingAmountDto(Currency.EUR, itemTotal)) else emptyList(),
             shippingShareJpy = billable.sumOf { it.shippingCostShareJpy ?: 0 }.takeIf { billable.any { o -> o.shippingCostShareJpy != null } },
