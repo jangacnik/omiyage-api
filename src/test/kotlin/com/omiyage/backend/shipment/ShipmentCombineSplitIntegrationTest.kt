@@ -149,6 +149,29 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `the shipment owner can set destination and shipping method while still preparing, but not after it ships`() {
+        val owner = user()
+        val other = user()
+        val a = order(owner)
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
+
+        assertThrows(ResponseStatusException::class.java) {
+            shipmentService.updateShippingMine(shipment.id, other.id, ShipmentDestination.AUSTRIA, ShippingMethod.EMS)
+        }
+
+        val updated = shipmentService.updateShippingMine(shipment.id, owner.id, ShipmentDestination.AUSTRIA, ShippingMethod.EMS)
+        assertEquals(ShipmentDestination.AUSTRIA, updated.destination)
+        assertEquals(ShippingMethod.EMS, updated.shippingMethod)
+
+        orderService.submitForShipping(a.id, owner)
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+
+        assertThrows(ResponseStatusException::class.java) {
+            shipmentService.updateShippingMine(shipment.id, owner.id, ShipmentDestination.SLOVENIA, null)
+        }
+    }
+
+    @Test
     fun `only the shipment owner can mark it arrived or rename it`() {
         val owner = user()
         val other = user()

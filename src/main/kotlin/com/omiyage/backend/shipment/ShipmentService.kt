@@ -169,6 +169,24 @@ class ShipmentService(
         return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
+    // Owner-only self-service destination/shipping method - only while still PREPARING, since
+    // changing either after the courier has already been chosen and paid for doesn't mean
+    // anything. Admins use update() above instead, which covers every field with no such guard.
+    @Transactional
+    fun updateShippingMine(id: UUID, userId: UUID, destination: ShipmentDestination?, shippingMethod: ShippingMethod?): ShipmentDto {
+        val shipment = findOrThrow(id)
+        if (shipment.ownerUserId != userId) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "only the shipment owner can set its destination and shipping method")
+        }
+        if (shipment.status != ShipmentStatus.PREPARING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot change destination or shipping method once a shipment has shipped")
+        }
+        destination?.let { shipment.destination = it }
+        shippingMethod?.let { shipment.shippingMethod = it }
+        shipment.updatedAt = OffsetDateTime.now()
+        return shipment.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
+    }
+
     // Owner-only self-service "it arrived" - members can't set SHIPPED (that needs tracking/admin
     // confirmation) but marking a shipment that's already on its way as delivered doesn't need
     // admin involvement.

@@ -57,6 +57,15 @@ class MemberShipmentController(
     ): MemberShipmentDto =
         service.renameMine(id, CurrentUser.principal().id, request.title).toMemberDto(nicknamesByUserId(authHeader))
 
+    @PatchMapping("/{id}/shipping")
+    fun updateShippingMine(
+        @PathVariable id: UUID,
+        @Valid @RequestBody request: UpdateShippingRequest,
+        @RequestHeader("Authorization") authHeader: String,
+    ): MemberShipmentDto =
+        service.updateShippingMine(id, CurrentUser.principal().id, request.destination, request.shippingMethod)
+            .toMemberDto(nicknamesByUserId(authHeader))
+
     @PostMapping("/{id}/mark-arrived")
     fun markArrivedMine(@PathVariable id: UUID, @RequestHeader("Authorization") authHeader: String): MemberShipmentDto =
         service.markArrivedMine(id, CurrentUser.principal().id).toMemberDto(nicknamesByUserId(authHeader))
