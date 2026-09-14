@@ -40,7 +40,11 @@ data class ShipmentDto(
 
 fun Shipment.toDto(
     priceFor: (ShippingMethod, ShipmentDestination, Int) -> ShippingQuote?,
-    toEur: (Int) -> BigDecimal,
+    toEurWithMarkup: (Int) -> BigDecimal,
+    // Bare admin-set-rate conversion (ExchangeRateService.toEur, no shipping markup) - only used
+    // for order items' JPY actualPrice -> EUR in profit(), a completely separate figure from the
+    // shipping cost this function also converts.
+    toEur: (BigDecimal) -> BigDecimal,
 ): ShipmentDto {
     // A cancelled order has nothing left to ship - it shouldn't count toward the shipment's
     // weight or be billed a cost share, even if it's still attached (e.g. leftover from before
@@ -58,7 +62,7 @@ fun Shipment.toDto(
         }
     }
     val totalCostJpy = quote?.costJpy
-    val totalCostEur = totalCostJpy?.let(toEur)
+    val totalCostEur = totalCostJpy?.let(toEurWithMarkup)
 
     val ordersWithShares = orders.map { order ->
         val weight = weightByOrder[order]
@@ -67,7 +71,7 @@ fun Shipment.toDto(
         } else {
             null
         }
-        order.toDto(includeProfit = true).copy(orderWeightGrams = weight, shippingCostShareJpy = shareJpy, shippingCostShareEur = shareJpy?.let(toEur))
+        order.toDto(includeProfit = true, toEur = toEur).copy(orderWeightGrams = weight, shippingCostShareJpy = shareJpy, shippingCostShareEur = shareJpy?.let(toEurWithMarkup))
     }
     // Per-order shares are rounded independently and can be off by a bit from the total in both
     // currencies - fold that drift into the last billable order (a cancelled one has no share).

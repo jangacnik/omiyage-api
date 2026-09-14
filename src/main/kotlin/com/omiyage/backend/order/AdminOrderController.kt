@@ -64,8 +64,6 @@ class AdminOrderController(private val service: OrderService, private val shipme
         actualPrice = request.actualPrice,
         soldPrice = request.soldPrice,
         weight = request.weight,
-        actualPriceCurrency = request.actualPriceCurrency,
-        soldPriceCurrency = request.soldPriceCurrency,
     )
 
     @PatchMapping("/{id}/items/{itemId}/details")

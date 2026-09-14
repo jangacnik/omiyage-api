@@ -6,6 +6,7 @@ import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
+import com.omiyage.backend.shipment.ExchangeRateService
 import com.omiyage.backend.shipment.Shipment
 import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentStatus
@@ -34,6 +35,7 @@ class OrderService(
     private val inventoryItems: InventoryItemRepository,
     private val shipments: ShipmentRepository,
     private val meishiAdmin: MeishiAdminClient,
+    private val exchangeRates: ExchangeRateService,
 ) {
 
     @Transactional
@@ -45,7 +47,7 @@ class OrderService(
     private fun createFor(userId: UUID, request: CreateOrderRequest, includeProfit: Boolean = false): OrderDto {
         val order = Order(userId = userId, notes = request.notes, nickname = request.nickname?.trim()?.ifBlank { null })
         request.items.forEach { order.items.add(buildOrderItem(order, it)) }
-        return orders.save(order).toDto(includeProfit)
+        return orders.save(order).toDto(includeProfit, exchangeRates::toEur)
     }
 
     @Transactional(readOnly = true)
@@ -59,7 +61,7 @@ class OrderService(
         if (!isAdmin && order.userId != principal.id) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
         }
-        return order.toDto(includeProfit = isAdmin)
+        return order.toDto(includeProfit = isAdmin, toEur = exchangeRates::toEur)
     }
 
     @Transactional(readOnly = true)
@@ -93,7 +95,7 @@ class OrderService(
         } catch (e: Exception) {
             emptyMap()
         }
-        return page.toPageResponse { it.toDto(includeProfit = true).copy(userNickname = nicknameByUserId[it.userId]) }
+        return page.toPageResponse { it.toDto(includeProfit = true, toEur = exchangeRates::toEur).copy(userNickname = nicknameByUserId[it.userId]) }
     }
 
     @Transactional
@@ -105,9 +107,12 @@ class OrderService(
             order.status = status
             order.updatedAt = OffsetDateTime.now()
         }
-        return order.toDto(includeProfit = true)
+        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
+    // Bought-for is always JPY (that's the currency the admin actually pays in) and sold-for is
+    // always EUR (that's what the customer is charged) - fixed by policy, not a per-item choice,
+    // so this ignores whatever currency a caller sends and sets the real one directly.
     @Transactional
     fun updateItem(
         orderId: UUID,
@@ -116,8 +121,6 @@ class OrderService(
         actualPrice: java.math.BigDecimal?,
         soldPrice: java.math.BigDecimal? = null,
         weight: java.math.BigDecimal? = null,
-        actualPriceCurrency: Currency? = null,
-        soldPriceCurrency: Currency? = null,
     ): OrderDto {
         val item = orderItems.findById(itemId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
@@ -129,12 +132,12 @@ class OrderService(
             item.purchasedAt = OffsetDateTime.now()
         }
         item.actualPrice = actualPrice
-        item.actualPriceCurrency = actualPriceCurrency
+        item.actualPriceCurrency = if (actualPrice != null) Currency.JPY else null
         item.soldPrice = soldPrice
-        item.soldPriceCurrency = soldPriceCurrency
+        item.soldPriceCurrency = if (soldPrice != null) Currency.EUR else null
         item.weight = weight
         item.updatedAt = OffsetDateTime.now()
-        return item.order.toDto(includeProfit = true)
+        return item.order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
@@ -166,7 +169,7 @@ class OrderService(
     fun adminUpdateItemContent(orderId: UUID, itemId: UUID, request: UpdateOwnOrderItemRequest): OrderDto {
         val order = findOrThrow(orderId)
         applyItemContentEdit(ownItemOrThrow(order, itemId), request, enforceStatusGuard = false)
-        return order.toDto(includeProfit = true)
+        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
@@ -176,7 +179,7 @@ class OrderService(
         item.paid = paid
         item.paidAt = if (paid) OffsetDateTime.now() else null
         item.updatedAt = OffsetDateTime.now()
-        return order.toDto(includeProfit = true)
+        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
@@ -194,7 +197,7 @@ class OrderService(
     fun adminRemoveItem(orderId: UUID, itemId: UUID): OrderDto {
         val order = findOrThrow(orderId)
         removeItemFromOrder(order, ownItemOrThrow(order, itemId), enforceStatusGuard = false)
-        return order.toDto(includeProfit = true)
+        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
@@ -379,7 +382,7 @@ class OrderService(
         // not deferred to flush, since toDto() below needs it immediately.
         orderItems.save(item)
         order.updatedAt = OffsetDateTime.now()
-        return order.toDto(includeProfit)
+        return order.toDto(includeProfit, exchangeRates::toEur)
     }
 
     private fun applyItemContentEdit(item: OrderItem, request: UpdateOwnOrderItemRequest, enforceStatusGuard: Boolean) {
@@ -433,7 +436,9 @@ class OrderService(
             return OrderItem(
                 order = order,
                 inventoryItem = inventoryItem,
-                currency = request.currency,
+                // Max price is always EUR - fixed by policy, not a per-item choice (see
+                // OrderDtos.UpdateOrderItemRequest for the equivalent on the admin bookkeeping side).
+                currency = Currency.EUR,
                 maxPrice = request.maxPrice,
                 quantity = request.quantity,
                 link = request.link,

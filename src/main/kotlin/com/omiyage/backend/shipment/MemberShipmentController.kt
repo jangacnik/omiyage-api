@@ -15,14 +15,14 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/api/shipments/mine")
-class MemberShipmentController(private val service: ShipmentService) {
+class MemberShipmentController(private val service: ShipmentService, private val exchangeRates: ExchangeRateService) {
 
     @GetMapping
     fun listMine(): List<MemberShipmentDto> {
         val userId = CurrentUser.principal().id
         return service.listAll()
             .filter { shipment -> shipment.orders.any { it.userId == userId } }
-            .map { it.toMemberDto() }
+            .map { it.toMemberDto(exchangeRates::toEur) }
     }
 
     @GetMapping("/{id}")
@@ -32,14 +32,14 @@ class MemberShipmentController(private val service: ShipmentService) {
         if (shipment.orders.none { it.userId == userId }) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "shipment not found")
         }
-        return shipment.toMemberDto()
+        return shipment.toMemberDto(exchangeRates::toEur)
     }
 
     @PatchMapping("/{id}/title")
     fun renameMine(@PathVariable id: UUID, @Valid @RequestBody request: RenameShipmentRequest): MemberShipmentDto =
-        service.renameMine(id, CurrentUser.principal().id, request.title).toMemberDto()
+        service.renameMine(id, CurrentUser.principal().id, request.title).toMemberDto(exchangeRates::toEur)
 
     @PostMapping("/{id}/mark-arrived")
     fun markArrivedMine(@PathVariable id: UUID): MemberShipmentDto =
-        service.markArrivedMine(id, CurrentUser.principal().id).toMemberDto()
+        service.markArrivedMine(id, CurrentUser.principal().id).toMemberDto(exchangeRates::toEur)
 }
