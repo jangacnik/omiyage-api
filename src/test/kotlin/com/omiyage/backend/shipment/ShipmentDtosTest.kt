@@ -107,4 +107,27 @@ class ShipmentDtosTest {
         assertNull(dto.shippingCostJpy)
         assertNull(dto.orders[0].shippingCostShareJpy)
     }
+
+    @Test
+    fun `toMemberDto strips admin-only pricing but keeps it in the item total it already computed`() {
+        val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
+        val order = orderWeighing(300)
+        order.items[0].actualPrice = BigDecimal("100")
+        order.items[0].actualPriceCurrency = Currency.JPY
+        order.items[0].maxPrice = BigDecimal("50")
+        order.items[0].status = com.omiyage.backend.order.OrderItemStatus.BOUGHT
+        shipment.orders.add(order)
+
+        val dto = shipment.toDto(::stubRates, ::stubToEur, ::stubToEurBare).toMemberDto(::stubToEurBare)
+
+        val member = dto.members.single()
+        val strippedItem = member.orders.single().items.single()
+        assertNull(strippedItem.actualPrice)
+        assertNull(strippedItem.actualPriceCurrency)
+        assertNull(strippedItem.soldPrice)
+        assertNull(strippedItem.profit)
+        // 100 JPY -> stubToEurBare -> 0.67 EUR, not the 50 EUR maxPrice fallback - proves the total
+        // was computed from actualPrice before it got stripped out of the response above.
+        assertEquals(BigDecimal("0.67"), member.itemTotals.single().amount)
+    }
 }

@@ -76,25 +76,29 @@ data class MemberShipmentDto(
 )
 
 // Shipment.toDto() always computes orders with includeProfit=true (every admin shipment endpoint
-// is admin-only) - strip profit/soldPrice back out here, since this DTO is served to members.
-// `toEur` is the bare admin-set-rate conversion (ExchangeRateService.toEur) for turning a JPY
-// actualPrice into the EUR everything else here is already denominated in.
+// is admin-only) - strip profit/soldPrice/actualPrice back out here, since this DTO is served to
+// members. `toEur` is the bare admin-set-rate conversion (ExchangeRateService.toEur) for turning
+// a JPY actualPrice into the EUR everything else here is already denominated in.
 fun ShipmentDto.toMemberDto(toEur: (BigDecimal) -> BigDecimal): MemberShipmentDto {
-    val orders = orders.map { order ->
-        order.copy(profit = null, items = order.items.map { it.copy(soldPrice = null, profit = null) })
-    }
     val byUser = orders.groupBy { it.userId }
     val members = byUser.map { (userId, memberOrders) ->
         val billable = memberOrders.filter { it.status != OrderStatus.CANCELLED }
-        // Explicit scale: toEur() returns scale-2, but maxPrice may not be, and BigDecimal
-        // arithmetic takes the larger of the two scales it's mixing.
+        // Computed from the still-unstripped orders below (memberOrders), before actualPrice gets
+        // nulled out for the response - explicit scale: toEur() returns scale-2, but maxPrice may
+        // not be, and BigDecimal arithmetic takes the larger of the two scales it's mixing.
         val itemTotal = billable.flatMap { it.items }.sumOf { item ->
             val amount = item.actualPrice?.let(toEur) ?: item.maxPrice ?: BigDecimal.ZERO
             amount * BigDecimal(item.quantity)
         }.setScale(2, java.math.RoundingMode.HALF_UP)
+        val strippedOrders = memberOrders.map { order ->
+            order.copy(
+                profit = null,
+                items = order.items.map { it.copy(soldPrice = null, profit = null, actualPrice = null, actualPriceCurrency = null) },
+            )
+        }
         ShipmentMemberDto(
             userId = userId,
-            orders = memberOrders,
+            orders = strippedOrders,
             itemTotals = if (itemTotal > BigDecimal.ZERO) listOf(PendingAmountDto(Currency.EUR, itemTotal)) else emptyList(),
             shippingShareJpy = billable.sumOf { it.shippingCostShareJpy ?: 0 }.takeIf { billable.any { o -> o.shippingCostShareJpy != null } },
             shippingShareEur = billable.mapNotNull { it.shippingCostShareEur }.takeIf { it.isNotEmpty() }?.fold(BigDecimal.ZERO, BigDecimal::add),

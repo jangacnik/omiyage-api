@@ -22,6 +22,8 @@ data class OrderItemDto(
     val condition: Condition?,
     val currency: Currency,
     val maxPrice: BigDecimal?,
+    // What the admin actually paid, always JPY - admin-only, same gating as profit (see
+    // toDto(includeProfit)). A normal user only ever sees maxPrice and soldPrice.
     val actualPrice: BigDecimal?,
     val actualPriceCurrency: Currency?,
     val status: OrderItemStatus,
@@ -65,8 +67,8 @@ fun OrderItem.toDto(includeProfit: Boolean = false, toEur: (BigDecimal) -> BigDe
         condition = linked?.condition ?: condition,
         currency = currency,
         maxPrice = maxPrice,
-        actualPrice = actualPrice,
-        actualPriceCurrency = actualPriceCurrency,
+        actualPrice = if (includeProfit) actualPrice else null,
+        actualPriceCurrency = if (includeProfit) actualPriceCurrency else null,
         status = status,
         paid = paid,
         paidAt = paidAt,
