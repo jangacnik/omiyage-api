@@ -69,7 +69,7 @@ data class InventoryItemRequest(
     @field:NotNull val currency: Currency,
     @field:DecimalMin("0.0") val boughtPrice: BigDecimal? = null,
     val stockQuantity: Int = 0,
-    val imageKeys: List<String> = emptyList(),
+    @field:Size(max = 5, message = "an item can have at most 5 images") val imageKeys: List<String> = emptyList(),
     val categoryIds: List<UUID> = emptyList(),
     val tags: List<String> = emptyList(),
     val isPreorder: Boolean = false,

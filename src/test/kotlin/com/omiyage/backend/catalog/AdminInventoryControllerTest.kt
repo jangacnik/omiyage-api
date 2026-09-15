@@ -105,6 +105,17 @@ class AdminInventoryControllerTest {
     }
 
     @Test
+    fun `create rejects more than 5 images`() {
+        val invalid = request().copy(imageKeys = List(6) { "img-$it" })
+
+        mockMvc.post("/api/admin/inventory") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(invalid)
+        }.andExpect { status { isBadRequest() } }
+    }
+
+    @Test
     fun `update succeeds for an admin`() {
         val id = UUID.randomUUID()
         val req = request()
