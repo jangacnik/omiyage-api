@@ -30,7 +30,8 @@ data class OrderItemDto(
     val paid: Boolean,
     val paidAt: OffsetDateTime?,
     val link: String?,
-    val purchasedAt: OffsetDateTime?,
+    // Admin-only - when the admin actually bought it, same gating as profit (see toDto(includeProfit)).
+    val purchasedAt: OffsetDateTime? = null,
     val quantity: Int,
     val weight: BigDecimal?,
     val isPreorder: Boolean = false,
@@ -73,7 +74,7 @@ fun OrderItem.toDto(includeProfit: Boolean = false, toEur: (BigDecimal) -> BigDe
         paid = paid,
         paidAt = paidAt,
         link = link ?: linked?.link,
-        purchasedAt = purchasedAt,
+        purchasedAt = if (includeProfit) purchasedAt else null,
         quantity = quantity,
         weight = weight,
         isPreorder = isPreorder,

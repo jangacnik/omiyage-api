@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
+import java.time.OffsetDateTime
 import java.util.UUID
 
 class OrderDtosTest {
@@ -22,6 +23,7 @@ class OrderDtosTest {
             actualPriceCurrency = Currency.JPY,
             soldPrice = BigDecimal("55.00"),
             soldPriceCurrency = Currency.EUR,
+            purchasedAt = OffsetDateTime.now(),
         )
         order.items.add(item)
         return item
@@ -33,16 +35,19 @@ class OrderDtosTest {
 
         assertNull(dto.actualPrice)
         assertNull(dto.actualPriceCurrency)
+        assertNull(dto.purchasedAt)
         // maxPrice and soldPrice are what a normal user sees, and stay populated regardless.
         assertEquals(BigDecimal("50.00"), dto.maxPrice)
         assertEquals(BigDecimal("55.00"), dto.soldPrice)
     }
 
     @Test
-    fun `actualPrice is included for an admin, via includeProfit`() {
-        val dto = itemWithPricing().toDto(includeProfit = true)
+    fun `actualPrice and purchasedAt are included for an admin, via includeProfit`() {
+        val item = itemWithPricing()
+        val dto = item.toDto(includeProfit = true)
 
         assertEquals(BigDecimal("6000"), dto.actualPrice)
         assertEquals(Currency.JPY, dto.actualPriceCurrency)
+        assertEquals(item.purchasedAt, dto.purchasedAt)
     }
 }

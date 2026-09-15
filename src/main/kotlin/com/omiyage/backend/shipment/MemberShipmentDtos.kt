@@ -96,7 +96,9 @@ fun ShipmentDto.toMemberDto(nicknameByUserId: Map<UUID, String?> = emptyMap()): 
         val strippedOrders = memberOrders.map { order ->
             order.copy(
                 profit = null,
-                items = order.items.map { it.copy(soldPrice = null, profit = null, actualPrice = null, actualPriceCurrency = null) },
+                items = order.items.map {
+                    it.copy(soldPrice = null, profit = null, actualPrice = null, actualPriceCurrency = null, purchasedAt = null)
+                },
             )
         }
         ShipmentMemberDto(
