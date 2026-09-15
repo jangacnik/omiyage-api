@@ -566,6 +566,13 @@ class OrderService(
                 // OrderDtos.UpdateOrderItemRequest for the equivalent on the admin bookkeeping side).
                 currency = Currency.EUR,
                 maxPrice = request.maxPrice,
+                // Cart/order items linked to inventory charge the catalog price, not an
+                // admin-entered figure - stamp it at add-time so profit is computable immediately.
+                // updateItem() above does a full replace of soldPrice from whatever a caller sends
+                // (null wipes it) - any future caller of that endpoint must resend the current
+                // soldPrice to preserve it, same as the existing admin edit dialog does.
+                soldPrice = inventoryItem.priceAmount,
+                soldPriceCurrency = Currency.EUR,
                 quantity = request.quantity,
                 link = request.link,
                 // Preorder status/date is catalog-controlled, not user-supplied - inherit from the
