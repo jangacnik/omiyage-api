@@ -132,4 +132,30 @@ class ShipmentDtosTest {
         // computed from soldPrice before it got stripped out of the response above.
         assertEquals(BigDecimal("60.00"), member.itemTotals.single().amount)
     }
+
+    @Test
+    fun `toMemberDto excludes already-paid items from the amount owed`() {
+        val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
+        val order = orderWeighing(300)
+        order.items[0].soldPrice = BigDecimal("60")
+        order.items[0].status = com.omiyage.backend.order.OrderItemStatus.BOUGHT
+        order.items[0].paid = true
+        val unpaidItem = OrderItem(
+            id = UUID.randomUUID(),
+            order = order,
+            customTitle = "unpaid item",
+            currency = Currency.JPY,
+            quantity = 1,
+            soldPrice = BigDecimal("40"),
+            status = com.omiyage.backend.order.OrderItemStatus.BOUGHT,
+        )
+        order.items.add(unpaidItem)
+        shipment.orders.add(order)
+
+        val dto = shipment.toDto(::stubRates, ::stubToEur, ::stubToEurBare).toMemberDto()
+
+        val member = dto.members.single()
+        // Only the unpaid item's 40 EUR counts toward what's still owed - the paid item's 60 is settled.
+        assertEquals(BigDecimal("40.00"), member.itemTotals.single().amount)
+    }
 }

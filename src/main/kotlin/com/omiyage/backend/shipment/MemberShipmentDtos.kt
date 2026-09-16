@@ -87,9 +87,11 @@ fun ShipmentDto.toMemberDto(nicknameByUserId: Map<UUID, String?> = emptyMap()): 
         val billable = memberOrders.filter { it.status != OrderStatus.CANCELLED }
         // What the member owes is soldPrice (what they're charged), not actualPrice (the admin's
         // own JPY cost basis) - computed from the still-unstripped orders below (memberOrders),
-        // before soldPrice gets nulled out for the response. Explicit scale: maxPrice/soldPrice
-        // may not already be scale-2, and BigDecimal arithmetic takes the larger of the two.
-        val itemTotal = billable.flatMap { it.items }.sumOf { item ->
+        // before soldPrice gets nulled out for the response. Already-paid items owe nothing more,
+        // same convention as DashboardService.entryFor's pending calc. Explicit scale:
+        // maxPrice/soldPrice may not already be scale-2, and BigDecimal arithmetic takes the
+        // larger of the two.
+        val itemTotal = billable.flatMap { it.items }.filter { !it.paid }.sumOf { item ->
             val amount = item.soldPrice ?: item.maxPrice ?: BigDecimal.ZERO
             amount * BigDecimal(item.quantity)
         }.setScale(2, java.math.RoundingMode.HALF_UP)
