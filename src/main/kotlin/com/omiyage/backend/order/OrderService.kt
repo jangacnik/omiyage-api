@@ -573,6 +573,9 @@ class OrderService(
                 // soldPrice to preserve it, same as the existing admin edit dialog does.
                 soldPrice = inventoryItem.priceAmount,
                 soldPriceCurrency = Currency.EUR,
+                // Same stamp-at-add-time convention as soldPrice above - a linked item's catalog
+                // weight is known immediately instead of waiting for an admin to fill it in later.
+                weight = inventoryItem.weight,
                 quantity = request.quantity,
                 link = request.link,
                 // Preorder status/date is catalog-controlled, not user-supplied - inherit from the

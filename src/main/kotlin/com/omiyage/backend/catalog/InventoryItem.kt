@@ -59,6 +59,10 @@ class InventoryItem(
     @Column(name = "stock_quantity", nullable = false)
     var stockQuantity: Int = 0,
 
+    // Stamped onto an order item at add-time (see OrderService.buildOrderItem) so a linked item's
+    // shipping weight is known immediately instead of waiting for an admin to fill it in per order.
+    var weight: BigDecimal? = null,
+
     @Column(name = "is_preorder", nullable = false)
     var isPreorder: Boolean = false,
 

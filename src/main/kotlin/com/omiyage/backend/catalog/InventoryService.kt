@@ -52,6 +52,7 @@ class InventoryService(
             currency = Currency.EUR,
             boughtPrice = request.boughtPrice,
             stockQuantity = request.stockQuantity,
+            weight = request.weight,
             isPreorder = request.isPreorder,
             expectedReleaseDate = request.expectedReleaseDate,
         )
@@ -72,6 +73,7 @@ class InventoryService(
         item.currency = Currency.EUR
         item.boughtPrice = request.boughtPrice
         item.stockQuantity = request.stockQuantity
+        item.weight = request.weight
         item.isPreorder = request.isPreorder
         item.expectedReleaseDate = request.expectedReleaseDate
         item.updatedAt = OffsetDateTime.now()

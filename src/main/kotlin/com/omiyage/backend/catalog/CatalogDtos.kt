@@ -29,6 +29,7 @@ data class InventoryItemDto(
     val tags: List<String> = emptyList(),
     val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
+    val weight: BigDecimal? = null,
     // Admin-only cost basis - never populated on a response a normal user can read, see toDto(includeCost).
     // Always JPY (that's where the admin actually buys); priceAmount above is always EUR.
     val boughtPrice: BigDecimal? = null,
@@ -51,6 +52,7 @@ fun InventoryItem.toDto(includeCost: Boolean = false, toEur: (BigDecimal) -> Big
     tags = tags.sorted(),
     isPreorder = isPreorder,
     expectedReleaseDate = expectedReleaseDate,
+    weight = weight,
     boughtPrice = if (includeCost) boughtPrice else null,
     profitEur = if (includeCost) boughtPrice?.let { priceAmount - toEur(it) } else null,
 )
@@ -69,6 +71,7 @@ data class InventoryItemRequest(
     @field:NotNull val currency: Currency,
     @field:DecimalMin("0.0") val boughtPrice: BigDecimal? = null,
     val stockQuantity: Int = 0,
+    @field:DecimalMin("0.0") val weight: BigDecimal? = null,
     @field:Size(max = 5, message = "an item can have at most 5 images") val imageKeys: List<String> = emptyList(),
     val categoryIds: List<UUID> = emptyList(),
     val tags: List<String> = emptyList(),
