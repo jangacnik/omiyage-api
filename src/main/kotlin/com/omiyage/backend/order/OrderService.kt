@@ -576,6 +576,11 @@ class OrderService(
                 // Same stamp-at-add-time convention as soldPrice above - a linked item's catalog
                 // weight is known immediately instead of waiting for an admin to fill it in later.
                 weight = inventoryItem.weight,
+                // boughtPrice is always JPY (see CatalogDtos' profitEur conversion) - stamp it
+                // alongside soldPrice for the same reason: profit/cost is computable immediately
+                // instead of waiting on the admin to re-enter a cost they already recorded once.
+                actualPrice = inventoryItem.boughtPrice,
+                actualPriceCurrency = inventoryItem.boughtPrice?.let { Currency.JPY },
                 quantity = request.quantity,
                 link = request.link,
                 // Preorder status/date is catalog-controlled, not user-supplied - inherit from the

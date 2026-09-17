@@ -155,6 +155,29 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `carries over the inventory item's bought price alongside its sold price`() {
+        val item = inventoryService.create(
+            InventoryItemRequest(
+                title = "Kit Kat matcha",
+                description = null,
+                condition = Condition.NEW,
+                priceAmount = BigDecimal("500"),
+                currency = Currency.JPY,
+                boughtPrice = BigDecimal("300"),
+            ),
+        )
+
+        val order = orderService.adminCreate(
+            user().id,
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY))),
+        )
+
+        assertEquals(BigDecimal("500"), order.items[0].soldPrice)
+        assertEquals(BigDecimal("300"), order.items[0].actualPrice)
+        assertEquals(Currency.JPY, order.items[0].actualPriceCurrency)
+    }
+
+    @Test
     fun `ordering an inventory-linked item decrements its stock`() {
         val item = inventoryService.create(
             InventoryItemRequest(
