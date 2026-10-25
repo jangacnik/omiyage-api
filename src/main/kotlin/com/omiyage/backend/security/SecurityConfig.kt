@@ -44,6 +44,7 @@ class SecurityConfig(
                     authorize("/v3/api-docs/**", permitAll)
                 }
                 authorize(HttpMethod.GET, "/api/images/**", permitAll)
+                authorize("/actuator/prometheus", hasRole("ADMIN"))
                 authorize("/api/admin/**", hasRole("ADMIN"))
                 authorize("/api/**", authenticated)
                 authorize(anyRequest, denyAll)

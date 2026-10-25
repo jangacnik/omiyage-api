@@ -26,7 +26,14 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
+logging:
+  structured:
+    format:
+      console: logstash
+
 omiyage:
+  maintenance:
+    soft-delete-retention-days: ${SOFT_DELETE_RETENTION_DAYS:90}
   meishi:
     jwt-secret: ${MEISHI_JWT_SECRET}
     api-url: ${MEISHI_API_URL:http://localhost:8080}
@@ -43,7 +50,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never
