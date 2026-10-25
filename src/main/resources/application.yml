@@ -24,7 +24,7 @@ spring:
 
 omiyage:
   meishi:
-    jwt-secret: ${MEISHI_JWT_SECRET:dev-secret-change-me}
+    jwt-secret: ${MEISHI_JWT_SECRET}
     api-url: ${MEISHI_API_URL:http://localhost:8080}
   cors:
     allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
