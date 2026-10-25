@@ -14,6 +14,8 @@ import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.client.HttpServerErrorException
+import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.multipart.MaxUploadSizeExceededException
 import org.springframework.web.multipart.support.MissingServletRequestPartException
@@ -78,6 +80,19 @@ class GlobalExceptionHandler {
     fun handleConflict(e: Exception): ResponseEntity<Map<String, String>> {
         log.warn("conflicting write: {}", e.javaClass.simpleName)
         return error(HttpStatus.CONFLICT, "conflict")
+    }
+
+    // MeishiApi unreachable or timing out: a gateway problem, not a fault in this service.
+    @ExceptionHandler(ResourceAccessException::class)
+    fun handleUpstreamUnavailable(e: ResourceAccessException): ResponseEntity<Map<String, String>> {
+        log.warn("upstream unavailable: {}", e.message)
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "upstream service unavailable")
+    }
+
+    @ExceptionHandler(HttpServerErrorException::class)
+    fun handleUpstreamError(e: HttpServerErrorException): ResponseEntity<Map<String, String>> {
+        log.warn("upstream returned {}", e.statusCode)
+        return error(HttpStatus.BAD_GATEWAY, "upstream service error")
     }
 
     @ExceptionHandler(Exception::class)

@@ -9,6 +9,10 @@ import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
+private val EDITABLE_PROFILE_FIELDS = setOf(
+    "email", "phone", "firstName", "lastName", "addressLine1", "addressLine2", "postalCode", "city", "country", "avatarKey",
+)
+
 @RestController
 @RequestMapping("/api/users/me")
 class UserProfileController(private val client: MeishiProfileClient) {
@@ -21,7 +25,7 @@ class UserProfileController(private val client: MeishiProfileClient) {
     fun updateMe(
         @RequestHeader("Authorization") authHeader: String,
         @RequestBody updates: Map<String, Any?>,
-    ): UserProfileDto = client.updateMe(authHeader, updates)
+    ): UserProfileDto = client.updateMe(authHeader, updates.filterKeys { it in EDITABLE_PROFILE_FIELDS })
 
     @PatchMapping("/nickname")
     fun changeNickname(

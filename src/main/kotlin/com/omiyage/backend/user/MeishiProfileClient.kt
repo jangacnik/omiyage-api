@@ -1,8 +1,8 @@
 package com.omiyage.backend.user
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.omiyage.backend.config.MeishiProperties
 import org.springframework.stereotype.Component
+import org.springframework.web.client.HttpClientErrorException
 import org.springframework.web.client.HttpStatusCodeException
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.body
@@ -12,9 +12,7 @@ internal data class MeishiErrorResponse(val error: String? = null)
 
 /** Proxies /api/users/me to MeishiApi, which is now the source of truth for profile data. */
 @Component
-class MeishiProfileClient(props: MeishiProperties, private val objectMapper: ObjectMapper) {
-
-    private val client = RestClient.builder().baseUrl(props.apiUrl).build()
+class MeishiProfileClient(private val client: RestClient, private val objectMapper: ObjectMapper) {
 
     fun getMe(authHeader: String): UserProfileDto = execute {
         client.get().uri("/api/users/me").header("Authorization", authHeader).retrieve()
@@ -34,7 +32,7 @@ class MeishiProfileClient(props: MeishiProperties, private val objectMapper: Obj
             client.patch().uri("/api/users/me/password").header("Authorization", authHeader)
                 .body(mapOf("oldPassword" to oldPassword, "newPassword" to newPassword)).retrieve()
                 .toBodilessEntity()
-        } catch (e: HttpStatusCodeException) {
+        } catch (e: HttpClientErrorException) {
             throw toResponseStatusException(e)
         }
     }
@@ -52,7 +50,7 @@ class MeishiProfileClient(props: MeishiProperties, private val objectMapper: Obj
         try {
             return call().body<UserProfileDto>()
                 ?: throw ResponseStatusException(org.springframework.http.HttpStatus.BAD_GATEWAY, "empty response from meishi")
-        } catch (e: HttpStatusCodeException) {
+        } catch (e: HttpClientErrorException) {
             throw toResponseStatusException(e)
         }
     }

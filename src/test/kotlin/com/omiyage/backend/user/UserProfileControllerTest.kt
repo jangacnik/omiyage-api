@@ -101,4 +101,17 @@ class UserProfileControllerTest {
             content = objectMapper.writeValueAsString(mapOf("oldPassword" to "wrong", "newPassword" to "new-pass-123"))
         }.andExpect { status { isUnauthorized() } }
     }
+
+    @Test
+    fun `profile update forwards only whitelisted fields`() {
+        every { client.updateMe(any(), mapOf("city" to "Tokyo")) } returns profile()
+
+        mockMvc.patch("/api/users/me") {
+            header("Authorization", "Bearer ${userToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("city" to "Tokyo", "role" to "ADMIN", "status" to "ACTIVE"))
+        }.andExpect { status { isOk() } }
+
+        verify { client.updateMe(any(), mapOf("city" to "Tokyo")) }
+    }
 }

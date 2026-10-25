@@ -1,6 +1,5 @@
 package com.omiyage.backend.auth
 
-import com.omiyage.backend.config.MeishiProperties
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -12,9 +11,7 @@ data class MeishiTokenResponse(val token: String)
 data class MeishiUserResponse(val id: String, val nickname: String?, val role: String, val status: String)
 
 @Component
-class MeishiAuthClient(props: MeishiProperties) {
-
-    private val client = RestClient.builder().baseUrl(props.apiUrl).build()
+class MeishiAuthClient(private val client: RestClient) {
 
     fun login(nickname: String, password: String): String {
         val response = try {

@@ -37,6 +37,12 @@ class SampleController {
     @GetMapping("/integrity")
     fun integrity(): String = throw DataIntegrityViolationException("duplicate")
 
+    @GetMapping("/upstream-down")
+    fun upstreamDown(): String = throw org.springframework.web.client.ResourceAccessException("connect timed out")
+
+    @GetMapping("/upstream-error")
+    fun upstreamError(): String = throw org.springframework.web.client.HttpServerErrorException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+
     @GetMapping("/boom")
     fun boom(): String = throw IllegalStateException("boom")
 }
@@ -81,6 +87,12 @@ class GlobalExceptionHandlerTest {
     @Test
     fun `data integrity violation is a 409`() {
         mockMvc.perform(get("/integrity")).andExpect(status().isConflict).andExpect(jsonPath("$.error").exists())
+    }
+
+    @Test
+    fun `unreachable upstream is a 503 and an upstream 5xx is a 502`() {
+        mockMvc.perform(get("/upstream-down")).andExpect(status().isServiceUnavailable).andExpect(jsonPath("$.error").exists())
+        mockMvc.perform(get("/upstream-error")).andExpect(status().isBadGateway).andExpect(jsonPath("$.error").exists())
     }
 
     @Test

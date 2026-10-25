@@ -18,7 +18,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
 
 @WebMvcTest(controllers = [AuthController::class])
-@Import(SecurityConfig::class, JwtAuthenticationFilter::class, JwtVerifier::class)
+@Import(SecurityConfig::class, JwtAuthenticationFilter::class, JwtVerifier::class, LoginRateLimiter::class)
 @EnableConfigurationProperties(MeishiProperties::class)
 @TestPropertySource(properties = ["omiyage.meishi.jwt-secret=auth-controller-secret", "omiyage.meishi.api-url=http://localhost:8080"])
 class AuthControllerTest {
@@ -51,5 +51,23 @@ class AuthControllerTest {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(LoginRequest("bob", ""))
         }.andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `login is throttled after too many attempts for one nickname`() {
+        every { service.login("carol", "pw") } returns "the-token"
+        val body = objectMapper.writeValueAsString(LoginRequest("carol", "pw"))
+
+        repeat(10) {
+            mockMvc.post("/api/auth/login") {
+                contentType = MediaType.APPLICATION_JSON
+                content = body
+            }.andExpect { status { isOk() } }
+        }
+
+        mockMvc.post("/api/auth/login") {
+            contentType = MediaType.APPLICATION_JSON
+            content = body
+        }.andExpect { status { isTooManyRequests() } }
     }
 }
