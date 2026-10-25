@@ -9,14 +9,11 @@ flowchart LR
     Browser["Browser<br/>(React SPA)"]
     Backend["Omiyage backend<br/>(Spring Boot, :8081)"]
     Postgres[("PostgreSQL<br/>omiyage db")]
-    MinIO[("MinIO<br/>object storage")]
     Meishi["MeishiApi<br/>(Vert.x, :8080)"]
     MeishiDB[("PostgreSQL<br/>meishi db")]
 
     Browser -- "REST + JWT" --> Backend
-    Browser -- "GET images (anon read)" --> MinIO
     Backend -- "JPA" --> Postgres
-    Backend -- "S3 API" --> MinIO
     Backend -- "login proxy + status check" --> Meishi
     Meishi -- "JPA-equivalent" --> MeishiDB
 ```
@@ -115,10 +112,10 @@ Key design point: an `order_item` either references an existing `inventory_item`
 | Package | Responsibility |
 |---|---|
 | `security` | `JwtVerifier` (hand-rolled HS256 check), `JwtAuthenticationFilter`, `SecurityConfig`, `CurrentUser` helper |
-| `config` | `MeishiProperties`, `MinioProperties` (`@ConfigurationProperties`) |
+| `config` | `MeishiProperties` (`@ConfigurationProperties`) |
 | `user` | `UserProfile` entity/repo/service, JIT provisioning, `GET`/`PATCH /api/users/me` |
 | `catalog` | `Category`, `InventoryItem` (+images, categories m2m), search/pagination, admin CRUD |
-| `media` | S3-compatible client wrapper around MinIO, `POST /api/images` upload |
+| `media` | images stored as `bytea` in the `media` table; `POST /api/images` upload, public `GET /api/images/{key}` |
 | `order` | `Order`/`OrderItem`, create/list/detail, admin status + per-item purchased updates |
 | `auth` | Login proxy to MeishiApi (`MeishiAuthClient`, `AuthService`, `AuthController`) |
 | `web` | `PageResponse<T>` (slim pagination DTO), `GlobalExceptionHandler` (keeps error bodies as `{"error": "..."}` — same shape MeishiApi uses, so the frontend's one error-parsing path works against either backend) |
@@ -140,7 +137,7 @@ Key design point: an `order_item` either references an existing `inventory_item`
 
 `src/lib` (API client, JWT decode, media URL helper) · `src/store` (Zustand auth store, Bearer token in `localStorage` — same pattern as `meishiFrontend`) · `src/routes` (route guards: `RequireAuth`, `RequireAdmin`) · `src/api` (TanStack Query hooks per domain) · `src/pages` incl. `pages/admin` · `src/components` (`Pagination`, `OrderStatusBadge`, `Layout`).
 
-Images: the backend stores/returns bucket-relative object keys only (not URLs), so swapping storage backends later doesn't touch stored data. The frontend builds display URLs itself from `VITE_MEDIA_BASE_URL` (MinIO endpoint + bucket, since MinIO serves the bucket as anonymously-readable).
+Images: the backend stores/returns bucket-relative object keys only (not URLs), so swapping storage backends later doesn't touch stored data. The frontend builds display URLs itself as `${VITE_API_BASE_URL}/api/images/${key}` (the GET endpoint is public because img tags cannot send the JWT).
 
 ## Test strategy
 
@@ -148,8 +145,8 @@ Images: the backend stores/returns bucket-relative object keys only (not URLs), 
 |---|---|---|
 | Unit | `JwtVerifierTest`, `AuthServiceTest` (MockK) | `authStore.test.ts`, `guards.test.tsx`, `Pagination.test.tsx`, `OrderStatusBadge.test.tsx` |
 | Web-slice / component | `@WebMvcTest` + MockMvc per controller, incl. 401/403 cases (springmockk) | RTL + MSW per page (`InventoryPage`, `OrderDetailPage`, `AdminOrdersPage`, ...) |
-| Integration | Testcontainers Postgres (`*ServiceIntegrationTest` — search/pagination/category-filter, order creation + ownership + purchased-flag independence, profile JIT-sync), Testcontainers MinIO (`MediaServiceIntegrationTest`), WireMock against the real MeishiApi HTTP contract (`AuthIntegrationTest`) | — |
-| Full-stack slice | `FullFlowIntegrationTest` — real MockMvc + real Postgres + real MinIO, drives create-order-with-image → admin-marks-purchased → status-advance → user-sees-update over actual HTTP | — |
+| Integration | Testcontainers Postgres (`*ServiceIntegrationTest` — search/pagination/category-filter, order creation + ownership + purchased-flag independence, profile JIT-sync), WireMock against the real MeishiApi HTTP contract (`AuthIntegrationTest`) | — |
+| Full-stack slice | `FullFlowIntegrationTest` — real MockMvc + real Postgres, drives create-order-with-image → admin-marks-purchased → status-advance → user-sees-update over actual HTTP | — |
 | E2E | — | Playwright (`e2e/critical-flow.spec.ts`) — same flow as the full-stack slice test but through the real browser-rendered UI, seeding throwaway MeishiApi accounts via its admin API per run |
 
 **Current status**: 47/47 backend unit + web-slice tests pass, 36/36 frontend tests pass, both apps build clean. The Testcontainers-based integration tests, the full-stack slice test, and the Playwright e2e suite are all written and compile/type-check, but haven't executed yet — this sandbox's Docker Desktop isn't running. They need Docker up locally to actually run (see below); nothing about them is blocked on code.
@@ -157,7 +154,7 @@ Images: the backend stores/returns bucket-relative object keys only (not URLs), 
 ## Running locally
 
 ```bash
-# 1. infra deps (Postgres :5433, MinIO :9000/:9001) — NOT the apps themselves
+# 1. infra deps (Postgres :5433) — NOT the apps themselves
 docker compose up -d
 
 # 2. backend (needs MeishiApi running separately on :8080 for login to work)

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.invoke
@@ -32,6 +33,7 @@ class SecurityConfig(
                 authorize("/actuator/health", permitAll)
                 authorize("/swagger-ui/**", permitAll)
                 authorize("/v3/api-docs/**", permitAll)
+                authorize(HttpMethod.GET, "/api/images/**", permitAll)
                 authorize("/api/admin/**", hasRole("ADMIN"))
                 authorize("/api/**", authenticated)
                 authorize(anyRequest, permitAll)

@@ -13,7 +13,6 @@ import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.security.TestJwt
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -30,19 +29,13 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.testcontainers.containers.MinIOContainer
-import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model.CreateBucketRequest
-import software.amazon.awssdk.services.s3.model.HeadBucketRequest
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException
 import java.math.BigDecimal
 import java.util.UUID
 
 private const val TEST_SECRET = "full-flow-secret"
-private const val TEST_BUCKET = "omiyage-fullflow-test"
 
 /** Drives the app end to end over real HTTP-level MockMvc requests, the real security filter
- *  chain, real Postgres, and real MinIO — the shape of thing a unit or web-slice test can't catch:
+ *  chain, and real Postgres — the shape of thing a unit or web-slice test can't catch:
  *  wrong @RequestMapping paths, JSON (de)serialization drift, or a security rule that's wired to
  *  the wrong path pattern. */
 @SpringBootTest
@@ -51,19 +44,10 @@ private const val TEST_BUCKET = "omiyage-fullflow-test"
 class FullFlowIntegrationTest : PostgresIntegrationTest() {
 
     companion object {
-        private val minio: MinIOContainer = MinIOContainer("minio/minio:RELEASE.2024-10-13T13-34-11Z")
-            .withUserName("omiyage")
-            .withPassword("omiyage123")
-            .apply { start() }
-
         @JvmStatic
         @DynamicPropertySource
         fun properties(registry: DynamicPropertyRegistry) {
             registry.add("omiyage.meishi.jwt-secret") { TEST_SECRET }
-            registry.add("omiyage.minio.endpoint") { minio.s3URL }
-            registry.add("omiyage.minio.access-key") { "omiyage" }
-            registry.add("omiyage.minio.secret-key") { "omiyage123" }
-            registry.add("omiyage.minio.bucket") { TEST_BUCKET }
         }
     }
 
@@ -72,18 +56,6 @@ class FullFlowIntegrationTest : PostgresIntegrationTest() {
 
     @Autowired
     lateinit var objectMapper: ObjectMapper
-
-    @Autowired
-    lateinit var s3Client: S3Client
-
-    @BeforeEach
-    fun ensureBucketExists() {
-        try {
-            s3Client.headBucket(HeadBucketRequest.builder().bucket(TEST_BUCKET).build())
-        } catch (e: NoSuchBucketException) {
-            s3Client.createBucket(CreateBucketRequest.builder().bucket(TEST_BUCKET).build())
-        }
-    }
 
     private fun userToken() = TestJwt.sign(TEST_SECRET, subject = UUID.randomUUID().toString(), nickname = "bob", role = "USER")
     private fun adminToken() = TestJwt.sign(TEST_SECRET, subject = UUID.randomUUID().toString(), nickname = "root", role = "ADMIN")
