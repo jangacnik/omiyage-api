@@ -3,10 +3,10 @@ package com.omiyage.backend.web
 import org.junit.jupiter.api.Test
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.MediaType
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultHandlers.print
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -48,20 +48,19 @@ class GlobalExceptionHandlerTest {
 
     private val mockMvc: MockMvc = MockMvcBuilders.standaloneSetup(SampleController())
         .setControllerAdvice(GlobalExceptionHandler())
-        .setMessageConverters(MappingJackson2HttpMessageConverter())
         .build()
 
     @Test
     fun `malformed json is a 400`() {
         mockMvc.perform(post("/body").contentType(MediaType.APPLICATION_JSON).content("{not json"))
-            .andExpect(status().isBadRequest)
+            .andDo(print()).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.error").exists())
     }
 
     @Test
     fun `invalid uuid in body or path is a 400`() {
         mockMvc.perform(post("/body").contentType(MediaType.APPLICATION_JSON).content("""{"id":"nope"}"""))
-            .andExpect(status().isBadRequest)
+            .andDo(print()).andExpect(status().isBadRequest)
         mockMvc.perform(get("/sample/nope")).andExpect(status().isBadRequest).andExpect(jsonPath("$.error").exists())
     }
 
