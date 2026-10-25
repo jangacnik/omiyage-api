@@ -1,9 +1,9 @@
 plugins {
-    kotlin("jvm") version "2.3.21"
-    kotlin("plugin.spring") version "2.3.21"
-    kotlin("plugin.jpa") version "2.3.21"
-    id("org.springframework.boot") version "3.3.4"
-    id("io.spring.dependency-management") version "1.1.6"
+    kotlin("jvm") version "2.4.20"
+    kotlin("plugin.spring") version "2.4.20"
+    kotlin("plugin.jpa") version "2.4.20"
+    id("org.springframework.boot") version "4.1.1"
+    id("io.spring.dependency-management") version "1.1.7"
     jacoco
 }
 
@@ -14,7 +14,7 @@ repositories {
     mavenCentral()
 }
 
-val awsSdkVersion = "2.28.11"
+val awsSdkVersion = "2.47.3"
 val testcontainersVersion = "1.21.3"
 
 dependencies {
@@ -25,12 +25,14 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("org.apache.commons:commons-lang3:2.6.0")
 
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
 
     implementation(platform("software.amazon.awssdk:bom:$awsSdkVersion"))
+    implementation("org.apache.commons:commons-compress:1.26.0")
     implementation("software.amazon.awssdk:s3")
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0")
@@ -43,7 +45,6 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:minio")
-    testImplementation("software.amazon.awssdk:s3")
 }
 
 kotlin {
@@ -65,7 +66,7 @@ tasks.withType<Test> {
 }
 
 jacoco {
-    toolVersion = "0.8.12"
+    toolVersion = "0.8.15"
 }
 
 tasks.jacocoTestReport {
