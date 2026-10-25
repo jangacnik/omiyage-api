@@ -6,7 +6,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
 import org.springframework.core.env.Profiles
+import com.omiyage.backend.web.errorBody
 import org.springframework.http.HttpMethod
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.invoke
@@ -81,6 +83,6 @@ class SecurityConfig(
     private fun writeJsonError(response: jakarta.servlet.http.HttpServletResponse, status: Int, message: String) {
         response.status = status
         response.contentType = MediaType.APPLICATION_JSON_VALUE
-        response.writer.write(objectMapper.writeValueAsString(mapOf("error" to message)))
+        response.writer.write(objectMapper.writeValueAsString(errorBody(HttpStatus.valueOf(status), message)))
     }
 }

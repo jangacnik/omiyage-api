@@ -96,6 +96,13 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    fun `errors carry a stable machine-readable code`() {
+        mockMvc.perform(get("/integrity")).andExpect(jsonPath("$.code").value("conflict"))
+        mockMvc.perform(get("/header")).andExpect(jsonPath("$.code").value("bad_request"))
+        mockMvc.perform(get("/boom")).andExpect(jsonPath("$.code").value("internal_server_error"))
+    }
+
+    @Test
     fun `unexpected exception stays a 500`() {
         mockMvc.perform(get("/boom")).andExpect(status().isInternalServerError)
     }

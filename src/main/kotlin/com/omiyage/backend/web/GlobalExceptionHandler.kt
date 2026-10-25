@@ -32,18 +32,18 @@ class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(e: MethodArgumentNotValidException): ResponseEntity<Map<String, String>> {
         val message = e.bindingResult.fieldErrors.joinToString("; ") { "${it.field} ${it.defaultMessage}" }
-        return ResponseEntity.badRequest().body(mapOf("error" to message))
+        return ResponseEntity.badRequest().body(errorBody(HttpStatus.BAD_REQUEST, message))
     }
 
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatus(e: ResponseStatusException): ResponseEntity<Map<String, String>> {
         val message = e.reason ?: e.statusCode.toString()
-        return ResponseEntity.status(e.statusCode).body(mapOf("error" to message))
+        return ResponseEntity.status(e.statusCode).body(errorBody(e.statusCode, message))
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
     fun handleMethodNotAllowed(e: HttpRequestMethodNotSupportedException): ResponseEntity<Map<String, String>> =
-        ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(mapOf("error" to (e.message ?: "method not allowed")))
+        ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(errorBody(HttpStatus.METHOD_NOT_ALLOWED, e.message ?: "method not allowed"))
 
     // A soft-deleted row is invisible to its own @SQLRestriction, so an eager to-one association
     // still pointing at it (a NOT NULL FK with no cascade) makes Hibernate throw this instead of
@@ -51,7 +51,7 @@ class GlobalExceptionHandler {
     // request was created. That's a missing resource, not a server fault.
     @ExceptionHandler(jakarta.persistence.EntityNotFoundException::class)
     fun handleEntityNotFound(e: jakarta.persistence.EntityNotFoundException): ResponseEntity<Map<String, String>> =
-        ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("error" to "not found"))
+        ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorBody(HttpStatus.NOT_FOUND, "not found"))
 
     @ExceptionHandler(
         HttpMessageNotReadableException::class,
@@ -98,9 +98,9 @@ class GlobalExceptionHandler {
     @ExceptionHandler(Exception::class)
     fun handleUnexpected(e: Exception): ResponseEntity<Map<String, String>> {
         log.error("unhandled exception", e)
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(mapOf("error" to "internal error"))
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "internal error"))
     }
 
     private fun error(status: HttpStatus, message: String) =
-        ResponseEntity.status(status).body(mapOf("error" to message))
+        ResponseEntity.status(status).body(errorBody(status, message))
 }

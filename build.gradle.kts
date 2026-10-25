@@ -26,13 +26,10 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.springframework.boot:spring-boot-jackson2")
-    implementation("org.apache.commons:commons-lang3:3.21.0")
 
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
-
-    implementation("org.apache.commons:commons-compress:1.28.0")
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 

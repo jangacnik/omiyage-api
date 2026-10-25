@@ -1,10 +1,12 @@
 package com.omiyage.backend.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.omiyage.backend.web.errorBody
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
@@ -61,7 +63,7 @@ class JwtAuthenticationFilter(
     private fun writeForbidden(response: HttpServletResponse) {
         response.status = 403
         response.contentType = MediaType.APPLICATION_JSON_VALUE
-        response.writer.write(objectMapper.writeValueAsString(mapOf("error" to "account is not allowed")))
+        response.writer.write(objectMapper.writeValueAsString(errorBody(HttpStatus.FORBIDDEN, "account is not allowed")))
     }
 
     // Bad tokens can be hammered at will, so warn at most once per interval with a count; never log the token.

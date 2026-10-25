@@ -37,7 +37,10 @@ class SecurityConfigTest {
 
     @Test
     fun `rejects a request with no token`() {
-        mockMvc.get("/api/ping").andExpect { status { isUnauthorized() } }
+        mockMvc.get("/api/ping").andExpect {
+            status { isUnauthorized() }
+            jsonPath("$.code") { value("unauthorized") }
+        }
     }
 
     @Test
@@ -49,7 +52,10 @@ class SecurityConfigTest {
     @Test
     fun `rejects a non-admin user on an admin endpoint`() {
         mockMvc.get("/api/admin/ping") { header("Authorization", "Bearer ${token("USER")}") }
-            .andExpect { status { isForbidden() } }
+            .andExpect {
+                status { isForbidden() }
+                jsonPath("$.code") { value("forbidden") }
+            }
     }
 
     @Test
