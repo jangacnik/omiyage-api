@@ -27,6 +27,8 @@ spec:
       labels:
         app: omiyage-api
     spec:
+      # Longer than spring.lifecycle.timeout-per-shutdown-phase (30s) so in-flight requests can finish.
+      terminationGracePeriodSeconds: 45
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
