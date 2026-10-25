@@ -1,0 +1,7 @@
+.git
+.gitea
+.gradle
+build
+deploy
+*.md
+.env*

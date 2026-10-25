@@ -4,8 +4,10 @@
 #   kubectl create secret generic omiyage-api-secrets \
 #     --from-literal=db-host='...' --from-literal=db-port='5432' \
 #     --from-literal=db-name='omiyage' --from-literal=db-user='...' \
-#     --from-literal=db-password='...' --from-literal=meishi-jwt-secret='...' \
-#     --from-literal=meishi-api-url='http://meishi-api.default.svc.cluster.local:8080'
+#     --from-literal=db-password='...' --from-literal=meishi-jwt-secret='...'
+#
+# MEISHI_API_URL is a plain env value below (not secret), so the secret no longer needs the
+# meishi-api-url key.
 #
 # Also needs "regcred" (shared cluster-wide docker-registry secret, already
 # created for meishi-api/tcg-accumulator) so the cluster can pull the image.
@@ -25,6 +27,14 @@ spec:
       labels:
         app: omiyage-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 512Mi }
       imagePullSecrets:
         - name: regcred
       containers:
@@ -53,10 +63,17 @@ spec:
               valueFrom:
                 secretKeyRef: { name: omiyage-api-secrets, key: meishi-jwt-secret }
             - name: MEISHI_API_URL
-              valueFrom:
-                secretKeyRef: { name: omiyage-api-secrets, key: meishi-api-url }
+              value: "http://meishi-api.default.svc.cluster.local:8080"
             - name: FRONTEND_ORIGIN
               value: "https://omiyage.gacnikhome.duckdns.org"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 150m
@@ -64,15 +81,20 @@ spec:
             limits:
               cpu: 750m
               memory: 896Mi
+          # Generous window so a slow Flyway migration is not killed by the liveness probe.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
           readinessProbe:
             httpGet:
-              path: /actuator/health
+              path: /actuator/health/readiness
               port: http
-            initialDelaySeconds: 25
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /actuator/health
+              path: /actuator/health/liveness
               port: http
-            initialDelaySeconds: 40
             periodSeconds: 15
