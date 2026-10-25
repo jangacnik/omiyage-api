@@ -3,6 +3,7 @@ package com.omiyage.backend.catalog
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
@@ -70,7 +71,7 @@ data class InventoryItemRequest(
     @field:NotNull @field:DecimalMin("0.0") val priceAmount: BigDecimal,
     @field:NotNull val currency: Currency,
     @field:DecimalMin("0.0") val boughtPrice: BigDecimal? = null,
-    val stockQuantity: Int = 0,
+    @field:Min(0) val stockQuantity: Int = 0,
     @field:DecimalMin("0.0") val weight: BigDecimal? = null,
     @field:Size(max = 5, message = "an item can have at most 5 images") val imageKeys: List<String> = emptyList(),
     val categoryIds: List<UUID> = emptyList(),

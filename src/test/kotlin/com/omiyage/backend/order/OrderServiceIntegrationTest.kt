@@ -221,6 +221,29 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `ordering at zero stock and then cancelling leaves stock at zero`() {
+        val item = inventoryService.create(
+            InventoryItemRequest(
+                title = "Kit Kat matcha",
+                description = null,
+                condition = Condition.NEW,
+                priceAmount = BigDecimal("500"),
+                currency = Currency.JPY,
+                stockQuantity = 0,
+            ),
+        )
+        val owner = user()
+        val order = orderService.create(
+            owner,
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 3))),
+        )
+
+        orderService.cancelOwn(order.id, owner)
+
+        assertEquals(0, inventoryService.getById(item.id).stockQuantity)
+    }
+
+    @Test
     fun `removing an inventory-linked item restores its stock`() {
         val item = inventoryService.create(
             InventoryItemRequest(

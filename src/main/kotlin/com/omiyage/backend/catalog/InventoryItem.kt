@@ -17,6 +17,7 @@ import jakarta.persistence.JoinTable
 import jakarta.persistence.ManyToMany
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OrderBy
+import jakarta.persistence.Version
 import jakarta.persistence.Table
 import org.hibernate.annotations.SQLDelete
 import org.hibernate.annotations.SQLRestriction
@@ -99,6 +100,9 @@ class InventoryItem(
 
     @Column(name = "deleted_at")
     var deletedAt: OffsetDateTime? = null,
+
+    @Version
+    var version: Long = 0,
 ) {
     init {
         require(!isPreorder || expectedReleaseDate != null) {

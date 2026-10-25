@@ -3,6 +3,7 @@ package com.omiyage.backend.order
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
@@ -137,6 +138,8 @@ fun Order.toDto(includeProfit: Boolean = false, toEur: (BigDecimal) -> BigDecima
 fun Order.totalWeightGrams(): BigDecimal =
     items.fold(BigDecimal.ZERO) { sum, item -> sum + (item.weight ?: BigDecimal.ZERO) * BigDecimal(item.quantity) }
 
+const val MAX_ITEM_QUANTITY = 1000L
+
 data class CreateOrderItemRequest(
     val inventoryItemId: UUID? = null,
     val title: String? = null,
@@ -145,7 +148,7 @@ data class CreateOrderItemRequest(
     val condition: Condition? = null,
     @field:NotNull val currency: Currency,
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
-    @field:Min(1) val quantity: Int = 1,
+    @field:Min(1) @field:Max(MAX_ITEM_QUANTITY) val quantity: Int = 1,
     @field:Size(max = 2048) val link: String? = null,
     val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
@@ -173,7 +176,7 @@ data class UpdateOwnOrderItemRequest(
     val description: String? = null,
     val imageKey: String? = null,
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
-    @field:Min(1) val quantity: Int? = null,
+    @field:Min(1) @field:Max(MAX_ITEM_QUANTITY) val quantity: Int? = null,
     @field:Size(max = 2048) val link: String? = null,
 )
 

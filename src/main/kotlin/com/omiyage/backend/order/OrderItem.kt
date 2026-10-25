@@ -51,6 +51,11 @@ class OrderItem(
     @Column(name = "custom_description")
     var customDescription: String? = null,
 
+    // Units actually taken from the linked inventory item's stock (may be less than quantity when
+    // stock ran out), so cancelling or shrinking returns exactly that and never inflates stock.
+    @Column(name = "reserved_quantity", nullable = false)
+    var reservedQuantity: Int = 0,
+
     @Column(name = "custom_image_key")
     var customImageKey: String? = null,
 

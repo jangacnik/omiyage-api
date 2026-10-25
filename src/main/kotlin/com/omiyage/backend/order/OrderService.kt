@@ -525,7 +525,11 @@ class OrderService(
         }
         request.maxPrice?.let { item.maxPrice = it }
         request.quantity?.let { newQuantity ->
-            item.inventoryItem?.let { inv -> inv.stockQuantity = (inv.stockQuantity + item.quantity - newQuantity).coerceAtLeast(0) }
+            item.inventoryItem?.let { inv ->
+                val available = inv.stockQuantity + item.reservedQuantity
+                item.reservedQuantity = minOf(newQuantity, available)
+                inv.stockQuantity = available - item.reservedQuantity
+            }
             item.quantity = newQuantity
         }
         request.link?.let { item.link = it }
@@ -543,9 +547,10 @@ class OrderService(
     }
 
     // Mirrors buildOrderItem's decrement - removing/cancelling an inventory-linked item means
-    // nothing was actually taken, so give the stock back (never below what was actually reserved).
+    // nothing was actually taken, so give back exactly what was reserved.
     private fun restockIfLinked(item: OrderItem) {
-        item.inventoryItem?.let { it.stockQuantity += item.quantity }
+        item.inventoryItem?.let { it.stockQuantity += item.reservedQuantity }
+        item.reservedQuantity = 0
     }
 
     private fun ownItemOrThrow(order: Order, itemId: UUID): OrderItem {
@@ -563,10 +568,12 @@ class OrderService(
                 .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "inventory item not found") }
             // Never go negative and never block the request over it - an item at (or now hitting)
             // 0 stock is still requestable, it's just a signal to the admin to restock/rebuy.
-            inventoryItem.stockQuantity = (inventoryItem.stockQuantity - request.quantity).coerceAtLeast(0)
+            val reserved = minOf(request.quantity, inventoryItem.stockQuantity)
+            inventoryItem.stockQuantity -= reserved
             return OrderItem(
                 order = order,
                 inventoryItem = inventoryItem,
+                reservedQuantity = reserved,
                 // Max price is always EUR - fixed by policy, not a per-item choice (see
                 // OrderDtos.UpdateOrderItemRequest for the equivalent on the admin bookkeeping side).
                 currency = Currency.EUR,
