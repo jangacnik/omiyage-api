@@ -4,6 +4,7 @@ import com.omiyage.backend.catalog.CategoryRepository
 import com.omiyage.backend.catalog.InventoryItemImageRepository
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.combine.CombineRequestRepository
+import com.omiyage.backend.media.MediaRepository
 import com.omiyage.backend.order.OrderItemRepository
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.shipment.ShipmentRepository
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 
 private const val RETENTION_DAYS = 90L
+private const val UNATTACHED_MEDIA_GRACE_DAYS = 1L
 
 @Component
 class SoftDeletePurgeJob(
@@ -24,6 +26,7 @@ class SoftDeletePurgeJob(
     private val inventoryItemImages: InventoryItemImageRepository,
     private val categories: CategoryRepository,
     private val combineRequests: CombineRequestRepository,
+    private val media: MediaRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -43,8 +46,11 @@ class SoftDeletePurgeJob(
         val purgedImages = inventoryItemImages.purgeDeletedBefore(cutoff)
         val purgedInventory = inventoryItems.purgeDeletedBefore(cutoff)
         val purgedCategories = categories.purgeDeletedBefore(cutoff)
+        // after image/order-item purges so their rows no longer count as references; the grace
+        // period keeps freshly uploaded files that are not attached to anything yet.
+        val purgedMedia = media.purgeUnreferencedBefore(OffsetDateTime.now().minusDays(UNATTACHED_MEDIA_GRACE_DAYS))
         log.info(
-            "soft-delete purge (older than {} days): {} combine requests, {} order items, {} orders, {} shipments, {} inventory item images, {} inventory items, {} categories",
+            "soft-delete purge (older than {} days): {} combine requests, {} order items, {} orders, {} shipments, {} inventory item images, {} inventory items, {} categories, {} media",
             RETENTION_DAYS,
             purgedCombineRequests,
             purgedItems,
@@ -53,6 +59,7 @@ class SoftDeletePurgeJob(
             purgedImages,
             purgedInventory,
             purgedCategories,
+            purgedMedia,
         )
     }
 }

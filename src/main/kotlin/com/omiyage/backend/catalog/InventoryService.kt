@@ -1,6 +1,7 @@
 package com.omiyage.backend.catalog
 
 import com.omiyage.backend.common.Currency
+import com.omiyage.backend.media.MediaService
 import com.omiyage.backend.order.OrderItemRepository
 import com.omiyage.backend.shipment.ExchangeRateService
 import com.omiyage.backend.web.PageResponse
@@ -19,6 +20,7 @@ class InventoryService(
     private val categories: CategoryRepository,
     private val orderItems: OrderItemRepository,
     private val exchangeRates: ExchangeRateService,
+    private val media: MediaService,
 ) {
 
     @Transactional(readOnly = true)
@@ -111,6 +113,7 @@ class InventoryService(
     }
 
     private fun applyImagesAndCategories(item: InventoryItem, request: InventoryItemRequest) {
+        media.requireExisting(request.imageKeys)
         request.imageKeys.forEachIndexed { index, key ->
             item.images.add(InventoryItemImage(inventoryItem = item, objectKey = key, sortOrder = index))
         }

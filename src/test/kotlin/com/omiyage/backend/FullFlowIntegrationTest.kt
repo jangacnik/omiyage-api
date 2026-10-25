@@ -66,7 +66,7 @@ class FullFlowIntegrationTest : PostgresIntegrationTest() {
         val user = userToken()
 
         // Admin uploads a photo and creates an inventory item with it.
-        val image = MockMultipartFile("file", "photo.jpg", "image/jpeg", "fake-bytes".toByteArray())
+        val image = MockMultipartFile("file", "photo.jpg", "image/jpeg", byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()))
         val uploadResult = mockMvc.perform(multipart("/api/images").file(image).header("Authorization", "Bearer $admin"))
             .andExpect(status().isCreated)
             .andReturn()

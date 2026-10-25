@@ -3,6 +3,7 @@ package com.omiyage.backend.order
 import com.omiyage.backend.catalog.InventoryItem
 import com.omiyage.backend.catalog.InventoryItemImage
 import com.omiyage.backend.catalog.InventoryItemRepository
+import com.omiyage.backend.media.MediaService
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
@@ -47,6 +48,7 @@ class OrderService(
     private val shipments: ShipmentRepository,
     private val meishiAdmin: MeishiAdminClient,
     private val exchangeRates: ExchangeRateService,
+    private val media: MediaService,
 ) {
 
     @Transactional
@@ -517,7 +519,10 @@ class OrderService(
         }
         request.title?.let { item.customTitle = it }
         request.description?.let { item.customDescription = it }
-        request.imageKey?.let { item.customImageKey = it }
+        request.imageKey?.let {
+            media.requireExisting(listOf(it))
+            item.customImageKey = it
+        }
         request.maxPrice?.let { item.maxPrice = it }
         request.quantity?.let { newQuantity ->
             item.inventoryItem?.let { inv -> inv.stockQuantity = (inv.stockQuantity + item.quantity - newQuantity).coerceAtLeast(0) }
@@ -600,6 +605,7 @@ class OrderService(
         if (request.isPreorder && request.expectedReleaseDate == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a preorder item must have an expected release date")
         }
+        request.imageKey?.let { media.requireExisting(listOf(it)) }
         addRequestedItemToInventory(request)
         return OrderItem(
             order = order,

@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPat
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
 private const val TEST_SECRET = "media-controller-secret"
+private const val KEY = "123e4567-e89b-12d3-a456-426614174000.jpeg"
 
 @WebMvcTest(controllers = [MediaController::class])
 @Import(SecurityConfig::class, JwtAuthenticationFilter::class, JwtVerifier::class)
@@ -47,7 +48,7 @@ class MediaControllerTest {
 
     @Test
     fun `upload returns the generated key`() {
-        every { service.upload(any()) } returns "uploads/generated-key.jpg"
+        every { service.upload(any(), any()) } returns "uploads/generated-key.jpg"
         val file = MockMultipartFile("file", "photo.jpg", "image/jpeg", "fake-bytes".toByteArray())
 
         mockMvc.perform(
@@ -58,12 +59,19 @@ class MediaControllerTest {
 
     @Test
     fun `download is public and serves the stored bytes with their content type`() {
-        every { service.get("uploads/abc.jpeg") } returns Media("uploads/abc.jpeg", "image/jpeg", "fake-bytes".toByteArray())
+        every { service.get("uploads/$KEY") } returns Media("uploads/$KEY", "image/jpeg", "fake-bytes".toByteArray())
 
-        mockMvc.perform(get("/api/images/uploads/abc.jpeg"))
+        mockMvc.perform(get("/api/images/uploads/$KEY"))
             .andExpect(status().isOk)
             .andExpect(content().contentType(MediaType.IMAGE_JPEG))
             .andExpect(content().bytes("fake-bytes".toByteArray()))
             .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+            .andExpect(header().string("Content-Security-Policy", "default-src 'none'"))
+            .andExpect(header().string("Content-Disposition", "inline"))
+    }
+
+    @Test
+    fun `download rejects a filename that is not a generated key`() {
+        mockMvc.perform(get("/api/images/uploads/abc.jpeg")).andExpect(status().isNotFound)
     }
 }
