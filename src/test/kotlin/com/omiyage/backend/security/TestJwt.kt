@@ -17,9 +17,13 @@ object TestJwt {
         nickname: String = "bob",
         role: String = "USER",
         expiresAtEpochSeconds: Long = System.currentTimeMillis() / 1000 + 60,
+        issuedAtEpochSeconds: Long? = null,
     ): String {
         val header = encode(mapOf("alg" to "HS256", "typ" to "JWT"))
-        val payload = encode(mapOf("sub" to subject, "nickname" to nickname, "role" to role, "exp" to expiresAtEpochSeconds))
+        val payload = encode(
+            mapOf("sub" to subject, "nickname" to nickname, "role" to role, "exp" to expiresAtEpochSeconds) +
+                (issuedAtEpochSeconds?.let { mapOf("iat" to it) } ?: emptyMap()),
+        )
         val signingInput = "$header.$payload"
 
         val mac = Mac.getInstance("HmacSHA256")

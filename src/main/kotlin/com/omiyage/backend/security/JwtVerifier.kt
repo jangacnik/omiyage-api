@@ -4,11 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.omiyage.backend.config.MeishiProperties
 import org.springframework.stereotype.Component
 import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+
+private val MAX_TOKEN_LIFETIME = Duration.ofHours(24)
 
 class JwtVerificationException(message: String) : RuntimeException(message)
 
@@ -46,7 +49,10 @@ class JwtVerifier(props: MeishiProperties, private val objectMapper: ObjectMappe
         }
 
         val exp = (claims["exp"] as? Number)?.toLong() ?: throw JwtVerificationException("missing exp claim")
-        if (Instant.now().epochSecond >= exp) throw JwtVerificationException("token expired")
+        val now = Instant.now().epochSecond
+        if (now >= exp) throw JwtVerificationException("token expired")
+        val issuedAt = (claims["iat"] as? Number)?.toLong() ?: now
+        if (exp - issuedAt > MAX_TOKEN_LIFETIME.seconds) throw JwtVerificationException("token lifetime too long")
 
         val sub = claims["sub"] as? String ?: throw JwtVerificationException("missing sub claim")
         val nickname = claims["nickname"] as? String ?: throw JwtVerificationException("missing nickname claim")

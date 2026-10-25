@@ -31,6 +31,26 @@ class JwtVerifierTest {
     }
 
     @Test
+    fun `rejects a token whose lifetime exceeds 24 hours`() {
+        val now = System.currentTimeMillis() / 1000
+        val token = TestJwt.sign(secret, issuedAtEpochSeconds = now, expiresAtEpochSeconds = now + 25 * 3600)
+        assertThrows<JwtVerificationException> { verifier.verify(token) }
+    }
+
+    @Test
+    fun `rejects a token without iat that expires more than 24 hours from now`() {
+        val token = TestJwt.sign(secret, expiresAtEpochSeconds = System.currentTimeMillis() / 1000 + 25 * 3600)
+        assertThrows<JwtVerificationException> { verifier.verify(token) }
+    }
+
+    @Test
+    fun `accepts a token with a 24 hour lifetime`() {
+        val now = System.currentTimeMillis() / 1000
+        val token = TestJwt.sign(secret, issuedAtEpochSeconds = now, expiresAtEpochSeconds = now + 24 * 3600)
+        assertEquals("bob", verifier.verify(token).nickname)
+    }
+
+    @Test
     fun `rejects an expired token`() {
         val token = TestJwt.sign(secret, expiresAtEpochSeconds = System.currentTimeMillis() / 1000 - 60)
         assertThrows<JwtVerificationException> { verifier.verify(token) }
