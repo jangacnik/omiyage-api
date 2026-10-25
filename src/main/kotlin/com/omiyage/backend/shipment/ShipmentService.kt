@@ -249,11 +249,11 @@ class ShipmentService(
 
     // Shipping physically moves every non-cancelled member order (and its items) on: the guard
     // above already required each to be at PREPARING_SHIPPING or later, so this is what "later"
-    // means. A cancelled order never actually ships, so it's left exactly as it was.
+    // means. A cancelled order never actually ships and a delivered one has already arrived, so both are left exactly as they were.
     private fun markOrdersSent(shipment: Shipment) {
         val now = OffsetDateTime.now()
         shipment.orders.forEach { order ->
-            if (order.status == OrderStatus.CANCELLED) return@forEach
+            if (order.status == OrderStatus.CANCELLED || order.status == OrderStatus.DELIVERED) return@forEach
             order.status = OrderStatus.SENT
             order.updatedAt = now
             order.items.forEach { item ->

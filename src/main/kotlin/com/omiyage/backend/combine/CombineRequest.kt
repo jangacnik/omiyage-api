@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn
 import jakarta.persistence.Column
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
+import jakarta.persistence.Version
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -44,4 +45,7 @@ class CombineRequest(
 
     @Column(name = "responded_at")
     var respondedAt: OffsetDateTime? = null,
+
+    @Version
+    var version: Long = 0,
 )

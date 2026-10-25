@@ -63,8 +63,10 @@ data class CreateCategoryRequest(
     @field:NotBlank val slug: String,
 )
 
+private const val MAX_TAGS = 20
+
 data class InventoryItemRequest(
-    @field:NotBlank val title: String,
+    @field:NotBlank @field:Size(max = 200) val title: String,
     val description: String?,
     @field:Size(max = 2048) val link: String? = null,
     @field:NotNull val condition: Condition,
@@ -75,7 +77,7 @@ data class InventoryItemRequest(
     @field:DecimalMin("0.0") val weight: BigDecimal? = null,
     @field:Size(max = 5, message = "an item can have at most 5 images") val imageKeys: List<String> = emptyList(),
     val categoryIds: List<UUID> = emptyList(),
-    val tags: List<String> = emptyList(),
+    @field:Size(max = MAX_TAGS) val tags: List<String> = emptyList(),
     val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
 )

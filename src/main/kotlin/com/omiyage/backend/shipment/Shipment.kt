@@ -11,6 +11,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OrderBy
 import jakarta.persistence.Table
+import jakarta.persistence.Version
 import org.hibernate.annotations.SQLDelete
 import org.hibernate.annotations.SQLRestriction
 import java.time.OffsetDateTime
@@ -72,4 +73,7 @@ class Shipment(
 
     @Column(name = "deleted_at")
     var deletedAt: OffsetDateTime? = null,
+
+    @Version
+    var version: Long = 0,
 )

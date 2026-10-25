@@ -14,6 +14,8 @@ import org.springframework.web.server.ResponseStatusException
 import java.time.OffsetDateTime
 import java.util.UUID
 
+private const val MAX_TAG_LENGTH = 50
+
 @Service
 class InventoryService(
     private val items: InventoryItemRepository,
@@ -127,8 +129,12 @@ class InventoryService(
     }
 
     private fun applyTags(item: InventoryItem, request: InventoryItemRequest) {
+        val tags = request.tags.map { it.trim() }.filter { it.isNotBlank() }
+        if (tags.any { it.length > MAX_TAG_LENGTH }) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a tag can be at most $MAX_TAG_LENGTH characters")
+        }
         item.tags.clear()
-        item.tags.addAll(request.tags.map { it.trim() }.filter { it.isNotBlank() })
+        item.tags.addAll(tags)
     }
 
     private fun findOrThrow(id: UUID): InventoryItem =

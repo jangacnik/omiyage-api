@@ -41,7 +41,7 @@ interface OrderRepository : JpaRepository<Order, UUID> {
     // persistence context, so a caller reading one of these orders again in the same transaction
     // would otherwise see the stale (pre-detach) shipment reference.
     @Modifying(clearAutomatically = true)
-    @Query("UPDATE Order o SET o.shipment = null WHERE o.shipment.id = :shipmentId")
+    @Query("UPDATE Order o SET o.shipment = null, o.version = o.version + 1 WHERE o.shipment.id = :shipmentId")
     fun detachShipment(@Param("shipmentId") shipmentId: UUID): Int
 }
 

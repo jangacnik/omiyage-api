@@ -812,6 +812,23 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `an admin cannot reopen a delivered or cancelled order but can move forward, cancel or undo one step`() {
+        val delivered = singleItemOrder()
+        orderService.updateStatus(delivered.id, OrderStatus.IN_PROGRESS)
+        orderService.updateStatus(delivered.id, OrderStatus.REQUESTED)
+        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED)
+        assertThrows(ResponseStatusException::class.java) { orderService.updateStatus(delivered.id, OrderStatus.REQUESTED) }
+
+        val cancelled = singleItemOrder()
+        orderService.updateStatus(cancelled.id, OrderStatus.CANCELLED)
+        assertThrows(ResponseStatusException::class.java) { orderService.updateStatus(cancelled.id, OrderStatus.IN_PROGRESS) }
+
+        val skipped = singleItemOrder() // skipping steps forward is allowed
+        orderService.updateStatus(skipped.id, OrderStatus.SENT)
+        assertThrows(ResponseStatusException::class.java) { orderService.updateStatus(skipped.id, OrderStatus.REQUESTED) }
+    }
+
+    @Test
     fun `a user cannot cancel someone else's order or an already-closed order`() {
         val owner = user()
         val order = singleItemOrder(owner)

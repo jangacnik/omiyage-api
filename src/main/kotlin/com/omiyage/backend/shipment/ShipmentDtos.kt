@@ -119,7 +119,7 @@ fun Shipment.toDto(
 data class CreateShipmentRequest(
     @field:NotEmpty val orderIds: List<UUID>,
     val notes: String? = null,
-    val title: String? = null,
+    @field:jakarta.validation.constraints.Size(max = 100) val title: String? = null,
 )
 
 data class UpdateShipmentRequest(
@@ -128,7 +128,7 @@ data class UpdateShipmentRequest(
     val shippingMethod: ShippingMethod? = null,
     val trackingNumber: String? = null,
     val notes: String? = null,
-    val title: String? = null,
+    @field:jakarta.validation.constraints.Size(max = 100) val title: String? = null,
 )
 
 data class AssignShipmentRequest(val shipmentId: UUID?)
@@ -137,6 +137,6 @@ data class RenameShipmentRequest(@field:jakarta.validation.constraints.Size(max 
 
 data class UpdateShippingRequest(val destination: ShipmentDestination? = null, val shippingMethod: ShippingMethod? = null)
 
-data class CombineShipmentsRequest(@field:NotEmpty val shipmentIds: List<UUID>, val title: String? = null)
+data class CombineShipmentsRequest(@field:NotEmpty val shipmentIds: List<UUID>, @field:jakarta.validation.constraints.Size(max = 100) val title: String? = null)
 
-data class SplitShipmentRequest(@field:NotEmpty val orderIds: List<UUID>, val title: String? = null)
+data class SplitShipmentRequest(@field:NotEmpty val orderIds: List<UUID>, @field:jakarta.validation.constraints.Size(max = 100) val title: String? = null)

@@ -142,9 +142,9 @@ const val MAX_ITEM_QUANTITY = 1000L
 
 data class CreateOrderItemRequest(
     val inventoryItemId: UUID? = null,
-    val title: String? = null,
+    @field:Size(max = 200) val title: String? = null,
     val description: String? = null,
-    val imageKey: String? = null,
+    @field:Size(max = 500) val imageKey: String? = null,
     val condition: Condition? = null,
     @field:NotNull val currency: Currency,
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
@@ -168,13 +168,13 @@ data class UpdateOrderItemRequest(
     @field:NotNull val status: OrderItemStatus,
     @field:DecimalMin("0.0") val actualPrice: BigDecimal? = null,
     @field:DecimalMin("0.0") val soldPrice: BigDecimal? = null,
-    val weight: BigDecimal? = null,
+    @field:DecimalMin("0.0") val weight: BigDecimal? = null,
 )
 
 data class UpdateOwnOrderItemRequest(
-    val title: String? = null,
+    @field:Size(max = 200) val title: String? = null,
     val description: String? = null,
-    val imageKey: String? = null,
+    @field:Size(max = 500) val imageKey: String? = null,
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
     @field:Min(1) @field:Max(MAX_ITEM_QUANTITY) val quantity: Int? = null,
     @field:Size(max = 2048) val link: String? = null,

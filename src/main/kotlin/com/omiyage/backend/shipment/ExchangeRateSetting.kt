@@ -11,6 +11,8 @@ import java.time.OffsetDateTime
 // per something else, so a full table with a lookup key would be overkill.
 @Entity
 @Table(name = "exchange_rate_setting")
+// Rate and shipping rate are edited independently; only write the column that changed.
+@org.hibernate.annotations.DynamicUpdate
 class ExchangeRateSetting(
     @Id
     val id: Short = 1,

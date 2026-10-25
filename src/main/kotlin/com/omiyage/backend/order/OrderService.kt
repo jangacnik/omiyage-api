@@ -40,6 +40,15 @@ internal fun markItemsPaid(items: List<OrderItem>, paid: Boolean) {
     }
 }
 
+// Admins may skip steps forward (and cancel from any open status) or undo a single step; delivered
+// and cancelled orders are final.
+private fun OrderStatus.canMoveTo(target: OrderStatus): Boolean = when {
+    this == target -> true
+    this == OrderStatus.DELIVERED || this == OrderStatus.CANCELLED -> false
+    target == OrderStatus.CANCELLED -> true
+    else -> target.ordinal >= ordinal - 1
+}
+
 @Service
 class OrderService(
     private val orders: OrderRepository,
@@ -50,6 +59,8 @@ class OrderService(
     private val exchangeRates: ExchangeRateService,
     private val media: MediaService,
 ) {
+
+    private val log = org.slf4j.LoggerFactory.getLogger(OrderService::class.java)
 
     @Transactional
     fun create(principal: MeishiPrincipal, request: CreateOrderRequest): OrderDto = createFor(principal.id, request)
@@ -106,6 +117,7 @@ class OrderService(
         val nicknameByUserId = try {
             meishiAdmin.listUsers(authHeader).associate { it.id to it.nickname }
         } catch (e: Exception) {
+            log.warn("could not load nicknames for the admin order list: {}", e.message)
             emptyMap()
         }
         return page.toPageResponse { it.toDto(includeProfit = true, toEur = exchangeRates::toEur).copy(userNickname = nicknameByUserId[it.userId]) }
@@ -114,6 +126,9 @@ class OrderService(
     @Transactional
     fun updateStatus(id: UUID, status: OrderStatus): OrderDto {
         val order = findOrThrow(id)
+        if (!order.status.canMoveTo(status)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot change order status from ${order.status} to $status")
+        }
         if (status == OrderStatus.CANCELLED) {
             cancelAndDetach(order)
         } else {
