@@ -3,3 +3,8 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true

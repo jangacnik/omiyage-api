@@ -11,6 +11,7 @@ import java.util.UUID
 
 interface OrderRepository : JpaRepository<Order, UUID> {
     fun findByUserId(userId: UUID, pageable: Pageable): Page<Order>
+    fun findByUserIdIn(userIds: Collection<UUID>): List<Order>
     fun findByStatus(status: OrderStatus, pageable: Pageable): Page<Order>
     fun existsByShipment_Id(shipmentId: UUID): Boolean
 

@@ -2,6 +2,7 @@ package com.omiyage.backend.dashboard
 
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.order.LOCKED_ITEM_STATUSES
+import com.omiyage.backend.order.Order
 import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.OrderStatus
@@ -27,7 +28,10 @@ class DashboardService(
         // An unactivated shell account (created via the admin "create user" flow but never
         // activated) has no nickname and can't have placed an order under a real session - skip
         // it rather than show a nameless, order-less row.
-        meishiAdmin.listUsers(authHeader).filter { it.activated }.map { user -> entryFor(user) }
+        meishiAdmin.listUsers(authHeader).filter { it.activated }.let { users ->
+            val ordersByUser = orders.findByUserIdIn(users.map { it.id }).groupBy { it.userId }
+            users.map { user -> entryFor(user, ordersByUser[user.id].orEmpty()) }
+        }
 
     // Delivered orders are settled history, not something the dashboard needs on every load -
     // the frontend fetches this per user only once an admin actually expands that section.
@@ -37,8 +41,7 @@ class DashboardService(
             .filter { it.status == OrderStatus.DELIVERED }
             .map { it.toDto(includeProfit = true, toEur = exchangeRates::toEur) }
 
-    private fun entryFor(user: UserProfileDto): UserDashboardEntryDto {
-        val userOrders = orders.findByUserId(user.id, Pageable.unpaged()).content
+    private fun entryFor(user: UserProfileDto, userOrders: List<Order>): UserDashboardEntryDto {
         val pending = userOrders
             .flatMap { order -> order.items.map { item -> order to item } }
             // A cancelled order's items that were never actually bought owe nothing - but if an

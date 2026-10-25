@@ -38,12 +38,12 @@ class ShipmentService(
     // separately (listDelivered) only when an admin actually asks to see them.
     @Transactional(readOnly = true)
     fun listActive(): List<ShipmentDto> =
-        shipments.findAll().filter { it.status != ShipmentStatus.DELIVERED }
+        shipments.findByStatusNot(ShipmentStatus.DELIVERED)
             .map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur) }
 
     @Transactional(readOnly = true)
     fun listDelivered(): List<ShipmentDto> =
-        shipments.findAll().filter { it.status == ShipmentStatus.DELIVERED }
+        shipments.findByStatus(ShipmentStatus.DELIVERED)
             .map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur) }
 
     @Transactional(readOnly = true)
@@ -59,8 +59,7 @@ class ShipmentService(
         } catch (e: Exception) {
             emptyMap()
         }
-        return shipments.findAll()
-            .filter { it.status == ShipmentStatus.PREPARING }
+        return shipments.findByStatus(ShipmentStatus.PREPARING)
             .filter { shipment -> shipment.orders.none { it.userId == userId } }
             .map { shipment -> shipment.toBrowsableDto(shipment.ownerUserId?.let { nicknameByUserId[it] }) }
     }
