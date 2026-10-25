@@ -55,7 +55,6 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    testLogging { exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL; showStandardStreams = true }
     finalizedBy(tasks.jacocoTestReport)
     // CI runs on a CI runner with no Docker socket, so
     // Testcontainers-backed integration tests can't start there. They still run

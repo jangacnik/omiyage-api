@@ -6,7 +6,6 @@ import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
-import org.springframework.test.web.servlet.result.MockMvcResultHandlers.print
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -15,15 +14,13 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.ResponseBody
+import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MaxUploadSizeExceededException
 import java.util.UUID
 
 data class SampleBody(val id: UUID)
 
-@RequestMapping
-@ResponseBody
+@RestController
 class SampleController {
     @GetMapping("/sample/{id}")
     fun byId(@PathVariable id: UUID) = id.toString()
@@ -53,14 +50,14 @@ class GlobalExceptionHandlerTest {
     @Test
     fun `malformed json is a 400`() {
         mockMvc.perform(post("/body").contentType(MediaType.APPLICATION_JSON).content("{not json"))
-            .andDo(print()).andExpect(status().isBadRequest)
+            .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.error").exists())
     }
 
     @Test
     fun `invalid uuid in body or path is a 400`() {
         mockMvc.perform(post("/body").contentType(MediaType.APPLICATION_JSON).content("""{"id":"nope"}"""))
-            .andDo(print()).andExpect(status().isBadRequest)
+            .andExpect(status().isBadRequest)
         mockMvc.perform(get("/sample/nope")).andExpect(status().isBadRequest).andExpect(jsonPath("$.error").exists())
     }
 
