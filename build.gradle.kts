@@ -14,7 +14,7 @@ repositories {
     mavenCentral()
 }
 
-val awsSdkVersion = "2.47.3"
+val awsSdkVersion = "2.57.3"
 val testcontainersVersion = "1.21.3"
 
 dependencies {
@@ -25,6 +25,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("org.springframework.boot:spring-boot-jackson2")
     implementation("org.apache.commons:commons-lang3:3.21.0")
 
     implementation("org.flywaydb:flyway-core")
@@ -32,15 +33,17 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     implementation(platform("software.amazon.awssdk:bom:$awsSdkVersion"))
-    implementation("org.apache.commons:commons-compress:1.26.0")
+    implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("software.amazon.awssdk:s3")
 
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("org.springframework.security:spring-security-test")
-    testImplementation("com.ninja-squad:springmockk:4.0.2")
+    testImplementation("com.ninja-squad:springmockk:5.0.1")
     testImplementation(platform("org.testcontainers:testcontainers-bom:$testcontainersVersion"))
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
