@@ -15,7 +15,11 @@ import org.springframework.context.annotation.Import
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.http.MediaType
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
@@ -50,5 +54,16 @@ class MediaControllerTest {
             multipart("/api/images").file(file).header("Authorization", "Bearer ${token()}"),
         ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.key").value("uploads/generated-key.jpg"))
+    }
+
+    @Test
+    fun `download is public and serves the stored bytes with their content type`() {
+        every { service.get("uploads/abc.jpeg") } returns Media("uploads/abc.jpeg", "image/jpeg", "fake-bytes".toByteArray())
+
+        mockMvc.perform(get("/api/images/uploads/abc.jpeg"))
+            .andExpect(status().isOk)
+            .andExpect(content().contentType(MediaType.IMAGE_JPEG))
+            .andExpect(content().bytes("fake-bytes".toByteArray()))
+            .andExpect(header().string("X-Content-Type-Options", "nosniff"))
     }
 }

@@ -14,7 +14,6 @@ repositories {
     mavenCentral()
 }
 
-val awsSdkVersion = "2.57.3"
 val testcontainersVersion = "1.21.3"
 
 dependencies {
@@ -32,9 +31,7 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
 
-    implementation(platform("software.amazon.awssdk:bom:$awsSdkVersion"))
     implementation("org.apache.commons:commons-compress:1.28.0")
-    implementation("software.amazon.awssdk:s3")
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 
@@ -47,7 +44,6 @@ dependencies {
     testImplementation(platform("org.testcontainers:testcontainers-bom:$testcontainersVersion"))
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
-    testImplementation("org.testcontainers:minio")
 }
 
 kotlin {

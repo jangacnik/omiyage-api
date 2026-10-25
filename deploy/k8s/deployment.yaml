@@ -6,10 +6,7 @@
 #     --from-literal=db-host='...' --from-literal=db-port='5432' \
 #     --from-literal=db-name='omiyage' --from-literal=db-user='...' \
 #     --from-literal=db-password='...' --from-literal=meishi-jwt-secret='...' \
-#     --from-literal=meishi-api-url='http://meishi-api.default.svc.cluster.local:8080' \
-#     --from-literal=minio-endpoint='http://minio.default.svc.cluster.local:9000' \
-#     --from-literal=minio-access-key='...' --from-literal=minio-secret-key='...' \
-#     --from-literal=minio-bucket='omiyage'
+#     --from-literal=meishi-api-url='http://meishi-api.default.svc.cluster.local:8080'
 #
 # Also needs "regcred" (shared cluster-wide docker-registry secret, already
 # created for meishi-api/tcg-accumulator) so the cluster can pull the image.
@@ -59,18 +56,6 @@ spec:
             - name: MEISHI_API_URL
               valueFrom:
                 secretKeyRef: { name: omiyage-api-secrets, key: meishi-api-url }
-            - name: MINIO_ENDPOINT
-              valueFrom:
-                secretKeyRef: { name: omiyage-api-secrets, key: minio-endpoint }
-            - name: MINIO_ACCESS_KEY
-              valueFrom:
-                secretKeyRef: { name: omiyage-api-secrets, key: minio-access-key }
-            - name: MINIO_SECRET_KEY
-              valueFrom:
-                secretKeyRef: { name: omiyage-api-secrets, key: minio-secret-key }
-            - name: MINIO_BUCKET
-              valueFrom:
-                secretKeyRef: { name: omiyage-api-secrets, key: minio-bucket }
             - name: FRONTEND_ORIGIN
               value: "https://omiyage.gacnikhome.duckdns.org"
           resources:
