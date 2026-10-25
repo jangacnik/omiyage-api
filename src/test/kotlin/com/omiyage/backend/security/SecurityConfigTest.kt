@@ -69,4 +69,15 @@ class SecurityConfigTest {
         mockMvc.get("/api/ping") { header("Authorization", "not-a-bearer-token") }
             .andExpect { status { isUnauthorized() } }
     }
+
+    @Test
+    fun `api docs are not public outside the dev profile`() {
+        mockMvc.get("/v3/api-docs").andExpect { status { isUnauthorized() } }
+        mockMvc.get("/swagger-ui/index.html").andExpect { status { isUnauthorized() } }
+    }
+
+    @Test
+    fun `an unmapped path outside api is not open by default`() {
+        mockMvc.get("/not-an-api-path").andExpect { status { isUnauthorized() } }
+    }
 }
