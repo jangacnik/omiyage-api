@@ -4,5 +4,4 @@ import org.springframework.security.core.context.SecurityContextHolder
 
 object CurrentUser {
     fun principal(): MeishiPrincipal =SecurityContextHolder.getContext().authentication!!.principal as MeishiPrincipal
-        ?: throw IllegalStateException("No authenticated user")
 }
