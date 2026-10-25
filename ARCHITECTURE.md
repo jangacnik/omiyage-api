@@ -1,6 +1,6 @@
 # Omiyage — Architecture Report
 
-Friends-and-family utility for browsing an inventory of stuff and requesting things to be bought/shipped from Japan. Two apps: `backend` (Kotlin + Spring Boot 3, Java 21) and `frontend` (React 18 + TypeScript + Vite). User identity and auth are delegated entirely to the existing **MeishiApi** service.
+Friends-and-family utility for browsing an inventory of stuff and requesting things to be bought/shipped from Japan. Two apps: `backend` (Kotlin + Spring Boot 4, Java 21) and `frontend` (React 18 + TypeScript + Vite). User identity and auth are delegated entirely to the existing **MeishiApi** service.
 
 ## System overview
 
@@ -51,6 +51,23 @@ Two deliberate choices worth flagging:
 - **Omiyage verifies JWTs by hand** (`security/JwtVerifier.kt`), not via a JWT library. jjwt (and most JWT libs) refuse to sign or verify HS256 with a key under 256 bits as a security policy — but MeishiApi's Vert.x-based signer has no such minimum and its dev-default secret is well under that. A library-based verifier would silently fail to validate perfectly legitimate MeishiApi tokens whenever the shared secret is short. The hand-rolled version (`javax.crypto.Mac`, constant-time signature comparison) matches Vert.x's actual behavior exactly.
 
 I also added `GET /api/users/me` to MeishiApi (previously only `GET /api/users` existed, admin-only) — a `findById` on `UserRepository`, a handler, and a route registered ahead of the `/api/users*` admin-only wildcard block so any authenticated user (not just admins) can read their own record. This is what the login-proxy's frozen-check calls.
+
+### Shared-secret coupling and rotation
+
+`MEISHI_JWT_SECRET` here must equal MeishiApi's `JWT_SECRET`; both apps also share the admin account, so a leak in either compromises both. Outside the `dev`/`test` profiles the secret must be set, not the dev default, and at least 32 bytes. Only HS256 tokens are accepted (the header `alg` is checked).
+
+Rotation without downtime:
+1. Set `MEISHI_JWT_SECRET_PREVIOUS=<old>` (cluster secret key `meishi-jwt-secret-previous`, optional) and `MEISHI_JWT_SECRET=<new>` on Omiyage and deploy; tokens signed with either are accepted.
+2. Switch MeishiApi's `JWT_SECRET` to `<new>` and deploy; new logins now use the new secret.
+3. After the token lifetime (24h) has passed, unset `MEISHI_JWT_SECRET_PREVIOUS`.
+
+Omiyage itself keeps accepting old-secret tokens until step 3, but MeishiApi verifies only its own secret: after step 2, calls Omiyage forwards to Meishi with an old token (profile endpoints, the account-status check on writes and admin calls) get 401 until the user logs in again.
+
+The MeishiApi endpoints Omiyage depends on (`POST /api/auth/login`, `GET /api/users/me`, `PATCH /api/users/me/nickname`, `GET /api/users`, `GET /api/users/nicknames`; `PATCH /api/users/me` and `/password` are not yet covered) are pinned by `MeishiContractTest`. Moving to asymmetric signing (RS256 + JWKS) is the planned follow-up and would remove the shared secret.
+
+## Image storage
+
+Uploaded images are stored in PostgreSQL (`media` table: bytes, content type, uploader, size), not in object storage. Items reference them by key (`uploads/<uuid>.<ext>`) and `GET /api/images/uploads/{file}` serves them publicly.
 
 ## Data model
 

@@ -18,8 +18,9 @@ object TestJwt {
         role: String = "USER",
         expiresAtEpochSeconds: Long = System.currentTimeMillis() / 1000 + 60,
         issuedAtEpochSeconds: Long? = null,
+        algorithm: String = "HS256",
     ): String {
-        val header = encode(mapOf("alg" to "HS256", "typ" to "JWT"))
+        val header = encode(mapOf("alg" to algorithm, "typ" to "JWT"))
         val payload = encode(
             mapOf("sub" to subject, "nickname" to nickname, "role" to role, "exp" to expiresAtEpochSeconds) +
                 (issuedAtEpochSeconds?.let { mapOf("iat" to it) } ?: emptyMap()),

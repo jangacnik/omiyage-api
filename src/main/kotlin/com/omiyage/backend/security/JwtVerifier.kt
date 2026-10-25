@@ -25,18 +25,18 @@ class JwtVerificationException(message: String) : RuntimeException(message)
 @Component
 class JwtVerifier(props: MeishiProperties, private val objectMapper: ObjectMapper) {
 
-    private val keyBytes = props.jwtSecret.toByteArray(Charsets.UTF_8)
+    private val keys = listOfNotNull(props.jwtSecret, props.jwtSecretPrevious?.takeIf { it.isNotBlank() })
+        .map { it.toByteArray(Charsets.UTF_8) }
 
     fun verify(token: String): MeishiPrincipal {
         val parts = token.split(".")
         if (parts.size != 3) throw JwtVerificationException("malformed token")
         val (headerB64, payloadB64, signatureB64) = parts
 
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(keyBytes, "HmacSHA256"))
-        val expectedSignature = mac.doFinal("$headerB64.$payloadB64".toByteArray(Charsets.US_ASCII))
+        requireHs256(headerB64)
+        val signingInput = "$headerB64.$payloadB64".toByteArray(Charsets.US_ASCII)
         val actualSignature = decodeBase64Url(signatureB64) ?: throw JwtVerificationException("malformed signature")
-        if (!MessageDigest.isEqual(expectedSignature, actualSignature)) {
+        if (keys.none { MessageDigest.isEqual(hmacSha256(it, signingInput), actualSignature) }) {
             throw JwtVerificationException("bad signature")
         }
 
@@ -70,6 +70,22 @@ class JwtVerifier(props: MeishiProperties, private val objectMapper: ObjectMappe
         }
 
         return MeishiPrincipal(id, nickname, parsedRole)
+    }
+
+    private fun requireHs256(headerB64: String) {
+        val header = decodeBase64Url(headerB64) ?: throw JwtVerificationException("malformed header")
+        val alg = try {
+            objectMapper.readTree(header).get("alg")?.asText()
+        } catch (e: Exception) {
+            throw JwtVerificationException("header is not valid JSON")
+        }
+        if (alg != "HS256") throw JwtVerificationException("unsupported algorithm")
+    }
+
+    private fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(key, "HmacSHA256"))
+        return mac.doFinal(data)
     }
 
     private fun decodeBase64Url(segment: String): ByteArray? {

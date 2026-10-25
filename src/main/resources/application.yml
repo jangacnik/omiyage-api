@@ -36,6 +36,7 @@ omiyage:
     soft-delete-retention-days: ${SOFT_DELETE_RETENTION_DAYS:90}
   meishi:
     jwt-secret: ${MEISHI_JWT_SECRET}
+    jwt-secret-previous: ${MEISHI_JWT_SECRET_PREVIOUS:}
     api-url: ${MEISHI_API_URL:http://localhost:8080}
   cors:
     allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}

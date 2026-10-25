@@ -7,9 +7,9 @@ import org.springframework.mock.env.MockEnvironment
 
 class JwtSecretValidatorTest {
 
-    private fun validate(secret: String, vararg profiles: String) {
+    private fun validate(secret: String, vararg profiles: String, previous: String? = null) {
         val environment = MockEnvironment().apply { setActiveProfiles(*profiles) }
-        JwtSecretValidator(MeishiProperties(jwtSecret = secret, apiUrl = "http://localhost:8080"), environment)
+        JwtSecretValidator(MeishiProperties(jwtSecret = secret, apiUrl = "http://localhost:8080", jwtSecretPrevious = previous), environment)
     }
 
     @Test
@@ -43,5 +43,12 @@ class JwtSecretValidatorTest {
     @Test
     fun `accepts a weak secret under the dev profile`() {
         assertDoesNotThrow { validate("dev-secret-change-me", "dev") }
+    }
+
+    @Test
+    fun `rejects a short previous secret outside dev and test but ignores a blank one`() {
+        assertThrows<IllegalStateException> { validate("a".repeat(32), "prod", previous = "short") }
+        assertDoesNotThrow { validate("a".repeat(32), "prod", previous = "") }
+        assertDoesNotThrow { validate("a".repeat(32), "prod", previous = "b".repeat(32)) }
     }
 }

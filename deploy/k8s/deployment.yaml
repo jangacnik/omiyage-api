@@ -62,6 +62,10 @@ spec:
             - name: MEISHI_JWT_SECRET
               valueFrom:
                 secretKeyRef: { name: omiyage-api-secrets, key: meishi-jwt-secret }
+            # Only set during a secret rotation (see ARCHITECTURE.md).
+            - name: MEISHI_JWT_SECRET_PREVIOUS
+              valueFrom:
+                secretKeyRef: { name: omiyage-api-secrets, key: meishi-jwt-secret-previous, optional: true }
             - name: MEISHI_API_URL
               value: "http://meishi-api.default.svc.cluster.local:8080"
             - name: FRONTEND_ORIGIN

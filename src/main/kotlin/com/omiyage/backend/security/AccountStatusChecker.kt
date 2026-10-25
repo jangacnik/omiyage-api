@@ -39,16 +39,18 @@ class AccountStatusChecker(private val meishi: MeishiAuthClient, private val clo
     }
 
     // Caches Meishi's facts rather than a verdict, so tokens carrying different role claims for
-    // the same user are each judged against the same fresh state. A token Meishi itself rejects is
-    // cached as frozen.
+    // the same user are each judged against the same fresh state. A token Meishi itself rejects
+    // is denied but not cached.
     private fun fetch(token: String, id: UUID): Entry? =
         try {
             val me = meishi.getMe(token)
-            Entry(me.status == "FROZEN", me.role, clock.instant())
+            Entry(me.status == "FROZEN", me.role, clock.instant()).also { cache[id] = it }
         } catch (e: ResponseStatusException) {
+            // Not cached: the token may just be stale (e.g. after a secret rotation) and the user
+            // can log in again right away.
             Entry(frozen = true, role = null, checkedAt = clock.instant())
         } catch (e: Exception) {
             log.warn("account status check skipped, meishi unavailable: {}", e.javaClass.simpleName)
             null
-        }?.also { cache[id] = it }
+        }
 }

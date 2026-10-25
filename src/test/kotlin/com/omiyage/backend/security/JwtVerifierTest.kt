@@ -25,6 +25,29 @@ class JwtVerifierTest {
     }
 
     @Test
+    fun `accepts tokens signed with either the current or the previous secret during rotation`() {
+        val rotating = JwtVerifier(
+            MeishiProperties(jwtSecret = "new-secret", apiUrl = "http://localhost:8080", jwtSecretPrevious = "old-secret"),
+            ObjectMapper(),
+        )
+
+        assertEquals("bob", rotating.verify(TestJwt.sign("new-secret")).nickname)
+        assertEquals("bob", rotating.verify(TestJwt.sign("old-secret")).nickname)
+        assertThrows<JwtVerificationException> { rotating.verify(TestJwt.sign("third-secret")) }
+    }
+
+    @Test
+    fun `rejects the previous secret once rotation is finished`() {
+        assertThrows<JwtVerificationException> { verifier.verify(TestJwt.sign("old-secret")) }
+    }
+
+    @Test
+    fun `rejects a token whose header algorithm is not HS256`() {
+        assertThrows<JwtVerificationException> { verifier.verify(TestJwt.sign(secret, algorithm = "none")) }
+        assertThrows<JwtVerificationException> { verifier.verify(TestJwt.sign(secret, algorithm = "HS512")) }
+    }
+
+    @Test
     fun `rejects a token signed with a different secret`() {
         val token = TestJwt.sign("wrong-secret")
         assertThrows<JwtVerificationException> { verifier.verify(token) }
