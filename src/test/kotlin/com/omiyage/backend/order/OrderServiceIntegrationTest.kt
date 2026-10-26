@@ -486,6 +486,28 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `adminList excludes the given statuses and the total reflects it`() {
+        val sent = singleItemOrder(title = "sent")
+        val delivered = singleItemOrder(title = "delivered")
+        val open = singleItemOrder(title = "open")
+        orderService.updateStatus(sent.id, OrderStatus.SENT)
+        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED)
+        val everything = PageRequest.of(0, 100)
+
+        val none = orderRepository.findFiltered(null, emptySet(), everything)
+        val one = orderRepository.findFiltered(null, setOf(OrderStatus.SENT), everything)
+        val both = orderRepository.findFiltered(null, setOf(OrderStatus.SENT, OrderStatus.DELIVERED), everything)
+        val byItemCount = orderRepository.findAllOrderByItemCountDesc(null, setOf(OrderStatus.SENT, OrderStatus.DELIVERED), everything)
+
+        assertTrue(none.content.map { it.id }.containsAll(listOf(sent.id, delivered.id, open.id)))
+        assertEquals(none.totalElements - 1, one.totalElements)
+        assertFalse(one.content.any { it.id == sent.id })
+        assertEquals(none.totalElements - 2, both.totalElements)
+        assertTrue(both.content.any { it.id == open.id })
+        assertEquals(both.totalElements, byItemCount.totalElements)
+    }
+
+    @Test
     fun `a user can add an item to their own open order`() {
         val owner = user()
         val order = singleItemOrder(owner)

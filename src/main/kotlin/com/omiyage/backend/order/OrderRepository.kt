@@ -12,7 +12,17 @@ import java.util.UUID
 interface OrderRepository : JpaRepository<Order, UUID> {
     fun findByUserId(userId: UUID, pageable: Pageable): Page<Order>
     fun findByUserIdIn(userIds: Collection<UUID>): List<Order>
-    fun findByStatus(status: OrderStatus, pageable: Pageable): Page<Order>
+
+    @Query(
+        value = "SELECT o FROM Order o WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded",
+        countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded",
+    )
+    fun findFiltered(
+        @Param("status") status: OrderStatus?,
+        @Param("excluded") excluded: Collection<OrderStatus>,
+        pageable: Pageable,
+    ): Page<Order>
+
     fun existsByShipment_Id(shipmentId: UUID): Boolean
 
     // "Order by item count" isn't a mapped property, so it can't ride Pageable's Sort like
@@ -20,16 +30,24 @@ interface OrderRepository : JpaRepository<Order, UUID> {
     // (shouldn't normally happen, but exists transiently) still sorts as count 0 rather than being
     // dropped by the join.
     @Query(
-        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) GROUP BY o ORDER BY COUNT(i) ASC",
-        countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status)",
+        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded GROUP BY o ORDER BY COUNT(i) ASC",
+        countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded",
     )
-    fun findAllOrderByItemCountAsc(@Param("status") status: OrderStatus?, pageable: Pageable): Page<Order>
+    fun findAllOrderByItemCountAsc(
+        @Param("status") status: OrderStatus?,
+        @Param("excluded") excluded: Collection<OrderStatus>,
+        pageable: Pageable,
+    ): Page<Order>
 
     @Query(
-        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) GROUP BY o ORDER BY COUNT(i) DESC",
-        countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status)",
+        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded GROUP BY o ORDER BY COUNT(i) DESC",
+        countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded",
     )
-    fun findAllOrderByItemCountDesc(@Param("status") status: OrderStatus?, pageable: Pageable): Page<Order>
+    fun findAllOrderByItemCountDesc(
+        @Param("status") status: OrderStatus?,
+        @Param("excluded") excluded: Collection<OrderStatus>,
+        pageable: Pageable,
+    ): Page<Order>
 
     @Modifying
     @Query(value = "DELETE FROM orders WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff", nativeQuery = true)

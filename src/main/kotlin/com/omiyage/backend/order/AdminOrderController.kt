@@ -32,11 +32,12 @@ class AdminOrderController(private val service: OrderService, private val shipme
     @GetMapping
     fun list(
         @RequestParam(required = false) status: OrderStatus?,
+        @RequestParam(required = false, defaultValue = "") excludeStatus: Set<OrderStatus>,
         @RequestParam(required = false, defaultValue = "UPDATED_AT") sortBy: AdminOrderSortBy,
         @RequestParam(required = false, defaultValue = "DESC") direction: Sort.Direction,
         @PageableDefault(size = 20) pageable: Pageable,
         @RequestHeader("Authorization") authHeader: String,
-    ): PageResponse<OrderDto> = service.adminList(status, sortBy, direction, pageable, authHeader)
+    ): PageResponse<OrderDto> = service.adminList(status, excludeStatus, sortBy, direction, pageable, authHeader)
 
     @PatchMapping("/{id}")
     fun updateStatus(@PathVariable id: UUID, @Valid @RequestBody request: UpdateOrderStatusRequest): OrderDto =

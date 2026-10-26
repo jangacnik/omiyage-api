@@ -99,9 +99,27 @@ class AdminOrderControllerTest {
 
     @Test
     fun `list returns all orders for an admin`() {
-        every { service.adminList(null, any(), any(), any(), any()) } returns PageResponse(listOf(sampleOrder()), 0, 20, 1, 1, false)
+        every { service.adminList(null, emptySet(), any(), any(), any(), any()) } returns PageResponse(listOf(sampleOrder()), 0, 20, 1, 1, false)
 
         mockMvc.get("/api/admin/orders") { header("Authorization", "Bearer ${adminToken()}") }
+            .andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `list passes a single excludeStatus through to the service`() {
+        every { service.adminList(null, setOf(OrderStatus.SENT), any(), any(), any(), any()) } returns PageResponse(listOf(sampleOrder()), 0, 20, 1, 1, false)
+
+        mockMvc.get("/api/admin/orders?excludeStatus=SENT") { header("Authorization", "Bearer ${adminToken()}") }
+            .andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `list passes multiple excludeStatus values through to the service`() {
+        every {
+            service.adminList(null, setOf(OrderStatus.SENT, OrderStatus.DELIVERED), any(), any(), any(), any())
+        } returns PageResponse(listOf(sampleOrder()), 0, 20, 1, 1, false)
+
+        mockMvc.get("/api/admin/orders?excludeStatus=SENT,DELIVERED") { header("Authorization", "Bearer ${adminToken()}") }
             .andExpect { status { isOk() } }
     }
 

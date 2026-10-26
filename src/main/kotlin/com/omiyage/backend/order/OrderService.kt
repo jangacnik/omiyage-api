@@ -91,6 +91,7 @@ class OrderService(
     @Transactional(readOnly = true)
     fun adminList(
         status: OrderStatus?,
+        excludeStatus: Set<OrderStatus>,
         sortBy: AdminOrderSortBy,
         direction: Sort.Direction,
         pageable: Pageable,
@@ -99,14 +100,14 @@ class OrderService(
         val page = when (sortBy) {
             AdminOrderSortBy.ITEM_COUNT ->
                 if (direction == Sort.Direction.ASC) {
-                    orders.findAllOrderByItemCountAsc(status, pageable)
+                    orders.findAllOrderByItemCountAsc(status, excludeStatus, pageable)
                 } else {
-                    orders.findAllOrderByItemCountDesc(status, pageable)
+                    orders.findAllOrderByItemCountDesc(status, excludeStatus, pageable)
                 }
             else -> {
                 val property = if (sortBy == AdminOrderSortBy.CREATED_AT) "createdAt" else "updatedAt"
                 val sorted = PageRequest.of(pageable.pageNumber, pageable.pageSize, Sort.by(direction, property))
-                if (status == null) orders.findAll(sorted) else orders.findByStatus(status, sorted)
+                orders.findFiltered(status, excludeStatus, sorted)
             }
         }
 
