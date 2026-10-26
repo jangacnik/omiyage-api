@@ -8,7 +8,8 @@ data class PageResponse<T>(
     val size: Int,
     val totalElements: Long,
     val totalPages: Int,
+    val hasNext: Boolean,
 )
 
 fun <T : Any, R> Page<T>.toPageResponse(map: (T) -> R): PageResponse<R> =
-    PageResponse(content.map(map), number, size, totalElements, totalPages)
+    PageResponse(content.map(map), number, size, totalElements, totalPages, hasNext())

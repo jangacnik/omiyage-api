@@ -4,6 +4,7 @@ import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -98,6 +99,28 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
         assertEquals(2, secondPage.content.size)
         assertEquals(3, firstPage.totalPages)
         assertEquals(5, firstPage.totalElements)
+        assertTrue(firstPage.hasNext)
+    }
+
+    @Test
+    fun `search last page has the remainder and no next page`() {
+        repeat(5) { inventoryService.create(request("Item $it")) }
+
+        val lastPage = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(2, 2))
+
+        assertEquals(1, lastPage.content.size)
+        assertFalse(lastPage.hasNext)
+    }
+
+    @Test
+    fun `search out-of-range page is empty but keeps the total`() {
+        repeat(5) { inventoryService.create(request("Item $it")) }
+
+        val page = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(9, 2))
+
+        assertEquals(0, page.content.size)
+        assertEquals(5, page.totalElements)
+        assertFalse(page.hasNext)
     }
 
     @Test

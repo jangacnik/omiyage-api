@@ -96,7 +96,7 @@ class OrderControllerTest {
 
     @Test
     fun `listMine returns the caller's orders`() {
-        every { service.listMine(any(), any()) } returns PageResponse(listOf(sampleOrder()), 0, 20, 1, 1)
+        every { service.listMine(any(), any()) } returns PageResponse(listOf(sampleOrder()), 0, 20, 1, 1, false)
 
         mockMvc.get("/api/orders/mine") { header("Authorization", "Bearer ${token()}") }
             .andExpect {

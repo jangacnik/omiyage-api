@@ -99,7 +99,7 @@ class AdminOrderControllerTest {
 
     @Test
     fun `list returns all orders for an admin`() {
-        every { service.adminList(null, any(), any(), any(), any()) } returns PageResponse(listOf(sampleOrder()), 0, 20, 1, 1)
+        every { service.adminList(null, any(), any(), any(), any()) } returns PageResponse(listOf(sampleOrder()), 0, 20, 1, 1, false)
 
         mockMvc.get("/api/admin/orders") { header("Authorization", "Bearer ${adminToken()}") }
             .andExpect { status { isOk() } }
