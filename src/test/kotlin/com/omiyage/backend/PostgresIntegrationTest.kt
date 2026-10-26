@@ -9,19 +9,23 @@ import org.testcontainers.containers.PostgreSQLContainer
 abstract class PostgresIntegrationTest {
 
     companion object {
-        @JvmStatic
-        val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
-            .withDatabaseName("omiyage_test")
-            .withUsername("omiyage")
-            .withPassword("omiyage")
-            .apply { start() }
+        /** CI provides a Postgres service and sets TEST_DB_URL; locally Testcontainers starts one. */
+        private val externalDbUrl: String? = System.getenv("TEST_DB_URL")
+
+        private val postgres: PostgreSQLContainer<*> by lazy {
+            PostgreSQLContainer("postgres:16")
+                .withDatabaseName("omiyage_test")
+                .withUsername("omiyage")
+                .withPassword("omiyage")
+                .apply { start() }
+        }
 
         @JvmStatic
         @DynamicPropertySource
         fun postgresProperties(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url", postgres::getJdbcUrl)
-            registry.add("spring.datasource.username", postgres::getUsername)
-            registry.add("spring.datasource.password", postgres::getPassword)
+            registry.add("spring.datasource.url") { externalDbUrl ?: postgres.jdbcUrl }
+            registry.add("spring.datasource.username") { if (externalDbUrl != null) "omiyage" else postgres.username }
+            registry.add("spring.datasource.password") { if (externalDbUrl != null) "omiyage" else postgres.password }
             registry.add("omiyage.meishi.jwt-secret") { "integration-test-secret" }
         }
     }

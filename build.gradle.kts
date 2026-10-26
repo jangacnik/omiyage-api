@@ -5,6 +5,7 @@ plugins {
     id("org.springframework.boot") version "4.1.1"
     id("io.spring.dependency-management") version "1.1.7"
     jacoco
+    id("dev.detekt") version "2.0.0-alpha.1"
 }
 
 group = "com.omiyage"
@@ -54,12 +55,10 @@ kotlin {
 tasks.withType<Test> {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
-    // CI runs on a CI runner with no Docker socket, so
-    // Testcontainers-backed integration tests can't start there. They still run
-    // locally (and anywhere Docker is available) - CI is set in every CI job.
-    if (System.getenv("CI") != null) {
-        exclude("**/*IntegrationTest.class")
-    }
+}
+
+detekt {
+    ignoreFailures = true
 }
 
 jacoco {
