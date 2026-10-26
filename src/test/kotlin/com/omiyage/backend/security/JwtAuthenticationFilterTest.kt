@@ -5,7 +5,9 @@ import com.omiyage.backend.config.MeishiProperties
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
@@ -19,6 +21,9 @@ class JwtAuthenticationFilterTest {
         checker,
         ObjectMapper(),
     )
+
+    @AfterEach
+    fun clearSecurityContext() = SecurityContextHolder.clearContext()
 
     private fun call(method: String, path: String): MockHttpServletResponse {
         val request = MockHttpServletRequest(method, path).apply {
