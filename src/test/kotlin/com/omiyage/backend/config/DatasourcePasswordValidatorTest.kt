@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.context.support.PropertySourcesPlaceholderConfigurer
 
 class DatasourcePasswordValidatorTest {
 
@@ -19,7 +20,10 @@ class DatasourcePasswordValidatorTest {
         assertDoesNotThrow { DatasourcePasswordValidator("secret") }
     }
 
-    private val runner = ApplicationContextRunner().withUserConfiguration(DatasourcePasswordValidator::class.java)
+    private val runner = ApplicationContextRunner().withUserConfiguration(
+        PropertySourcesPlaceholderConfigurer::class.java,
+        DatasourcePasswordValidator::class.java,
+    )
 
     @Test
     fun `startup fails when the datasource password is not configured`() {
