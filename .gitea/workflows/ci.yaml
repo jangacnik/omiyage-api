@@ -17,7 +17,10 @@ jobs:
           trap 'docker rm -f "$NET-db" >/dev/null 2>&1; docker network rm "$NET" >/dev/null 2>&1' EXIT
           docker run -d --name "$NET-db" --network "$NET" -e POSTGRES_DB=omiyage_test -e POSTGRES_USER=omiyage -e POSTGRES_PASSWORD=omiyage --health-cmd "pg_isready -U omiyage" --health-interval 2s --health-retries 30 postgres:16
           until [ "$(docker inspect -f '{{.State.Health.Status}}' "$NET-db")" = healthy ]; do sleep 2; done
-          docker run --rm --network "$NET" -e CI=true -e TEST_DB_URL="jdbc:postgresql://$NET-db:5432/omiyage_test" --user "$(id -u):$(id -g)" -e HOME=/tmp -e GRADLE_USER_HOME=/tmp/gradle -v "$PWD":/w -w /w gradle:9.3.0-jdk21 gradle --no-daemon test detekt
+          docker run --rm --network "$NET" -e CI=true -e TEST_DB_URL="jdbc:postgresql://$NET-db:5432/omiyage_test" --user "$(id -u):$(id -g)" -e HOME=/tmp -e GRADLE_USER_HOME=/tmp/gradle -v "$PWD":/w -w /w gradle:9.3.0-jdk21 gradle --no-daemon test
+      - name: Detekt
+        run: |
+          docker run --rm -v "$PWD":/w -w /w ghcr.io/detekt/detekt:latest detekt-cli --input src/main/kotlin --report txt:/w/build/detekt.txt --report html:/w/build/detekt.html || true
       - name: Dependency scan
         run: |
           docker run --rm -v "$PWD":/w -w /w aquasec/trivy:latest fs --scanners vuln --exit-code 0 .

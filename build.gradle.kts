@@ -5,7 +5,6 @@ plugins {
     id("org.springframework.boot") version "4.1.1"
     id("io.spring.dependency-management") version "1.1.7"
     jacoco
-    id("dev.detekt") version "2.0.0-alpha.1"
 }
 
 group = "com.omiyage"
@@ -55,10 +54,6 @@ kotlin {
 tasks.withType<Test> {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
-}
-
-detekt {
-    ignoreFailures = true
 }
 
 jacoco {
