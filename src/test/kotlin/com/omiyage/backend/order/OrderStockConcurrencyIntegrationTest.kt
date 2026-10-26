@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.jdbc.core.JdbcTemplate
 import java.math.BigDecimal
 import java.util.UUID
+import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 
@@ -46,7 +47,7 @@ class OrderStockConcurrencyIntegrationTest : PostgresIntegrationTest() {
         val start = CountDownLatch(1)
         val pool = Executors.newFixedThreadPool(2)
         val attempts = List(2) {
-            pool.submit {
+            pool.submit(Callable {
                 start.await()
                 runCatching {
                     orderService.create(
@@ -54,7 +55,7 @@ class OrderStockConcurrencyIntegrationTest : PostgresIntegrationTest() {
                         CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY))),
                     )
                 }
-            }
+            })
         }
         start.countDown()
         val results = attempts.map { it.get() }
