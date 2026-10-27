@@ -29,7 +29,7 @@ enum class InventoryStatus { ACTIVE, ARCHIVED }
 
 @Entity
 @Table(name = "inventory_items")
-@SQLDelete(sql = "UPDATE inventory_items SET deleted_at = now() WHERE id = ?")
+@SQLDelete(sql = "UPDATE inventory_items SET deleted_at = now() WHERE id = ? AND version = ?")
 @SQLRestriction("deleted_at IS NULL")
 class InventoryItem(
     @Id

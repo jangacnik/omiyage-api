@@ -21,7 +21,7 @@ enum class ShipmentStatus { PREPARING, SHIPPED, DELIVERED }
 
 @Entity
 @Table(name = "shipments")
-@SQLDelete(sql = "UPDATE shipments SET deleted_at = now() WHERE id = ?")
+@SQLDelete(sql = "UPDATE shipments SET deleted_at = now() WHERE id = ? AND version = ?")
 @SQLRestriction("deleted_at IS NULL")
 // Destination/method/tracking/title/status/ownerUserId are each set from separate
 // endpoints/transactions - same multi-writer shape @DynamicUpdate was added to OrderItem for.

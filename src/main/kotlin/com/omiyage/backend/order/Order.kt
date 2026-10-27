@@ -25,7 +25,7 @@ enum class OrderStatus { REQUESTED, IN_PROGRESS, PURCHASED, PREPARING_SHIPPING, 
 
 @Entity
 @Table(name = "orders")
-@SQLDelete(sql = "UPDATE orders SET deleted_at = now() WHERE id = ?")
+@SQLDelete(sql = "UPDATE orders SET deleted_at = now() WHERE id = ? AND version = ?")
 @SQLRestriction("deleted_at IS NULL")
 // Nickname, status, and shipment assignment are each set from a separate endpoint/transaction -
 // same multi-writer shape @DynamicUpdate was added to OrderItem for, so one save's stale
