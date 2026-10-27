@@ -19,6 +19,7 @@ import com.omiyage.backend.shipment.ShippingRateService
 import com.omiyage.backend.user.MeishiNicknameClient
 import com.omiyage.backend.user.MeishiProfileClient
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.fail
 import org.springdoc.core.configuration.SpringDocConfiguration
 import org.springdoc.core.properties.SpringDocConfigProperties
 import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration
@@ -69,12 +70,15 @@ class OpenApiSpecGeneratorTest {
     @MockkBean lateinit var meishiProfileClient: MeishiProfileClient
 
     @Test
-    fun `writes the OpenAPI spec to docs`() {
-        val spec = mockMvc.get("/v3/api-docs").andReturn().response.contentAsString
-
+    fun `committed OpenAPI spec matches the generated spec`() {
+        val generated = mockMvc.get("/v3/api-docs").andReturn().response.contentAsString + "\n"
         val path = Path.of(SPEC_PATH)
-        Files.createDirectories(path.parent)
-        Files.writeString(path, spec + "\n")
-        println("OPENAPI-BEGIN\n$spec\nOPENAPI-END")
+        val committed = if (Files.exists(path)) Files.readString(path) else null
+
+        if (committed != generated) {
+            Files.createDirectories(path.parent)
+            Files.writeString(path, generated)
+            fail<Unit>("$SPEC_PATH was out of date and has been regenerated. Commit it:\nOPENAPI-BEGIN\n$generated\nOPENAPI-END")
+        }
     }
 }
