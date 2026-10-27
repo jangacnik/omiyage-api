@@ -26,6 +26,7 @@ import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.TestPropertySource
@@ -37,6 +38,7 @@ import java.nio.file.Path
 private const val SPEC_PATH = "docs/openapi.json"
 
 @WebMvcTest
+@AutoConfigureMockMvc(addFilters = false)
 @ImportAutoConfiguration(SpringDocConfiguration::class, SpringDocWebMvcConfiguration::class, SpringDocConfigProperties::class)
 @Import(OpenApiConfig::class, SecurityConfig::class, JwtAuthenticationFilter::class, JwtVerifier::class)
 @EnableConfigurationProperties(MeishiProperties::class)
