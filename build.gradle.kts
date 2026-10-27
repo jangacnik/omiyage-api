@@ -53,8 +53,6 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    filter.includeTestsMatching("*OpenApiSpecGeneratorTest")
-    testLogging.showStandardStreams = true
     finalizedBy(tasks.jacocoTestReport)
     testLogging {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
