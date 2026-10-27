@@ -1,5 +1,6 @@
 package com.omiyage.backend.config
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.auth.AuthService
 import com.omiyage.backend.auth.LoginRateLimiter
@@ -75,9 +76,10 @@ class OpenApiSpecGeneratorTest {
     fun `committed OpenAPI spec matches the generated spec`() {
         val generated = mockMvc.get("/v3/api-docs").andReturn().response.contentAsString + "\n"
         val path = Path.of(SPEC_PATH)
-        val committed = if (Files.exists(path)) Files.readString(path) else null
+        val mapper = ObjectMapper()
+        val committed = if (Files.exists(path)) mapper.readTree(Files.readString(path)) else null
 
-        if (committed != generated) {
+        if (committed != mapper.readTree(generated)) {
             Files.createDirectories(path.parent)
             Files.writeString(path, generated)
             fail("$SPEC_PATH was out of date and has been regenerated. Commit it:\nOPENAPI-BEGIN\n$generated\nOPENAPI-END")
