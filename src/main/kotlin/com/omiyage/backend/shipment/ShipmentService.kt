@@ -292,7 +292,9 @@ class ShipmentService(
         if (target != null && target.status != ShipmentStatus.PREPARING) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "cannot attach an order to a shipment that has already shipped")
         }
+        order.shipment?.orders?.remove(order)
         order.shipment = target
+        target?.orders?.add(order)
         order.updatedAt = OffsetDateTime.now()
         val dto = order.toDto()
         if (previousShipmentId != null && previousShipmentId != shipmentId) {

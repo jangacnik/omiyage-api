@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.math.BigDecimal
 import java.util.UUID
 
-private const val TEST_SECRET = "full-flow-secret"
+private const val TEST_SECRET = "integration-test-secret"
 
 /** Drives the app end to end over real HTTP-level MockMvc requests, the real security filter
  *  chain, and real Postgres — the shape of thing a unit or web-slice test can't catch:
