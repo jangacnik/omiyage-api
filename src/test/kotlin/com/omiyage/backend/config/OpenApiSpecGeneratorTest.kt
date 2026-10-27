@@ -78,7 +78,7 @@ class OpenApiSpecGeneratorTest {
         if (committed != generated) {
             Files.createDirectories(path.parent)
             Files.writeString(path, generated)
-            fail<Unit>("$SPEC_PATH was out of date and has been regenerated. Commit it:\nOPENAPI-BEGIN\n$generated\nOPENAPI-END")
+            fail("$SPEC_PATH was out of date and has been regenerated. Commit it:\nOPENAPI-BEGIN\n$generated\nOPENAPI-END")
         }
     }
 }
