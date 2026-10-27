@@ -537,6 +537,19 @@
               }
             }, {
               "in" : "query",
+              "name" : "excludeStatus",
+              "required" : false,
+              "schema" : {
+                "type" : "array",
+                "default" : [ ],
+                "items" : {
+                  "type" : "string",
+                  "enum" : [ "REQUESTED", "IN_PROGRESS", "PURCHASED", "PREPARING_SHIPPING", "SENT", "DELIVERED", "CANCELLED" ]
+                },
+                "uniqueItems" : true
+              }
+            }, {
+              "in" : "query",
               "name" : "sortBy",
               "required" : false,
               "schema" : {
@@ -3319,6 +3332,9 @@
                 "type" : "string",
                 "format" : "date-time"
               },
+              "iconUrl" : {
+                "type" : "string"
+              },
               "id" : {
                 "type" : "string",
                 "format" : "uuid"
@@ -3479,6 +3495,9 @@
                   "$ref" : "#/components/schemas/InventoryItemDto"
                 }
               },
+              "hasNext" : {
+                "type" : "boolean"
+              },
               "page" : {
                 "type" : "integer",
                 "format" : "int32"
@@ -3505,6 +3524,9 @@
                 "items" : {
                   "$ref" : "#/components/schemas/OrderDto"
                 }
+              },
+              "hasNext" : {
+                "type" : "boolean"
               },
               "page" : {
                 "type" : "integer",
