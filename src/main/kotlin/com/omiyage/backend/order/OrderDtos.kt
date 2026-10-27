@@ -101,6 +101,8 @@ data class OrderDto(
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
     val items: List<OrderItemDto>,
+    // Public image URL of the first item, null when it has no image.
+    val iconUrl: String? = null,
     // Only populated when this order is read as part of a shipment (see Shipment.toDto()) -
     // null on every other endpoint that returns an order.
     val orderWeightGrams: BigDecimal? = null,
@@ -130,6 +132,7 @@ fun Order.toDto(includeProfit: Boolean = false, toEur: (BigDecimal) -> BigDecima
         createdAt = createdAt,
         updatedAt = updatedAt,
         items = itemDtos,
+        iconUrl = itemDtos.firstOrNull()?.imageKey?.let { "/api/images/$it" },
         profit = if (includeProfit) itemDtos.mapNotNull { it.profit }.fold(BigDecimal.ZERO, BigDecimal::add) else null,
     )
 }

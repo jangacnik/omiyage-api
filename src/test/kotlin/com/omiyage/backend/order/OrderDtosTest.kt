@@ -50,4 +50,16 @@ class OrderDtosTest {
         assertEquals(Currency.JPY, dto.actualPriceCurrency)
         assertEquals(item.purchasedAt, dto.purchasedAt)
     }
+
+    @Test
+    fun `iconUrl points at the first item's image`() {
+        val item = itemWithPricing().apply { customImageKey = "uploads/a.png" }
+
+        assertEquals("/api/images/uploads/a.png", item.order.toDto().iconUrl)
+    }
+
+    @Test
+    fun `iconUrl is null when the first item has no image`() {
+        assertNull(itemWithPricing().order.toDto().iconUrl)
+    }
 }
