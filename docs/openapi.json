@@ -4258,6 +4258,9 @@
               "country" : {
                 "type" : "string"
               },
+              "discordName" : {
+                "type" : "string"
+              },
               "email" : {
                 "type" : "string"
               },
