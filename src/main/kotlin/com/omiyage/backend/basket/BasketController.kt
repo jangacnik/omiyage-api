@@ -1,5 +1,6 @@
 package com.omiyage.backend.basket
 
+import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.security.CurrentUser
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -33,6 +34,9 @@ class BasketController(private val service: BasketService) {
     @DeleteMapping("/lines/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun remove(@PathVariable id: UUID) = service.remove(CurrentUser.principal(), id)
+
+    @PostMapping("/confirm")
+    fun confirm(): OrderDto = service.confirm(CurrentUser.principal())
 
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)

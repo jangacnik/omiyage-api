@@ -1530,6 +1530,24 @@
             "tags" : [ "basket-controller" ]
           }
         },
+        "/api/basket/confirm" : {
+          "post" : {
+            "operationId" : "confirm",
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "$ref" : "#/components/schemas/OrderDto"
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "tags" : [ "basket-controller" ]
+          }
+        },
         "/api/basket/lines" : {
           "post" : {
             "operationId" : "add",

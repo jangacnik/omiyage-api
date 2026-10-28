@@ -100,4 +100,35 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
         }
         assertEquals(HttpStatus.NOT_FOUND, error.statusCode)
     }
+
+    @Test
+    fun `confirm creates an order from all lines and empties the basket`() {
+        val alice = user()
+        basketService.add(alice, customLine("A"))
+        basketService.add(alice, customLine("B"))
+
+        val order = basketService.confirm(alice)
+
+        assertEquals(setOf("A", "B"), order.items.map { it.title }.toSet())
+        assertEquals(alice.id, order.userId)
+        assertTrue(basketService.list(alice).isEmpty())
+    }
+
+    @Test
+    fun `confirm only takes the callers lines`() {
+        val alice = user()
+        val bob = user()
+        basketService.add(alice, customLine("A"))
+        basketService.add(bob, customLine("B"))
+
+        basketService.confirm(alice)
+
+        assertEquals(listOf("B"), basketService.list(bob).map { it.customTitle })
+    }
+
+    @Test
+    fun `confirm on an empty basket is rejected`() {
+        val error = assertThrows(ResponseStatusException::class.java) { basketService.confirm(user()) }
+        assertEquals(HttpStatus.CONFLICT, error.statusCode)
+    }
 }

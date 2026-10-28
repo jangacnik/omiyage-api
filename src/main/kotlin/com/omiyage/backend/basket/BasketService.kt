@@ -1,6 +1,10 @@
 package com.omiyage.backend.basket
 
 import com.omiyage.backend.catalog.InventoryItemRepository
+import com.omiyage.backend.order.CreateOrderItemRequest
+import com.omiyage.backend.order.CreateOrderRequest
+import com.omiyage.backend.order.OrderDto
+import com.omiyage.backend.order.OrderService
 import com.omiyage.backend.security.MeishiPrincipal
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -13,6 +17,7 @@ import java.util.UUID
 class BasketService(
     private val lines: BasketRepository,
     private val inventory: InventoryItemRepository,
+    private val orders: OrderService,
 ) {
 
     @Transactional(readOnly = true)
@@ -62,6 +67,28 @@ class BasketService(
     fun clear(principal: MeishiPrincipal) {
         lines.deleteByUserId(principal.id)
     }
+
+    @Transactional
+    fun confirm(principal: MeishiPrincipal): OrderDto {
+        val basket = nonEmptyBasket(principal)
+        val order = orders.create(principal, CreateOrderRequest(items = basket.map { it.toOrderItemRequest() }))
+        lines.deleteAll(basket)
+        return order
+    }
+
+    private fun nonEmptyBasket(principal: MeishiPrincipal): List<BasketLine> =
+        lines.findByUserIdOrderByCreatedAt(principal.id).ifEmpty {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "basket is empty")
+        }
+
+    private fun BasketLine.toOrderItemRequest() = CreateOrderItemRequest(
+        inventoryItemId = inventoryItemId,
+        title = customTitle,
+        description = customDescription,
+        currency = currency,
+        maxPrice = maxPrice,
+        quantity = quantity,
+    )
 
     private fun lineOrThrow(principal: MeishiPrincipal, id: UUID): BasketLine =
         lines.findByIdAndUserId(id, principal.id)
