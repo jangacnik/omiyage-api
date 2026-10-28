@@ -114,4 +114,17 @@ class UserProfileControllerTest {
 
         verify { client.updateMe(any(), mapOf("city" to "Tokyo")) }
     }
+
+    @Test
+    fun `profile update forwards discordName`() {
+        every { client.updateMe(any(), mapOf("discordName" to "bob_b")) } returns profile()
+
+        mockMvc.patch("/api/users/me") {
+            header("Authorization", "Bearer ${userToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("discordName" to "bob_b"))
+        }.andExpect { status { isOk() } }
+
+        verify { client.updateMe(any(), mapOf("discordName" to "bob_b")) }
+    }
 }

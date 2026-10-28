@@ -33,7 +33,7 @@ class MeishiContractTest {
     private val userJson = """
         {"id":"3f2b8c1e-7a44-4a53-9d7e-0c9f4f5a1b11","nickname":"bob","email":"bob@example.com","phone":null,
          "firstName":"Bob","lastName":"B","addressLine1":null,"addressLine2":null,"postalCode":null,"city":"Tokyo",
-         "country":"JP","avatarKey":null,"activated":true,"role":"USER","status":"ACTIVE"}
+         "country":"JP","avatarKey":null,"discordName":"bob_b","activated":true,"role":"USER","status":"ACTIVE"}
     """.trimIndent()
 
     @Test

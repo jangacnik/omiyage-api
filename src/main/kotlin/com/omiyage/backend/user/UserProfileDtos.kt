@@ -21,6 +21,7 @@ data class UserProfileDto(
     val city: String?,
     val country: String?,
     val avatarKey: String? = null,
+    val discordName: String? = null,
     val activated: Boolean = true,
 )
 

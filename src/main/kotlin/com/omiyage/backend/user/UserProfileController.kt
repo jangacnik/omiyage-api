@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 private val EDITABLE_PROFILE_FIELDS = setOf(
-    "email", "phone", "firstName", "lastName", "addressLine1", "addressLine2", "postalCode", "city", "country", "avatarKey",
+    "email", "phone", "firstName", "lastName", "addressLine1", "addressLine2", "postalCode", "city", "country", "avatarKey", "discordName",
 )
 
 @RestController
