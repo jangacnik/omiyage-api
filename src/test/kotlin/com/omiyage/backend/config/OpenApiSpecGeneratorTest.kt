@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.auth.AuthService
 import com.omiyage.backend.auth.LoginRateLimiter
+import com.omiyage.backend.basket.BasketService
 import com.omiyage.backend.catalog.CategoryService
 import com.omiyage.backend.catalog.InventoryService
 import com.omiyage.backend.catalog.ItemTemplateService
@@ -59,6 +60,7 @@ class OpenApiSpecGeneratorTest {
 
     @MockkBean lateinit var authService: AuthService
     @MockkBean lateinit var loginRateLimiter: LoginRateLimiter
+    @MockkBean lateinit var basketService: BasketService
     @MockkBean lateinit var categoryService: CategoryService
     @MockkBean lateinit var inventoryService: InventoryService
     @MockkBean lateinit var itemTemplateService: ItemTemplateService
