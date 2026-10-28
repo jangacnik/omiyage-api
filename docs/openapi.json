@@ -350,7 +350,7 @@
             "tags" : [ "admin-inventory-controller" ]
           },
           "put" : {
-            "operationId" : "update",
+            "operationId" : "update_1",
             "parameters" : [ {
               "in" : "path",
               "name" : "id",
@@ -489,7 +489,7 @@
             "tags" : [ "admin-item-template-controller" ]
           },
           "patch" : {
-            "operationId" : "update_3",
+            "operationId" : "update_4",
             "parameters" : [ {
               "in" : "path",
               "name" : "id",
@@ -526,7 +526,7 @@
         },
         "/api/admin/orders" : {
           "get" : {
-            "operationId" : "list_5",
+            "operationId" : "list_6",
             "parameters" : [ {
               "in" : "query",
               "name" : "status",
@@ -534,6 +534,19 @@
               "schema" : {
                 "type" : "string",
                 "enum" : [ "REQUESTED", "IN_PROGRESS", "PURCHASED", "PREPARING_SHIPPING", "SENT", "DELIVERED", "CANCELLED" ]
+              }
+            }, {
+              "in" : "query",
+              "name" : "excludeStatus",
+              "required" : false,
+              "schema" : {
+                "type" : "array",
+                "default" : [ ],
+                "items" : {
+                  "type" : "string",
+                  "enum" : [ "REQUESTED", "IN_PROGRESS", "PURCHASED", "PREPARING_SHIPPING", "SENT", "DELIVERED", "CANCELLED" ]
+                },
+                "uniqueItems" : true
               }
             }, {
               "in" : "query",
@@ -1248,7 +1261,7 @@
             "tags" : [ "admin-shipment-controller" ]
           },
           "patch" : {
-            "operationId" : "update_2",
+            "operationId" : "update_3",
             "parameters" : [ {
               "in" : "path",
               "name" : "id",
@@ -1424,7 +1437,7 @@
             "tags" : [ "admin-shipping-rate-controller" ]
           },
           "patch" : {
-            "operationId" : "update_1",
+            "operationId" : "update_2",
             "parameters" : [ {
               "in" : "path",
               "name" : "id",
@@ -1485,6 +1498,119 @@
               }
             },
             "tags" : [ "auth-controller" ]
+          }
+        },
+        "/api/basket" : {
+          "delete" : {
+            "operationId" : "clear",
+            "responses" : {
+              "204" : {
+                "description" : "No Content"
+              }
+            },
+            "tags" : [ "basket-controller" ]
+          },
+          "get" : {
+            "operationId" : "list_5",
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "type" : "array",
+                      "items" : {
+                        "$ref" : "#/components/schemas/BasketLineDto"
+                      }
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "tags" : [ "basket-controller" ]
+          }
+        },
+        "/api/basket/lines" : {
+          "post" : {
+            "operationId" : "add",
+            "requestBody" : {
+              "content" : {
+                "application/json" : {
+                  "schema" : {
+                    "$ref" : "#/components/schemas/AddBasketLineRequest"
+                  }
+                }
+              },
+              "required" : true
+            },
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "$ref" : "#/components/schemas/BasketLineDto"
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "tags" : [ "basket-controller" ]
+          }
+        },
+        "/api/basket/lines/{id}" : {
+          "delete" : {
+            "operationId" : "remove",
+            "parameters" : [ {
+              "in" : "path",
+              "name" : "id",
+              "required" : true,
+              "schema" : {
+                "type" : "string",
+                "format" : "uuid"
+              }
+            } ],
+            "responses" : {
+              "204" : {
+                "description" : "No Content"
+              }
+            },
+            "tags" : [ "basket-controller" ]
+          },
+          "put" : {
+            "operationId" : "update",
+            "parameters" : [ {
+              "in" : "path",
+              "name" : "id",
+              "required" : true,
+              "schema" : {
+                "type" : "string",
+                "format" : "uuid"
+              }
+            } ],
+            "requestBody" : {
+              "content" : {
+                "application/json" : {
+                  "schema" : {
+                    "$ref" : "#/components/schemas/UpdateBasketLineRequest"
+                  }
+                }
+              },
+              "required" : true
+            },
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "$ref" : "#/components/schemas/BasketLineDto"
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "tags" : [ "basket-controller" ]
           }
         },
         "/api/categories" : {
@@ -2728,12 +2854,77 @@
       },
       "components" : {
         "schemas" : {
+          "AddBasketLineRequest" : {
+            "type" : "object",
+            "properties" : {
+              "currency" : {
+                "type" : "string",
+                "enum" : [ "JPY", "EUR" ]
+              },
+              "customDescription" : {
+                "type" : "string"
+              },
+              "customTitle" : {
+                "type" : "string",
+                "maxLength" : 200,
+                "minLength" : 0
+              },
+              "inventoryItemId" : {
+                "type" : "string",
+                "format" : "uuid"
+              },
+              "maxPrice" : {
+                "type" : "number",
+                "minimum" : 0.00
+              },
+              "quantity" : {
+                "type" : "integer",
+                "format" : "int32",
+                "minimum" : 1
+              }
+            },
+            "required" : [ "currency" ]
+          },
           "AssignShipmentRequest" : {
             "type" : "object",
             "properties" : {
               "shipmentId" : {
                 "type" : "string",
                 "format" : "uuid"
+              }
+            }
+          },
+          "BasketLineDto" : {
+            "type" : "object",
+            "properties" : {
+              "createdAt" : {
+                "type" : "string",
+                "format" : "date-time"
+              },
+              "currency" : {
+                "type" : "string",
+                "enum" : [ "JPY", "EUR" ]
+              },
+              "customDescription" : {
+                "type" : "string"
+              },
+              "customTitle" : {
+                "type" : "string"
+              },
+              "id" : {
+                "type" : "string",
+                "format" : "uuid"
+              },
+              "inventoryItemId" : {
+                "type" : "string",
+                "format" : "uuid"
+              },
+              "maxPrice" : {
+                "type" : "number"
+              },
+              "quantity" : {
+                "type" : "integer",
+                "format" : "int32"
               }
             }
           },
@@ -3319,6 +3510,9 @@
                 "type" : "string",
                 "format" : "date-time"
               },
+              "iconUrl" : {
+                "type" : "string"
+              },
               "id" : {
                 "type" : "string",
                 "format" : "uuid"
@@ -3479,6 +3673,9 @@
                   "$ref" : "#/components/schemas/InventoryItemDto"
                 }
               },
+              "hasNext" : {
+                "type" : "boolean"
+              },
               "page" : {
                 "type" : "integer",
                 "format" : "int32"
@@ -3505,6 +3702,9 @@
                 "items" : {
                   "$ref" : "#/components/schemas/OrderDto"
                 }
+              },
+              "hasNext" : {
+                "type" : "boolean"
               },
               "page" : {
                 "type" : "integer",
@@ -3857,6 +4057,28 @@
               }
             }
           },
+          "UpdateBasketLineRequest" : {
+            "type" : "object",
+            "properties" : {
+              "customDescription" : {
+                "type" : "string"
+              },
+              "customTitle" : {
+                "type" : "string",
+                "maxLength" : 200,
+                "minLength" : 0
+              },
+              "maxPrice" : {
+                "type" : "number",
+                "minimum" : 0.00
+              },
+              "quantity" : {
+                "type" : "integer",
+                "format" : "int32",
+                "minimum" : 1
+              }
+            }
+          },
           "UpdateOrderItemRequest" : {
             "type" : "object",
             "properties" : {
@@ -4070,5 +4292,3 @@
         }
       }
     }
-
-    
