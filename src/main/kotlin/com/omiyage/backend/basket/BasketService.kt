@@ -1,6 +1,7 @@
 package com.omiyage.backend.basket
 
 import com.omiyage.backend.catalog.InventoryItemRepository
+import com.omiyage.backend.common.Condition
 import com.omiyage.backend.order.CreateOrderItemRequest
 import com.omiyage.backend.order.CreateOrderRequest
 import com.omiyage.backend.order.OrderDto
@@ -85,6 +86,7 @@ class BasketService(
         inventoryItemId = inventoryItemId,
         title = customTitle,
         description = customDescription,
+        condition = Condition.NEW.takeIf { inventoryItemId == null },
         currency = currency,
         maxPrice = maxPrice,
         quantity = quantity,
