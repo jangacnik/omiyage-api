@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
@@ -1154,5 +1155,40 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         orderService.updateStatus(solo.id, OrderStatus.CANCELLED)
 
         assertFalse(shipmentRepository.existsById(shipment.id))
+    }
+
+    @Test
+    fun `listMine pages every order exactly once, newest first`() {
+        val principal = user()
+        val created = (1..45).map { singleItemOrder(principal, "O$it").id }.toSet()
+
+        val paged = generateSequence(0) { it + 1 }
+            .map { orderService.listMine(principal, PageRequest.of(it, 20, Sort.by(Sort.Direction.DESC, "createdAt"))) }
+            .takeWhile { it.content.isNotEmpty() }
+            .flatMap { it.content }
+            .toList()
+
+        assertEquals(45, paged.size)
+        assertEquals(created, paged.map { it.id }.toSet())
+        assertEquals(paged.sortedByDescending { it.createdAt }.map { it.createdAt }, paged.map { it.createdAt })
+    }
+
+    @Test
+    fun `admin item-count sort pages every order exactly once for both directions`() {
+        val principal = user()
+        val created = (1..45).map { singleItemOrder(principal, "O$it").id }.toSet()
+
+        listOf(Sort.Direction.ASC, Sort.Direction.DESC).forEach { direction ->
+            val paged = generateSequence(0) { it + 1 }
+                .map {
+                    orderService.adminList(null, emptySet(), AdminOrderSortBy.ITEM_COUNT, direction, PageRequest.of(it, 20), "")
+                }
+                .takeWhile { it.content.isNotEmpty() }
+                .flatMap { it.content }
+                .toList()
+
+            assertEquals(created, paged.map { it.id }.filter { it in created }.toSet())
+            assertEquals(paged.size, paged.map { it.id }.toSet().size)
+        }
     }
 }

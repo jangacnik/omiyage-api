@@ -30,7 +30,7 @@ interface OrderRepository : JpaRepository<Order, UUID> {
     // (shouldn't normally happen, but exists transiently) still sorts as count 0 rather than being
     // dropped by the join.
     @Query(
-        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded GROUP BY o ORDER BY COUNT(i) ASC",
+        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded GROUP BY o ORDER BY COUNT(i) ASC, o.createdAt DESC, o.id",
         countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded",
     )
     fun findAllOrderByItemCountAsc(
@@ -40,7 +40,7 @@ interface OrderRepository : JpaRepository<Order, UUID> {
     ): Page<Order>
 
     @Query(
-        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded GROUP BY o ORDER BY COUNT(i) DESC",
+        value = "SELECT o FROM Order o LEFT JOIN o.items i WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded GROUP BY o ORDER BY COUNT(i) DESC, o.createdAt DESC, o.id",
         countQuery = "SELECT COUNT(o) FROM Order o WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded",
     )
     fun findAllOrderByItemCountDesc(

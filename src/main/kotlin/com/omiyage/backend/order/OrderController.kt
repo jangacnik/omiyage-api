@@ -5,6 +5,7 @@ import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.web.PageResponse
 import jakarta.validation.Valid
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.data.web.PageableDefault
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -27,7 +28,7 @@ class OrderController(private val service: OrderService, private val shipments: 
         ResponseEntity.status(HttpStatus.CREATED).body(service.create(CurrentUser.principal(), request))
 
     @GetMapping("/mine")
-    fun listMine(@PageableDefault(size = 20) pageable: Pageable): PageResponse<OrderDto> =
+    fun listMine(@PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC) pageable: Pageable): PageResponse<OrderDto> =
         service.listMine(CurrentUser.principal(), pageable)
 
     @GetMapping("/{id}")
