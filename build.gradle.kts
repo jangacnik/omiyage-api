@@ -4,7 +4,7 @@ plugins {
     kotlin("plugin.jpa") version "2.4.20"
     id("org.springframework.boot") version "4.1.1"
     id("io.spring.dependency-management") version "1.1.7"
-    jacoco
+    id("org.jetbrains.kotlinx.kover") version "0.9.1"
 }
 
 group = "com.omiyage"
@@ -53,41 +53,29 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    finalizedBy(tasks.jacocoTestReport)
     testLogging {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }
 
-jacoco {
-    toolVersion = "0.8.15"
-}
-
-tasks.jacocoTestReport {
-    dependsOn(tasks.test)
+kover {
     reports {
-        xml.required.set(true)
-        html.required.set(true)
+        filters {
+            excludes {
+                // Nothing meaningful to cover: Spring Boot entrypoint, JPA entities (getters/
+                // setters/constructors only), and plain data-carrying DTOs/config classes.
+                classes(
+                    "com.omiyage.backend.OmiyageApplication*",
+                    "*Entity*",
+                    "com.omiyage.backend.catalog.Category",
+                    "com.omiyage.backend.catalog.InventoryItem*",
+                    "com.omiyage.backend.order.Order",
+                    "com.omiyage.backend.order.OrderItem",
+                    "com.omiyage.backend.user.UserProfile",
+                    "*Dto*",
+                    "com.omiyage.backend.config.*Properties",
+                )
+            }
+        }
     }
-    classDirectories.setFrom(
-        files(
-            classDirectories.files.map {
-                fileTree(it) {
-                    // Nothing meaningful to cover: Spring Boot entrypoint, JPA entities (getters/
-                    // setters/constructors only), and plain data-carrying DTOs/config classes.
-                    exclude(
-                        "**/OmiyageApplication*",
-                        "**/*Entity*",
-                        "**/catalog/Category.class",
-                        "**/catalog/InventoryItem*.class",
-                        "**/order/Order.class",
-                        "**/order/OrderItem.class",
-                        "**/user/UserProfile.class",
-                        "**/*Dto*.class",
-                        "**/config/*Properties.class",
-                    )
-                }
-            },
-        ),
-    )
 }
