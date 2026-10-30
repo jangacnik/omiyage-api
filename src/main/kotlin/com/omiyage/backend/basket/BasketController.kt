@@ -38,6 +38,10 @@ class BasketController(private val service: BasketService) {
     @PostMapping("/confirm")
     fun confirm(): OrderDto = service.confirm(CurrentUser.principal())
 
+    @PostMapping("/add-to-order")
+    fun addToOrder(@Valid @RequestBody request: AddBasketToOrderRequest): OrderDto =
+        service.addToOrder(CurrentUser.principal(), request.orderId!!)
+
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun clear() = service.clear(CurrentUser.principal())

@@ -1530,6 +1530,34 @@
             "tags" : [ "basket-controller" ]
           }
         },
+        "/api/basket/add-to-order" : {
+          "post" : {
+            "operationId" : "addToOrder",
+            "requestBody" : {
+              "content" : {
+                "application/json" : {
+                  "schema" : {
+                    "$ref" : "#/components/schemas/AddBasketToOrderRequest"
+                  }
+                }
+              },
+              "required" : true
+            },
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "$ref" : "#/components/schemas/OrderDto"
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "tags" : [ "basket-controller" ]
+          }
+        },
         "/api/basket/confirm" : {
           "post" : {
             "operationId" : "confirm",
@@ -2902,6 +2930,16 @@
               }
             },
             "required" : [ "currency" ]
+          },
+          "AddBasketToOrderRequest" : {
+            "type" : "object",
+            "properties" : {
+              "orderId" : {
+                "type" : "string",
+                "format" : "uuid"
+              }
+            },
+            "required" : [ "orderId" ]
           },
           "AssignShipmentRequest" : {
             "type" : "object",

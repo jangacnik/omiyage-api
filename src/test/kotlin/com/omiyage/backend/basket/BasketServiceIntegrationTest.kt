@@ -2,12 +2,16 @@ package com.omiyage.backend.basket
 
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Currency
+import com.omiyage.backend.order.OrderRepository
+import com.omiyage.backend.order.OrderStatus
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpStatus
@@ -22,6 +26,9 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Autowired
     lateinit var basketService: BasketService
+
+    @Autowired
+    lateinit var orderRepository: OrderRepository
 
     private fun user() = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
 
@@ -129,6 +136,61 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `confirm on an empty basket is rejected`() {
         val error = assertThrows(ResponseStatusException::class.java) { basketService.confirm(user()) }
+        assertEquals(HttpStatus.CONFLICT, error.statusCode)
+    }
+
+    private fun orderWithStatus(owner: MeishiPrincipal, status: OrderStatus): UUID {
+        basketService.add(owner, customLine("Existing"))
+        val orderId = basketService.confirm(owner).id
+        orderRepository.findById(orderId).get().status = status
+        return orderId
+    }
+
+    @ParameterizedTest
+    @EnumSource(OrderStatus::class, names = ["REQUESTED", "IN_PROGRESS", "PURCHASED"])
+    fun `add to order moves the lines into an open order and empties the basket`(status: OrderStatus) {
+        val alice = user()
+        val orderId = orderWithStatus(alice, status)
+        basketService.add(alice, customLine("A"))
+
+        val order = basketService.addToOrder(alice, orderId)
+
+        assertEquals(setOf("Existing", "A"), order.items.map { it.title }.toSet())
+        assertTrue(basketService.list(alice).isEmpty())
+    }
+
+    @ParameterizedTest
+    @EnumSource(OrderStatus::class, names = ["PREPARING_SHIPPING", "SENT", "DELIVERED", "CANCELLED"])
+    fun `add to order is rejected for closed orders and keeps the basket`(status: OrderStatus) {
+        val alice = user()
+        val orderId = orderWithStatus(alice, status)
+        basketService.add(alice, customLine("A"))
+
+        val error = assertThrows(ResponseStatusException::class.java) { basketService.addToOrder(alice, orderId) }
+
+        assertEquals(HttpStatus.CONFLICT, error.statusCode)
+        assertEquals(1, basketService.list(alice).size)
+    }
+
+    @Test
+    fun `add to order hides another users order`() {
+        val alice = user()
+        val orderId = orderWithStatus(alice, OrderStatus.REQUESTED)
+        val bob = user()
+        basketService.add(bob, customLine("B"))
+
+        val error = assertThrows(ResponseStatusException::class.java) { basketService.addToOrder(bob, orderId) }
+
+        assertEquals(HttpStatus.NOT_FOUND, error.statusCode)
+    }
+
+    @Test
+    fun `add to order with an empty basket is rejected`() {
+        val alice = user()
+        val orderId = orderWithStatus(alice, OrderStatus.REQUESTED)
+
+        val error = assertThrows(ResponseStatusException::class.java) { basketService.addToOrder(alice, orderId) }
+
         assertEquals(HttpStatus.CONFLICT, error.statusCode)
     }
 }

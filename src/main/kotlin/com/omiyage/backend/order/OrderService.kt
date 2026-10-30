@@ -180,6 +180,16 @@ class OrderService(
     }
 
     @Transactional
+    fun addOwnItems(orderId: UUID, principal: MeishiPrincipal, requests: List<CreateOrderItemRequest>): OrderDto {
+        val order = findOrThrow(orderId)
+        if (order.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        requireOpen(order)
+        return requests.map { addItemToOrder(order, it) }.last()
+    }
+
+    @Transactional
     fun adminAddItem(orderId: UUID, request: CreateOrderItemRequest): OrderDto =
         addItemToOrder(findOrThrow(orderId), request, includeProfit = true)
 

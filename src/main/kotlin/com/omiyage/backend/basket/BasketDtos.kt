@@ -40,6 +40,8 @@ data class AddBasketLineRequest(
     @field:Min(1) val quantity: Int = 1,
 )
 
+data class AddBasketToOrderRequest(@field:NotNull val orderId: UUID?)
+
 data class UpdateBasketLineRequest(
     @field:Size(max = 200) val customTitle: String? = null,
     val customDescription: String? = null,

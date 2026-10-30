@@ -77,6 +77,14 @@ class BasketService(
         return order
     }
 
+    @Transactional
+    fun addToOrder(principal: MeishiPrincipal, orderId: UUID): OrderDto {
+        val basket = nonEmptyBasket(principal)
+        val order = orders.addOwnItems(orderId, principal, basket.map { it.toOrderItemRequest() })
+        lines.deleteAll(basket)
+        return order
+    }
+
     private fun nonEmptyBasket(principal: MeishiPrincipal): List<BasketLine> =
         lines.findByUserIdOrderByCreatedAt(principal.id).ifEmpty {
             throw ResponseStatusException(HttpStatus.CONFLICT, "basket is empty")
