@@ -17,9 +17,9 @@ jobs:
           NET="ci-$GITHUB_RUN_ID-$GITHUB_RUN_NUMBER"
           docker network create "$NET"
           trap 'docker rm -f "$NET-db" >/dev/null 2>&1; docker network rm "$NET" >/dev/null 2>&1' EXIT
-          docker run -d --name "$NET-db" --network "$NET" -e POSTGRES_DB=omiyage_test -e POSTGRES_USER=omiyage -e POSTGRES_PASSWORD=omiyage --health-cmd "pg_isready -U omiyage" --health-interval 2s --health-retries 30 postgres:16
+          docker run -d --name "$NET-db" --network "$NET" -e POSTGRES_DB=omiyage_test -e POSTGRES_USER=omiyage -e POSTGRES_PASSWORD=omiyage --health-cmd "pg_isready -U omiyage" --health-interval 2s --health-retries 30 postgres:latest
           until [ "$(docker inspect -f '{{.State.Health.Status}}' "$NET-db")" = healthy ]; do sleep 2; done
-          docker run --rm --network "$NET" -e CI=true -e TEST_DB_URL="jdbc:postgresql://$NET-db:5432/omiyage_test" --user "$(id -u):$(id -g)" -e HOME=/tmp -e GRADLE_USER_HOME=/tmp/gradle -v "$PWD":/w -w /w gradle:9.3.0-jdk21 gradle --no-daemon test koverXmlReport koverHtmlReport
+          docker run --rm --network "$NET" -e CI=true -e TEST_DB_URL="jdbc:postgresql://$NET-db:5432/omiyage_test" --user "$(id -u):$(id -g)" -e HOME=/tmp -e GRADLE_USER_HOME=/tmp/gradle -v "$PWD":/w -w /w gradle:jdk21 gradle --no-daemon test koverXmlReport koverHtmlReport
       - name: Detekt
         run: |
           docker run --rm -v "$PWD":/w -w /w ghcr.io/detekt/detekt:latest detekt-cli --input src/main/kotlin --report txt:/w/build/detekt.txt --report html:/w/build/detekt.html || true
@@ -38,7 +38,7 @@ jobs:
         run: |
           git fetch -q origin master
           git diff origin/master...HEAD > pr.diff
-          docker run --rm -v "$PWD":/w -w /w python:3.13-alpine sh -c "pip install -q diff-cover && diff-cover build/reports/kover/report.xml --diff-file pr.diff --fail-under=80"
+          docker run --rm -v "$PWD":/w -w /w python:alpine sh -c "pip install -q diff-cover && diff-cover build/reports/kover/report.xml --diff-file pr.diff --fail-under=80"
   build:
     needs: test
     if: github.ref == 'refs/heads/master'
