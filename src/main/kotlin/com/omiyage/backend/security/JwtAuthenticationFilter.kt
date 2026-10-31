@@ -1,11 +1,14 @@
 package com.omiyage.backend.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.omiyage.backend.web.ROLE_MDC_KEY
+import com.omiyage.backend.web.USER_ID_MDC_KEY
 import com.omiyage.backend.web.errorBody
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -30,6 +33,7 @@ class JwtAuthenticationFilter(
 ) : OncePerRequestFilter() {
 
     private val log = LoggerFactory.getLogger(JwtAuthenticationFilter::class.java)
+    private val securityLog = LoggerFactory.getLogger("security")
     private val rejectedSinceLastLog = AtomicInteger()
     private var lastRejectedLog = Instant.EPOCH
 
@@ -39,7 +43,10 @@ class JwtAuthenticationFilter(
             val token = header.removePrefix("Bearer ")
             try {
                 val principal = jwtVerifier.verify(token)
+                MDC.put(USER_ID_MDC_KEY, principal.id.toString())
+                MDC.put(ROLE_MDC_KEY, principal.role.name)
                 if (needsFreshStatus(request) && accountStatus?.isAllowed(token, principal) == false) {
+                    securityLog.warn("account_status_blocked userId={}", principal.id)
                     writeForbidden(response)
                     return
                 }
@@ -73,7 +80,7 @@ class JwtAuthenticationFilter(
         val now = Instant.now()
         if (lastRejectedLog.plus(REJECTED_LOG_INTERVAL) > now) return
         lastRejectedLog = now
-        log.warn("rejected {} token(s) since last report, latest on {} {}: {}", rejected, request.method, request.requestURI, e.message)
+        log.warn("token_rejected count={} latestMethod={} reason={}", rejected, request.method, e.message)
         rejectedSinceLastLog.set(0)
     }
 }

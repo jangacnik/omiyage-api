@@ -2,6 +2,7 @@ package com.omiyage.backend.media
 
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
@@ -29,6 +30,8 @@ private fun ByteArray.hasAt(offset: Int, text: String): Boolean =
 @Service
 class MediaService(private val repository: MediaRepository) {
 
+    private val events = LoggerFactory.getLogger("events")
+
     fun upload(file: MultipartFile, uploader: MeishiPrincipal): String {
         if (file.isEmpty) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "file is empty")
@@ -43,6 +46,7 @@ class MediaService(private val repository: MediaRepository) {
 
         val key = "uploads/${UUID.randomUUID()}.${contentType.substringAfter('/')}"
         repository.save(Media(objectKey = key, contentType = contentType, data = bytes, uploaderId = uploader.id))
+        events.info("media_uploaded key={} contentType={} sizeBytes={} uploaderId={}", key, contentType, bytes.size, uploader.id)
         return key
     }
 

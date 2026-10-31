@@ -21,6 +21,8 @@ class CombineRequestService(
     private val shipmentService: ShipmentService,
 ) {
 
+    private val events = org.slf4j.LoggerFactory.getLogger("events")
+
     @Transactional
     fun create(principal: MeishiPrincipal, requesterOrderId: UUID, targetShipmentId: UUID): CombineRequestDto {
         val requesterOrder = orderOrThrow(requesterOrderId)
@@ -38,7 +40,9 @@ class CombineRequestService(
         if (requests.existsByRequesterOrder_IdAndTargetShipment_IdAndStatus(requesterOrderId, targetShipmentId, CombineRequestStatus.PENDING)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "a pending combine request already exists for this order and shipment")
         }
-        return requests.save(CombineRequest(requesterOrder = requesterOrder, targetShipment = targetShipment)).toDto()
+        val saved = requests.save(CombineRequest(requesterOrder = requesterOrder, targetShipment = targetShipment))
+        events.info("combine_request_created requestId={} orderId={} shipmentId={}", saved.id, requesterOrderId, targetShipmentId)
+        return saved.toDto()
     }
 
     @Transactional(readOnly = true)
@@ -72,6 +76,7 @@ class CombineRequestService(
         }
         request.status = CombineRequestStatus.DECLINED
         request.respondedAt = OffsetDateTime.now()
+        events.info("combine_request_declined requestId={}", id)
         return request.toDto()
     }
 
@@ -83,6 +88,7 @@ class CombineRequestService(
         }
         request.status = CombineRequestStatus.CANCELLED
         request.respondedAt = OffsetDateTime.now()
+        events.info("combine_request_cancelled requestId={}", id)
         return request.toDto()
     }
 
@@ -109,6 +115,7 @@ class CombineRequestService(
         request.status = CombineRequestStatus.ACCEPTED
         request.respondedAt = OffsetDateTime.now()
         request.resultingShipmentId = targetShipmentId
+        events.info("combine_request_accepted requestId={} shipmentId={}", request.id, targetShipmentId)
         return request.toDto()
     }
 

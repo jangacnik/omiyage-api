@@ -25,6 +25,8 @@ class InventoryService(
     private val media: MediaService,
 ) {
 
+    private val events = org.slf4j.LoggerFactory.getLogger("events")
+
     @Transactional(readOnly = true)
     fun search(
         title: String?,
@@ -62,13 +64,21 @@ class InventoryService(
         )
         applyImagesAndCategories(item, request)
         applyTags(item, request)
-        return items.save(item).toDto(includeCost = true, toEur = exchangeRates::toEur)
+        val saved = items.save(item)
+        events.info("inventory_item_created itemId={} stockQuantity={}", saved.id, saved.stockQuantity)
+        return saved.toDto(includeCost = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
     fun update(id: UUID, request: InventoryItemRequest): InventoryItemDto {
         requirePreorderDate(request)
         val item = findOrThrow(id)
+        if (item.stockQuantity != request.stockQuantity) {
+            events.info(
+                "inventory_stock_changed itemId={} delta={} reason=admin_update",
+                id, request.stockQuantity - item.stockQuantity,
+            )
+        }
         item.title = request.title
         item.description = request.description
         item.link = request.link
@@ -112,6 +122,7 @@ class InventoryService(
         // real DB's ON DELETE SET NULL only fires on a hard delete, which this no longer is.
         orderItems.detachInventoryItem(id)
         items.deleteById(id)
+        events.info("inventory_item_deleted itemId={}", id)
     }
 
     private fun applyImagesAndCategories(item: InventoryItem, request: InventoryItemRequest) {
