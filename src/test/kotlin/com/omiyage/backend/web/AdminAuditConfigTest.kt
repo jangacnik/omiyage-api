@@ -79,7 +79,7 @@ class AdminAuditConfigTest {
         }.andExpect { status { isCreated() } }
 
         assertEquals(
-            listOf("admin_mutation user=$adminId method=POST path=/api/admin/categories status=201"),
+            listOf("admin_mutation user=$adminId method=POST route=/api/admin/categories status=201"),
             appender.list.map { it.formattedMessage },
         )
     }

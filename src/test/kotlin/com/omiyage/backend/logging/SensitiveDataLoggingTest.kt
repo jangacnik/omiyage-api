@@ -6,6 +6,8 @@ import com.omiyage.backend.auth.AuthController
 import com.omiyage.backend.auth.AuthService
 import com.omiyage.backend.auth.LoginRateLimiter
 import com.omiyage.backend.auth.LoginRequest
+import com.omiyage.backend.auth.MeishiAuthClient
+import com.omiyage.backend.auth.MeishiUserResponse
 import com.omiyage.backend.config.MeishiProperties
 import com.omiyage.backend.security.JwtAuthenticationFilter
 import com.omiyage.backend.security.JwtVerifier
@@ -37,7 +39,7 @@ private const val CANARY_HEADER = "CANARY_HEADER_1d2c"
 
 /** Guard for every future logging change: drives the real filter chain with distinctive canaries and fails if any reaches a log event. */
 @WebMvcTest(controllers = [AuthController::class])
-@Import(SecurityConfig::class, JwtAuthenticationFilter::class, JwtVerifier::class, LoginRateLimiter::class)
+@Import(AuthService::class, SecurityConfig::class, JwtAuthenticationFilter::class, JwtVerifier::class, LoginRateLimiter::class)
 @EnableConfigurationProperties(MeishiProperties::class)
 @TestPropertySource(properties = ["omiyage.meishi.jwt-secret=canary-test-secret", "omiyage.meishi.api-url=http://localhost:8080"])
 class SensitiveDataLoggingTest {
@@ -49,14 +51,14 @@ class SensitiveDataLoggingTest {
     lateinit var objectMapper: ObjectMapper
 
     @MockkBean
-    lateinit var service: AuthService
+    lateinit var meishi: MeishiAuthClient
 
     private fun loginBody(nickname: String, password: String) =
         objectMapper.writeValueAsString(LoginRequest(nickname, password))
 
     @Test
     fun `no canary value reaches any log event across login, validation, bad token and unknown route`() {
-        every { service.login(CANARY_NICKNAME, CANARY_PASSWORD, any()) } throws ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid credentials")
+        every { meishi.login(CANARY_NICKNAME, CANARY_PASSWORD) } throws ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid credentials")
 
         LogCapture.root().use { capture ->
             mockMvc.post("/api/auth/login") {
@@ -105,7 +107,8 @@ class SensitiveDataLoggingTest {
 
     @Test
     fun `rate limited logins log the client ip as a security event`() {
-        every { service.login("carol", "pw", any()) } returns "t"
+        every { meishi.login("carol", "pw") } returns "t"
+        every { meishi.getMe("t") } returns MeishiUserResponse("u1", "carol", "USER", "ACTIVE")
         LogCapture("security").use { capture ->
             repeat(11) {
                 mockMvc.post("/api/auth/login") {
