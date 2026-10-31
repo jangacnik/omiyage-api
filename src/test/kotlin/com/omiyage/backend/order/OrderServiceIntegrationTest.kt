@@ -90,6 +90,53 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         assertEquals(0, BigDecimal("2000").compareTo(inventoryItem.priceAmount))
     }
 
+    private fun customRequest(title: String, nickname: String? = null, quantity: Int = 1) = CreateOrderRequest(
+        nickname = nickname,
+        items = listOf(CreateOrderItemRequest(title = title, condition = Condition.NEW, currency = Currency.EUR, quantity = quantity)),
+    )
+
+    @Test
+    fun `submitting the same order twice in a row returns the first order instead of a duplicate`() {
+        val owner = user()
+
+        val first = orderService.create(owner, customRequest("Frieren card", "Frieren Cards"))
+        val second = orderService.create(owner, customRequest("  frieren CARD ", " Frieren Cards "))
+
+        assertEquals(first.id, second.id)
+        assertEquals(1, orderRepository.findByUserId(owner.id, org.springframework.data.domain.Pageable.unpaged()).content.size)
+        assertEquals(1, inventoryItemRepository.findAll().count { it.title.equals("Frieren card", ignoreCase = true) })
+    }
+
+    @Test
+    fun `a different nickname or quantity is a separate order`() {
+        val owner = user()
+
+        val base = orderService.create(owner, customRequest("Frieren card", "A"))
+        val otherNickname = orderService.create(owner, customRequest("Frieren card", "B"))
+        val otherQuantity = orderService.create(owner, customRequest("Frieren card", "A", quantity = 2))
+
+        assertEquals(3, setOf(base.id, otherNickname.id, otherQuantity.id).size)
+    }
+
+    @Test
+    fun `a cancelled order does not block ordering the same thing again`() {
+        val owner = user()
+        val first = orderService.create(owner, customRequest("Frieren card"))
+        orderService.cancelOwn(first.id, owner)
+
+        val again = orderService.create(owner, customRequest("Frieren card"))
+
+        assertNotEquals(first.id, again.id)
+    }
+
+    @Test
+    fun `a custom request reuses an existing inventory item with the same title, condition and link`() {
+        orderService.create(user(), customRequest("Shared card"))
+        orderService.create(user(), customRequest("shared card"))
+
+        assertEquals(1, inventoryItemRepository.findAll().count { it.title.equals("Shared card", ignoreCase = true) })
+    }
+
     @Test
     fun `a custom request with no max price still lands in inventory, at zero price`() {
         val request = CreateOrderRequest(
