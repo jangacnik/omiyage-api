@@ -36,8 +36,14 @@ logging:
   structured:
     format:
       console: logstash
+  level:
+    root: ${LOG_LEVEL:INFO}
+    org.hibernate: WARN
+    org.springframework.security: WARN
 
 omiyage:
+  logging:
+    slow-request-ms: ${SLOW_REQUEST_MS:2000}
   maintenance:
     soft-delete-retention-days: ${SOFT_DELETE_RETENTION_DAYS:90}
     basket-ttl-days: ${BASKET_TTL_DAYS:7}

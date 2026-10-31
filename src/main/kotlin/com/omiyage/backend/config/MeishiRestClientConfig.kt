@@ -17,6 +17,6 @@ class MeishiRestClientConfig {
     fun meishiRestClient(props: MeishiProperties): RestClient {
         val requestFactory = JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build())
         requestFactory.setReadTimeout(READ_TIMEOUT)
-        return RestClient.builder().baseUrl(props.apiUrl).requestFactory(requestFactory).build()
+        return RestClient.builder().baseUrl(props.apiUrl).requestFactory(requestFactory).requestInterceptor(MeishiCallLoggingInterceptor()).build()
     }
 }

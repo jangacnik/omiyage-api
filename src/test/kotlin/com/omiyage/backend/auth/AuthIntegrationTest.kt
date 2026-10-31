@@ -75,14 +75,14 @@ class AuthIntegrationTest : PostgresIntegrationTest() {
             )
         }
 
-        assertEquals("signed-token", authService.login("bob", "hunter2"))
+        assertEquals("signed-token", authService.login("bob", "hunter2", "1.2.3.4"))
     }
 
     @Test
     fun `surfaces invalid credentials as 401`() {
         loginHandler = { it.respondJson(401, """{"error":"invalid credentials"}""") }
 
-        val exception = assertThrows(ResponseStatusException::class.java) { authService.login("bob", "wrong") }
+        val exception = assertThrows(ResponseStatusException::class.java) { authService.login("bob", "wrong", "1.2.3.4") }
         assertEquals(401, exception.statusCode.value())
     }
 
@@ -96,7 +96,7 @@ class AuthIntegrationTest : PostgresIntegrationTest() {
             )
         }
 
-        val exception = assertThrows(ResponseStatusException::class.java) { authService.login("bob", "hunter2") }
+        val exception = assertThrows(ResponseStatusException::class.java) { authService.login("bob", "hunter2", "1.2.3.4") }
         assertEquals(403, exception.statusCode.value())
     }
 }

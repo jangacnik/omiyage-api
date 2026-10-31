@@ -61,6 +61,7 @@ class OrderService(
 ) {
 
     private val log = org.slf4j.LoggerFactory.getLogger(OrderService::class.java)
+    private val events = org.slf4j.LoggerFactory.getLogger("events")
 
     @Transactional
     fun create(principal: MeishiPrincipal, request: CreateOrderRequest): OrderDto = createFor(principal.id, request)
@@ -71,7 +72,9 @@ class OrderService(
     private fun createFor(userId: UUID, request: CreateOrderRequest, includeProfit: Boolean = false): OrderDto {
         val order = Order(userId = userId, notes = request.notes, nickname = request.nickname?.trim()?.ifBlank { null })
         request.items.forEach { order.items.add(buildOrderItem(order, it)) }
-        return orders.save(order).toDto(includeProfit, exchangeRates::toEur)
+        val saved = orders.save(order)
+        events.info("order_created orderId={} userId={} itemCount={}", saved.id, userId, saved.items.size)
+        return saved.toDto(includeProfit, exchangeRates::toEur)
     }
 
     @Transactional(readOnly = true)
@@ -130,6 +133,7 @@ class OrderService(
         if (!order.status.canMoveTo(status)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "cannot change order status from ${order.status} to $status")
         }
+        events.info("order_status_changed orderId={} from={} to={}", id, order.status, status)
         if (status == OrderStatus.CANCELLED) {
             cancelAndDetach(order)
         } else {
@@ -156,6 +160,7 @@ class OrderService(
         if (item.order.id != orderId) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found")
         }
+        events.info("order_item_status_changed orderId={} itemId={} from={} to={}", orderId, itemId, item.status, status)
         item.status = status
         if (status == OrderItemStatus.BOUGHT && item.purchasedAt == null) {
             item.purchasedAt = OffsetDateTime.now()
@@ -283,6 +288,7 @@ class OrderService(
         }
         source.updatedAt = OffsetDateTime.now()
         target.updatedAt = OffsetDateTime.now()
+        events.info("items_moved sourceOrderId={} targetOrderId={} itemCount={}", source.id, target.id, toMove.size)
         return MoveItemsResponseDto(
             source = source.toDto(includeProfit = true, toEur = exchangeRates::toEur),
             target = target.toDto(includeProfit = true, toEur = exchangeRates::toEur),
@@ -300,6 +306,7 @@ class OrderService(
             throw ResponseStatusException(HttpStatus.CONFLICT, "order has items already bought or shipped and cannot be cancelled")
         }
         cancelAndDetach(order)
+        events.info("order_cancelled orderId={} userId={}", orderId, principal.id)
         return order.toDto()
     }
 
@@ -331,6 +338,7 @@ class OrderService(
             created.items.add(item)
         }
         source.updatedAt = OffsetDateTime.now()
+        events.info("order_split sourceOrderId={} newOrderId={} itemCount={}", source.id, created.id, toMove.size)
         return SplitOrderResponseDto(original = source.toDto(), created = created.toDto())
     }
 
@@ -368,6 +376,7 @@ class OrderService(
             target.status = OrderStatus.PREPARING_SHIPPING
             target.updatedAt = OffsetDateTime.now()
         }
+        events.info("order_submitted_for_shipping orderId={} shipmentId={} orderCount={}", orderId, shipment.id, targets.size)
         return order.toDto()
     }
 
@@ -391,7 +400,7 @@ class OrderService(
                 throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
             }
         }
-        return mergeSelected(selected).toDto()
+        return mergeSelected(selected).also { events.info("orders_merged targetOrderId={} mergedCount={}", it.id, selected.size) }.toDto()
     }
 
     // Admin equivalent of mergeMine: no ownership restriction (any user's orders), but merging
@@ -404,7 +413,8 @@ class OrderService(
         if (selected.map { it.userId }.distinct().size > 1) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "cannot merge orders belonging to different users")
         }
-        return mergeSelected(selected).toDto(includeProfit = true, toEur = exchangeRates::toEur)
+        return mergeSelected(selected).also { events.info("orders_merged targetOrderId={} mergedCount={}", it.id, selected.size) }
+            .toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     private fun loadDistinctOrThrow(orderIds: List<UUID>): List<Order> {
