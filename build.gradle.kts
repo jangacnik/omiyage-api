@@ -42,6 +42,8 @@ dependencies {
     testImplementation(platform("org.testcontainers:testcontainers-bom:$testcontainersVersion"))
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
+    testImplementation("net.jqwik:jqwik:1.9.3")
+    testImplementation("net.jqwik:jqwik-kotlin:1.9.3")
 }
 
 kotlin {
