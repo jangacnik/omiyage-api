@@ -12,6 +12,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -29,6 +31,12 @@ class SoftDeletePurgeJobTest {
     private val combineRequests = mockk<CombineRequestRepository>()
     private val media = mockk<MediaRepository>()
 
+    private val retentionCutoffs = mutableListOf<OffsetDateTime>()
+    private val mediaCutoff = mutableListOf<OffsetDateTime>()
+
+    private fun assertCloseTo(expected: OffsetDateTime, actual: OffsetDateTime) =
+        assertTrue(Duration.between(expected, actual).abs() < Duration.ofMinutes(1), "expected ~$expected but was $actual")
+
     private fun job(retentionDays: Long) = SoftDeletePurgeJob(
         orderItems, orders, shipments, inventoryItems, inventoryItemImages, categories, combineRequests, media, retentionDays,
     )
@@ -39,16 +47,20 @@ class SoftDeletePurgeJobTest {
     }
 
     @Test
+    fun `accepts a retention of exactly one day`() {
+        assertNotNull(job(1))
+    }
+
+    @Test
     fun `purges referencing rows before the rows they reference`() {
-        val cutoff = mutableListOf<OffsetDateTime>()
-        every { combineRequests.purgeReferencingPurgeableOrdersOrShipments(capture(cutoff)) } returns 1
-        every { orderItems.purgeDeletedBefore(any()) } returns 2
-        every { orders.purgeDeletedBefore(any()) } returns 3
-        every { shipments.purgeDeletedBefore(any()) } returns 4
-        every { inventoryItemImages.purgeDeletedBefore(any()) } returns 5
-        every { inventoryItems.purgeDeletedBefore(any()) } returns 6
-        every { categories.purgeDeletedBefore(any()) } returns 7
-        every { media.purgeUnreferencedBefore(any()) } returns 8
+        every { combineRequests.purgeReferencingPurgeableOrdersOrShipments(capture(retentionCutoffs)) } returns 1
+        every { orderItems.purgeDeletedBefore(capture(retentionCutoffs)) } returns 2
+        every { orders.purgeDeletedBefore(capture(retentionCutoffs)) } returns 3
+        every { shipments.purgeDeletedBefore(capture(retentionCutoffs)) } returns 4
+        every { inventoryItemImages.purgeDeletedBefore(capture(retentionCutoffs)) } returns 5
+        every { inventoryItems.purgeDeletedBefore(capture(retentionCutoffs)) } returns 6
+        every { categories.purgeDeletedBefore(capture(retentionCutoffs)) } returns 7
+        every { media.purgeUnreferencedBefore(capture(mediaCutoff)) } returns 8
 
         job(30).purgeSoftDeleted()
 
@@ -62,7 +74,8 @@ class SoftDeletePurgeJobTest {
             media.purgeUnreferencedBefore(any())
         }
         verify(exactly = 1) { categories.purgeDeletedBefore(any()) }
-        val expected = OffsetDateTime.now().minusDays(30)
-        assertTrue(Duration.between(cutoff.single(), expected).abs() < Duration.ofMinutes(1))
+        assertEquals(7, retentionCutoffs.size)
+        retentionCutoffs.forEach { assertCloseTo(OffsetDateTime.now().minusDays(30), it) }
+        assertCloseTo(OffsetDateTime.now().minusDays(1), mediaCutoff.single())
     }
 }

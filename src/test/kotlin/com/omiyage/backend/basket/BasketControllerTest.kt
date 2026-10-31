@@ -86,6 +86,8 @@ class BasketControllerTest {
             .andExpect {
                 status { isOk() }
                 jsonPath("$[0].quantity") { value(3) }
+                jsonPath("$[0].customTitle") { value("Kit Kat") }
+                jsonPath("$[0].currency") { value("JPY") }
             }
     }
 
@@ -101,6 +103,7 @@ class BasketControllerTest {
         }.andExpect {
             status { isCreated() }
             jsonPath("$.quantity") { value(2) }
+            jsonPath("$.customTitle") { value("Kit Kat") }
         }
     }
 
@@ -160,6 +163,8 @@ class BasketControllerTest {
             .andExpect {
                 status { isOk() }
                 jsonPath("$.status") { value("REQUESTED") }
+                jsonPath("$.open") { value(true) }
+                jsonPath("$.userId") { value(userId.toString()) }
             }
     }
 

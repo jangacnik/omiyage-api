@@ -1,5 +1,6 @@
 package com.omiyage.backend.web
 
+import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
@@ -22,9 +23,12 @@ class AdminAuditInterceptorTest {
     private val interceptor = AdminAuditInterceptor()
     private val appender = ListAppender<ILoggingEvent>()
     private val auditLogger = LoggerFactory.getLogger("audit") as Logger
+    private var originalLevel: Level? = null
 
     @BeforeEach
     fun attachAppender() {
+        originalLevel = auditLogger.level
+        auditLogger.level = Level.INFO
         appender.start()
         auditLogger.addAppender(appender)
     }
@@ -32,6 +36,7 @@ class AdminAuditInterceptorTest {
     @AfterEach
     fun detachAppender() {
         auditLogger.detachAppender(appender)
+        auditLogger.level = originalLevel
         SecurityContextHolder.clearContext()
     }
 

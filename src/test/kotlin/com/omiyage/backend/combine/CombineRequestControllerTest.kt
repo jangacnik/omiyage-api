@@ -102,18 +102,35 @@ class CombineRequestControllerTest {
     }
 
     @Test
-    fun `accept, decline and cancel return the updated request`() {
+    fun `accept returns the accepted request for the caller`() {
         val id = UUID.randomUUID()
-        every { service.accept(any(), id) } returns sampleDto(CombineRequestStatus.ACCEPTED)
-        every { service.decline(any(), id) } returns sampleDto(CombineRequestStatus.DECLINED)
-        every { service.cancel(any(), id) } returns sampleDto(CombineRequestStatus.CANCELLED)
+        every { service.accept(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.ACCEPTED)
 
         mockMvc.post("/api/orders/combine-requests/$id/accept") { header("Authorization", "Bearer ${userToken()}") }
             .andExpect { status { isOk() }; jsonPath("$.status") { value("ACCEPTED") } }
+    }
+
+    @Test
+    fun `decline returns the declined request for the caller`() {
+        val id = UUID.randomUUID()
+        every { service.decline(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.DECLINED)
+
         mockMvc.post("/api/orders/combine-requests/$id/decline") { header("Authorization", "Bearer ${userToken()}") }
             .andExpect { status { isOk() }; jsonPath("$.status") { value("DECLINED") } }
+    }
+
+    @Test
+    fun `cancel returns the cancelled request for the caller`() {
+        val id = UUID.randomUUID()
+        every { service.cancel(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.CANCELLED)
+
         mockMvc.delete("/api/orders/combine-requests/$id") { header("Authorization", "Bearer ${userToken()}") }
             .andExpect { status { isOk() }; jsonPath("$.status") { value("CANCELLED") } }
+    }
+
+    @Test
+    fun `admin list requires authentication`() {
+        mockMvc.get("/api/admin/combine-requests").andExpect { status { isUnauthorized() } }
     }
 
     @Test
