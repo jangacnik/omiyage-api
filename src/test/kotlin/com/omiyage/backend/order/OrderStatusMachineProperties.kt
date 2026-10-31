@@ -37,7 +37,7 @@ class OrderStatusMachineProperties {
     @Property
     fun `a terminal status is absorbing under any random walk`(
         @ForAll start: OrderStatus,
-        @ForAll attempts: List<OrderStatus>,
+        @ForAll attempts: List<@JvmSuppressWildcards OrderStatus>,
     ) {
         if (start !in terminal) return
         var current = start
