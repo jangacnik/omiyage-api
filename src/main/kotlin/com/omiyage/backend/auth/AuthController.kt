@@ -14,7 +14,9 @@ import org.springframework.web.server.ResponseStatusException
 data class LoginRequest(
     @field:NotBlank @field:Size(max = 100) val nickname: String,
     @field:NotBlank val password: String,
-)
+) {
+    override fun toString() = "LoginRequest(redacted)"
+}
 
 data class TokenResponse(val token: String)
 
