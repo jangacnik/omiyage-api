@@ -42,7 +42,7 @@ internal fun markItemsPaid(items: List<OrderItem>, paid: Boolean) {
 
 // Admins may skip steps forward (and cancel from any open status) or undo a single step; delivered
 // and cancelled orders are final.
-private fun OrderStatus.canMoveTo(target: OrderStatus): Boolean = when {
+internal fun OrderStatus.canMoveTo(target: OrderStatus): Boolean = when {
     this == target -> true
     this == OrderStatus.DELIVERED || this == OrderStatus.CANCELLED -> false
     target == OrderStatus.CANCELLED -> true
