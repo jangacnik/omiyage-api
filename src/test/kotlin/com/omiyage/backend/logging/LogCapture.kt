@@ -24,7 +24,7 @@ class LogCapture(loggerName: String) : AutoCloseable {
 
     fun named(name: String): List<ILoggingEvent> = events.filter { it.loggerName == name }
 
-    fun text(): String = events.joinToString("\n") { event ->
+    fun text(): String = events.filterNot { it.loggerName.startsWith("io.mockk") }.joinToString("\n") { event ->
         listOf(event.loggerName, event.formattedMessage, event.mdcPropertyMap.toString(), ThrowableProxyUtil.asString(event.throwableProxy).orEmpty())
             .joinToString(" ")
     }
