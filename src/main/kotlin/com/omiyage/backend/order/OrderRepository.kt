@@ -12,6 +12,12 @@ import java.util.UUID
 interface OrderRepository : JpaRepository<Order, UUID> {
     fun findByUserId(userId: UUID, pageable: Pageable): Page<Order>
     fun findByUserIdIn(userIds: Collection<UUID>): List<Order>
+    fun findByUserIdAndCreatedAtAfter(userId: UUID, createdAt: OffsetDateTime): List<Order>
+
+    // Serialises order creation per user for the rest of the transaction, so two simultaneous
+    // identical submits cannot both pass the duplicate check. CAST because void has no JDBC mapping.
+    @Query(value = "SELECT CAST(pg_advisory_xact_lock(hashtext(:key)) AS text)", nativeQuery = true)
+    fun lockOrderCreation(@Param("key") key: String): String?
 
     @Query(
         value = "SELECT o FROM Order o WHERE (:status IS NULL OR o.status = :status) AND o.status NOT IN :excluded",

@@ -10,6 +10,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 interface InventoryItemRepository : JpaRepository<InventoryItem, UUID> {
+    fun existsByTitleIgnoreCaseAndConditionAndLink(title: String, condition: com.omiyage.backend.common.Condition, link: String?): Boolean
 
     @Modifying
     @Query(value = "DELETE FROM inventory_items WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff", nativeQuery = true)

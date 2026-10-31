@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -39,6 +40,14 @@ internal fun markItemsPaid(items: List<OrderItem>, paid: Boolean) {
         item.updatedAt = now
     }
 }
+
+// A second identical order from the same user inside this window is a double submit (a double tap
+// or a retry), not a new order - createFor hands back the first one instead.
+private val DUPLICATE_ORDER_WINDOW = Duration.ofSeconds(30)
+
+private fun CreateOrderItemRequest.signature() = "${inventoryItemId ?: title?.trim()?.lowercase()}x$quantity"
+
+private fun OrderItem.signature() = "${inventoryItem?.id ?: customTitle?.trim()?.lowercase()}x$quantity"
 
 // Admins may skip steps forward (and cancel from any open status) or undo a single step; delivered
 // and cancelled orders are final.
@@ -69,7 +78,13 @@ class OrderService(
     fun adminCreate(userId: UUID, request: CreateOrderRequest): OrderDto = createFor(userId, request, includeProfit = true)
 
     private fun createFor(userId: UUID, request: CreateOrderRequest, includeProfit: Boolean = false): OrderDto {
-        val order = Order(userId = userId, notes = request.notes, nickname = request.nickname?.trim()?.ifBlank { null })
+        val nickname = request.nickname?.trim()?.ifBlank { null }
+        orders.lockOrderCreation(userId.toString())
+        val wanted = request.items.map { it.signature() }.sorted()
+        orders.findByUserIdAndCreatedAtAfter(userId, OffsetDateTime.now().minus(DUPLICATE_ORDER_WINDOW))
+            .firstOrNull { it.status != OrderStatus.CANCELLED && it.nickname == nickname && it.items.map { item -> item.signature() }.sorted() == wanted }
+            ?.let { return it.toDto(includeProfit, exchangeRates::toEur) }
+        val order = Order(userId = userId, notes = request.notes, nickname = nickname)
         request.items.forEach { order.items.add(buildOrderItem(order, it)) }
         return orders.save(order).toDto(includeProfit, exchangeRates::toEur)
     }
@@ -660,6 +675,7 @@ class OrderService(
     // way instead of retyping it. Zero stock already means "still requestable, just signals the
     // admin to go source it" (see the inventoryItemId branch above), so no new status is needed.
     private fun addRequestedItemToInventory(request: CreateOrderItemRequest) {
+        if (inventoryItems.existsByTitleIgnoreCaseAndConditionAndLink(requireNotNull(request.title), requireNotNull(request.condition), request.link)) return
         val newItem = InventoryItem(
             title = requireNotNull(request.title),
             description = request.description,
