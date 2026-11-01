@@ -58,7 +58,7 @@ class DashboardQueryCountIntegrationTest : PostgresIntegrationTest() {
             repeat(ORDERS_PER_USER) {
                 orderService.create(
                     principal,
-                    CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Item", condition = Condition.NEW, currency = Currency.JPY))),
+                    CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Item", condition = Condition.NEW, currency = Currency.JPY)), nickname = UUID.randomUUID().toString()),
                 )
             }
         }

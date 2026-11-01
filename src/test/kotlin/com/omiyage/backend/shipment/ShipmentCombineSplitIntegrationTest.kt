@@ -40,7 +40,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
 
     private fun order(principal: MeishiPrincipal) = orderService.create(
         principal,
-        CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY))),
+        CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)), nickname = UUID.randomUUID().toString()),
     )
 
     @Test
