@@ -40,7 +40,7 @@ logging:
     root: ${LOG_LEVEL:INFO}
     org.hibernate: WARN
     org.springframework.security: WARN
-    org.springframework.web.util.RfcUriParser: WARN
+    "_org.springframework.web.util.RfcUriParser": WARN
 
 omiyage:
   logging:
