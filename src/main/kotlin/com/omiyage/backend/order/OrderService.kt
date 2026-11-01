@@ -42,7 +42,7 @@ internal fun markItemsPaid(items: List<OrderItem>, paid: Boolean) {
 
 // Admins may skip steps forward (and cancel from any open status) or undo a single step; delivered
 // and cancelled orders are final.
-private fun OrderStatus.canMoveTo(target: OrderStatus): Boolean = when {
+internal fun OrderStatus.canMoveTo(target: OrderStatus): Boolean = when {
     this == target -> true
     this == OrderStatus.DELIVERED || this == OrderStatus.CANCELLED -> false
     target == OrderStatus.CANCELLED -> true
@@ -177,6 +177,16 @@ class OrderService(
         }
         requireOpen(order)
         return addItemToOrder(order, request)
+    }
+
+    @Transactional
+    fun addOwnItems(orderId: UUID, principal: MeishiPrincipal, requests: List<CreateOrderItemRequest>): OrderDto {
+        val order = findOrThrow(orderId)
+        if (order.userId != principal.id) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
+        }
+        requireOpen(order)
+        return requests.map { addItemToOrder(order, it) }.last()
     }
 
     @Transactional
