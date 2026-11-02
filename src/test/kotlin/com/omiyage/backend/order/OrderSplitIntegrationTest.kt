@@ -42,6 +42,7 @@ class OrderSplitIntegrationTest : PostgresIntegrationTest() {
                 CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY),
                 CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY),
             ),
+            nickname = UUID.randomUUID().toString(),
         ),
     )
 

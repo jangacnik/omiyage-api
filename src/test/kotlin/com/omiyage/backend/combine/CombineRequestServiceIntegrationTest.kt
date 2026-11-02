@@ -41,7 +41,7 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
 
     private fun order(principal: MeishiPrincipal) = orderService.create(
         principal,
-        CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY))),
+        CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)), nickname = UUID.randomUUID().toString()),
     )
 
     // Every browsable target in this feature is an existing shipment (per the new "browse other
