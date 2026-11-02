@@ -34,7 +34,7 @@ class AuthControllerTest {
 
     @Test
     fun `login is public and does not require a token`() {
-        every { service.login("bob", "hunter2") } returns "the-token"
+        every { service.login("bob", "hunter2", any()) } returns "the-token"
 
         mockMvc.post("/api/auth/login") {
             contentType = MediaType.APPLICATION_JSON
@@ -55,7 +55,7 @@ class AuthControllerTest {
 
     @Test
     fun `login is throttled after too many attempts for one nickname`() {
-        every { service.login("carol", "pw") } returns "the-token"
+        every { service.login("carol", "pw", any()) } returns "the-token"
         val body = objectMapper.writeValueAsString(LoginRequest("carol", "pw"))
 
         repeat(10) {

@@ -31,6 +31,8 @@ class ShipmentService(
     private val meishiNicknames: MeishiNicknameClient,
 ) {
 
+    private val events = org.slf4j.LoggerFactory.getLogger("events")
+
     @Transactional(readOnly = true)
     fun listAll(): List<ShipmentDto> = shipments.findAll().map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur) }
 
@@ -106,6 +108,7 @@ class ShipmentService(
         val vacated = mutableSetOf<UUID>()
         selected.forEach { order -> attach(shipment, order, vacated) }
         deleteIfEmpty(vacated - shipment.id!!)
+        events.info("shipment_combined shipmentId={} orderCount={}", shipment.id, selected.size)
         return shipment
     }
 
@@ -147,6 +150,7 @@ class ShipmentService(
         }
 
         val destination = shipments.save(Shipment(ownerUserId = toMove.first().userId, title = title))
+        events.info("shipment_created shipmentId={} sourceShipmentId={} orderCount={}", destination.id, sourceShipmentId, toMove.size)
         val vacated = mutableSetOf<UUID>()
         toMove.forEach { order -> attach(destination, order, vacated) }
         deleteIfEmpty(vacated - destination.id!!)
@@ -157,6 +161,7 @@ class ShipmentService(
     fun update(id: UUID, request: UpdateShipmentRequest): ShipmentDto {
         val shipment = findOrThrow(id)
         request.status?.let { newStatus ->
+            events.info("shipment_status_changed shipmentId={} from={} to={}", id, shipment.status, newStatus)
             applyStatusChange(shipment, newStatus)
         }
         request.destination?.let { shipment.destination = it }

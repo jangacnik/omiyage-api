@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.servlet.HandlerInterceptor
+import org.springframework.web.servlet.HandlerMapping
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
@@ -19,10 +20,11 @@ class AdminAuditInterceptor : HandlerInterceptor {
 
     override fun afterCompletion(request: HttpServletRequest, response: HttpServletResponse, handler: Any, ex: Exception?) {
         if (request.method in READ_ONLY_METHODS) return
+        val route = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) as? String ?: "unmatched"
         val admin = SecurityContextHolder.getContext().authentication?.principal as? MeishiPrincipal
         auditLog.info(
-            "admin_mutation user={} method={} path={} status={}",
-            admin?.id, request.method, request.requestURI, response.status,
+            "admin_mutation user={} method={} route={} status={}",
+            admin?.id, request.method, route, response.status,
         )
     }
 }

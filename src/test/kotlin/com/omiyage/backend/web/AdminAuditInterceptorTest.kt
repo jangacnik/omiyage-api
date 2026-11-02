@@ -46,11 +46,11 @@ class AdminAuditInterceptorTest {
         SecurityContextHolder.getContext().authentication = UsernamePasswordAuthenticationToken(admin, null, emptyList())
         val response = MockHttpServletResponse().apply { status = 204 }
 
-        interceptor.afterCompletion(MockHttpServletRequest("DELETE", "/api/admin/orders/1"), response, Any(), null)
+        interceptor.afterCompletion(routed("DELETE", "/api/admin/orders/{id}"), response, Any(), null)
 
         assertEquals(1, appender.list.size)
         val message = appender.list.single().formattedMessage
-        assertEquals("admin_mutation user=${admin.id} method=DELETE path=/api/admin/orders/1 status=204", message)
+        assertEquals("admin_mutation user=${admin.id} method=DELETE route=/api/admin/orders/{id} status=204", message)
     }
 
     @Test
@@ -64,8 +64,12 @@ class AdminAuditInterceptorTest {
 
     @Test
     fun `logs a null user when nobody is authenticated`() {
-        interceptor.afterCompletion(MockHttpServletRequest("POST", "/api/admin/orders"), MockHttpServletResponse(), Any(), null)
+        interceptor.afterCompletion(routed("POST", "/api/admin/orders"), MockHttpServletResponse(), Any(), null)
 
-        assertEquals("admin_mutation user=null method=POST path=/api/admin/orders status=200", appender.list.single().formattedMessage)
+        assertEquals("admin_mutation user=null method=POST route=/api/admin/orders status=200", appender.list.single().formattedMessage)
+    }
+
+    private fun routed(method: String, pattern: String) = MockHttpServletRequest(method, pattern).apply {
+        setAttribute(org.springframework.web.servlet.HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, pattern)
     }
 }

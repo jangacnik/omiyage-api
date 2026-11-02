@@ -156,6 +156,20 @@ Key design point: an `order_item` either references an existing `inventory_item`
 
 Images: the backend stores/returns bucket-relative object keys only (not URLs), so swapping storage backends later doesn't touch stored data. The frontend builds display URLs itself as `${VITE_API_BASE_URL}/api/images/${key}` (the GET endpoint is public because img tags cannot send the JWT).
 
+## Logging
+
+Console output is JSON (logstash); MDC keys become fields. `LOG_LEVEL` sets the app level (default `INFO`), `SLOW_REQUEST_MS` the slow-request threshold (default 2000). Hibernate and Spring Security stay at `WARN`; never enable Hibernate SQL parameter logging.
+
+| Logger | Content |
+|---|---|
+| `access` | One line per request: `requestId`, `method`, `route` (matched pattern or `unmatched`, never URI/query), `status`, `durationMs`, `userId` (UUID or `anonymous`), `role`. 2xx/3xx/4xx `INFO` (401/403/429 `WARN`), 5xx `ERROR`, probes `DEBUG`. |
+| `slow` | `WARN slow_request` when `durationMs` exceeds the threshold. |
+| `events` | Business events (`order_created`, `order_status_changed`, `shipment_combined`, `inventory_item_created`, `media_uploaded`, `combine_request_*`, ...): ids, counts and enums only. |
+| `security` | `login_failed` (`nicknameHash`, `clientIp`), `login_rate_limited`, `account_status_blocked`. |
+| `meishi.client` | One line per MeishiApi call: method, path, status, `durationMs`. `X-Request-Id` is forwarded. |
+
+Never log: credentials/tokens (`Authorization`, `Cookie`, JWTs, passwords, secrets), request/response bodies, query strings, personal data (email, phone, address, names, notes, tracking numbers), submitted login names (use `nicknameHash`: first 8 hex of SHA-256 of the lower-cased name), file bytes, or request-derived values without validation. Client IPs only on authentication and rate-limit events. `SensitiveDataLoggingTest` fails if a canary value reaches any log event.
+
 ## Test strategy
 
 | Layer | Backend | Frontend |
