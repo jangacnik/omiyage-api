@@ -55,7 +55,7 @@ fun Shipment.toDto(
     val quote = destination?.let { dest ->
         shippingMethod?.let { method ->
             if (totalWeight > BigDecimal.ZERO) {
-                priceFor(method, dest, totalWeight.setScale(0, RoundingMode.CEILING).toInt())
+                priceFor(method, dest, billedGrams(totalWeight))
             } else {
                 null
             }
