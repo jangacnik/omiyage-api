@@ -140,8 +140,8 @@ class ShipmentCostAllocationProperties {
         val withoutCancelled = spec.dtoOf(orderEntities.filter { it.status != OrderStatus.CANCELLED })
 
         assertThat(withCancelled.totalWeightGrams).isEqualByComparingTo(withoutCancelled.totalWeightGrams)
-        assertThat(withCancelled.billableOrders().map { it.id to it.shippingCostShareJpy })
-            .containsExactlyElementsOf(withoutCancelled.orders.map { it.id to it.shippingCostShareJpy })
+        assertThat(withCancelled.billableOrders().map { Triple(it.id, it.shippingCostShareJpy, it.shippingCostShareEur) })
+            .containsExactlyElementsOf(withoutCancelled.orders.map { Triple(it.id, it.shippingCostShareJpy, it.shippingCostShareEur) })
     }
 
     @Property
