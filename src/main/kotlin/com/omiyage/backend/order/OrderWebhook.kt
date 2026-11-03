@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 import java.net.URI
+import java.net.URISyntaxException
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -17,6 +18,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.HexFormat
 import java.util.UUID
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
@@ -27,7 +29,8 @@ const val TIMESTAMP_HEADER = "X-Omiyage-Timestamp"
 const val SIGNATURE_HEADER = "X-Omiyage-Signature"
 
 // The bot accepts a timestamp up to 10 minutes old; every attempt must end within EVENT_LIFETIME of
-// it. These delays plus 5 attempts of at most 7 s each end after 191 s, well inside that.
+// it. The discordName lookup (at most 7 s), these delays and 5 attempts of at most 7 s each end
+// after 198 s, well inside that.
 internal val DEFAULT_RETRY_DELAYS = listOf(Duration.ofSeconds(1), Duration.ofSeconds(5), Duration.ofSeconds(30), Duration.ofMinutes(2))
 private val CONNECT_TIMEOUT = Duration.ofSeconds(2)
 private val REQUEST_TIMEOUT = Duration.ofSeconds(5)
@@ -35,13 +38,23 @@ private val SHUTDOWN_GRACE = Duration.ofSeconds(5)
 private const val MAX_PENDING_EVENTS = 1000
 private val EVENT_LIFETIME = Duration.ofMinutes(5)
 
+/** Not a data class: a generated toString would print the secret. */
 @ConfigurationProperties(prefix = "omiyage.order-webhook")
-data class OrderWebhookProperties(
+class OrderWebhookProperties(
     val url: String = "",
     val secret: String = "",
     val retryDelays: List<Duration> = DEFAULT_RETRY_DELAYS,
 ) {
-    val enabled: Boolean get() = url.isNotBlank() && secret.isNotBlank()
+    /** Parsed once; null when the url is blank or not an absolute http(s) URL. */
+    val endpoint: URI? = parseEndpoint(url)
+
+    val enabled: Boolean get() = endpoint != null && secret.isNotBlank()
+}
+
+private fun parseEndpoint(url: String): URI? = try {
+    URI(url.trim()).takeIf { it.scheme in setOf("http", "https") && !it.host.isNullOrBlank() }
+} catch (e: URISyntaxException) {
+    null
 }
 
 /** HMAC-SHA256 over "<timestamp>.<raw body>", hex encoded, as sent in X-Omiyage-Signature. */
@@ -75,7 +88,9 @@ class OrderWebhook(
     private val executor = ScheduledThreadPoolExecutor(1) { Thread(it, "order-webhook").apply { isDaemon = true } }
 
     init {
-        if (properties.url.isNotBlank() && properties.secret.isBlank()) {
+        if (properties.url.isNotBlank() && properties.endpoint == null) {
+            log.warn("order webhook url is not an absolute http(s) URL, so no order events are sent")
+        } else if (properties.url.isNotBlank() && properties.secret.isBlank()) {
             log.warn("order webhook url is set but the secret is not, so no order events are sent")
         }
     }
@@ -86,7 +101,17 @@ class OrderWebhook(
             log.warn("order_event_dropped eventId={} reason=too_many_pending", pending.event.eventId)
             return
         }
-        executor.execute { deliver(pending) }
+        submit(pending.event.eventId, Duration.ZERO) { deliver(pending) }
+    }
+
+    // Every path that holds a slot ends in exactly one release: delivered, gave up, expired or dropped.
+    private fun submit(eventId: UUID, delay: Duration, task: () -> Unit): Boolean = try {
+        executor.schedule(Runnable { task() }, delay.toMillis(), TimeUnit.MILLISECONDS)
+        true
+    } catch (e: RejectedExecutionException) {
+        log.warn("order_event_dropped eventId={} reason=shutting_down", eventId)
+        slots.release()
+        false
     }
 
     @PreDestroy
@@ -98,10 +123,17 @@ class OrderWebhook(
     }
 
     private fun deliver(pending: PendingOrderEvent) {
-        val order = pending.event.order
-        val event = pending.event.copy(order = order.copy(discordName = discordName(order.userId, pending.actor)))
-        val body = objectMapper.writeValueAsBytes(event)
-        attempt(SignedEvent(event.eventId, body, pending.signedAt, signWebhook(properties.secret, pending.signedAt, body)), 0)
+        val signed = try {
+            val order = pending.event.order
+            val event = pending.event.copy(order = order.copy(discordName = discordName(order.userId, pending.actor)))
+            val body = objectMapper.writeValueAsBytes(event)
+            SignedEvent(event.eventId, body, pending.signedAt, signWebhook(properties.secret, pending.signedAt, body))
+        } catch (e: Exception) {
+            log.warn("order_event_dropped eventId={} reason=not_serializable error={}", pending.event.eventId, e.javaClass.simpleName)
+            slots.release()
+            return
+        }
+        attempt(signed, 0)
     }
 
     // Best effort: MeishiApi owns discordName and only answers with a user or admin token.
@@ -137,8 +169,9 @@ class OrderWebhook(
                 slots.release()
             }
             (status == null || isRetryable(status)) && attempt < properties.retryDelays.size -> {
-                executor.schedule({ attempt(signed, attempt + 1) }, properties.retryDelays[attempt].toMillis(), TimeUnit.MILLISECONDS)
-                log.info("order_event_retry_scheduled eventId={} attempt={} status={}", eventId, attempt + 1, status)
+                if (submit(eventId, properties.retryDelays[attempt]) { attempt(signed, attempt + 1) }) {
+                    log.info("order_event_retry_scheduled eventId={} attempt={} status={}", eventId, attempt + 1, status)
+                }
             }
             else -> {
                 log.warn("order_event_gave_up eventId={} attempts={} status={}", eventId, attempt + 1, status)
@@ -148,7 +181,7 @@ class OrderWebhook(
     }
 
     private fun send(signed: SignedEvent): Int {
-        val request = HttpRequest.newBuilder(URI.create(properties.url))
+        val request = HttpRequest.newBuilder(requireNotNull(properties.endpoint))
             .timeout(REQUEST_TIMEOUT)
             .header("Content-Type", "application/json")
             .header(TIMESTAMP_HEADER, signed.timestamp.toString())

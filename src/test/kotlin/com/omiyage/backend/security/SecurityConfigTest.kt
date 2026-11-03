@@ -35,6 +35,16 @@ class SecurityConfigTest {
     private fun token(role: String, expiresInMillis: Long = 60_000): String =
         TestJwt.sign(TEST_SECRET, role = role, expiresAtEpochSeconds = System.currentTimeMillis() / 1000 + expiresInMillis / 1000)
 
+    @Autowired
+    lateinit var userDetailsService: org.springframework.security.core.userdetails.UserDetailsService
+
+    @Test
+    fun `there is no default user with a generated password`() {
+        org.junit.jupiter.api.assertThrows<org.springframework.security.core.userdetails.UsernameNotFoundException> {
+            userDetailsService.loadUserByUsername("user")
+        }
+    }
+
     @Test
     fun `rejects a request with no token`() {
         mockMvc.get("/api/ping").andExpect {

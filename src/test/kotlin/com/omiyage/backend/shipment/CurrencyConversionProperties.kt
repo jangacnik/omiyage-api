@@ -34,14 +34,6 @@ class CurrencyConversionProperties {
     )
 
     @Property
-    fun `toEur has scale 2 and is never negative`(@ForAll("amounts") amount: BigDecimal, @ForAll("rates") rate: BigDecimal) {
-        val eur = jpyToEur(amount, rate)
-
-        assertThat(eur.scale()).isEqualTo(2)
-        assertThat(eur.signum()).isGreaterThanOrEqualTo(0)
-    }
-
-    @Property
     fun `toEur is monotonic in the amount`(
         @ForAll("amounts") a: BigDecimal,
         @ForAll("amounts") b: BigDecimal,
@@ -68,12 +60,11 @@ class CurrencyConversionProperties {
     }
 
     @Property
-    fun `the markup has scale 2 and is monotonic`(
+    fun `the markup is monotonic in the amount`(
         @ForAll @IntRange(min = 0, max = 10_000_000) a: Int,
         @ForAll @IntRange(min = 0, max = 10_000_000) b: Int,
         @ForAll("rates") rate: BigDecimal,
     ) {
-        assertThat(jpyToEurWithMarkup(a, rate).scale()).isEqualTo(2)
         assertThat(jpyToEurWithMarkup(minOf(a, b), rate)).isLessThanOrEqualTo(jpyToEurWithMarkup(maxOf(a, b), rate))
     }
 

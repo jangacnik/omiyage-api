@@ -54,6 +54,13 @@ class AdminAuditInterceptorTest {
     }
 
     @Test
+    fun `logs 500 when the handler threw, even though the response still says 200`() {
+        interceptor.afterCompletion(routed("PATCH", "/api/admin/orders/{id}"), MockHttpServletResponse(), Any(), IllegalStateException("boom"))
+
+        assertEquals("admin_mutation user=null method=PATCH route=/api/admin/orders/{id} status=500", appender.list.single().formattedMessage)
+    }
+
+    @Test
     fun `does not log read-only requests`() {
         for (method in listOf("GET", "HEAD", "OPTIONS")) {
             interceptor.afterCompletion(MockHttpServletRequest(method, "/api/admin/orders"), MockHttpServletResponse(), Any(), null)

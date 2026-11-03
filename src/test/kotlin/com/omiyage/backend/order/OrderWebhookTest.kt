@@ -218,6 +218,64 @@ class OrderWebhookTest {
     }
 
     @Test
+    fun `an invalid url disables the webhook with one log line that does not echo the url`() {
+        LogCapture(OrderWebhook::class.java.name).use { capture ->
+            val properties = OrderWebhookProperties("not a url://x", SECRET)
+            OrderWebhook(properties, profiles, admin, objectMapper)
+
+            assertThat(properties.enabled).isFalse()
+            assertThat(OrderWebhookProperties("ftp://bot/events", SECRET).enabled).isFalse()
+            assertThat(OrderWebhookProperties("/events", SECRET).enabled).isFalse()
+            assertThat(capture.events.map { it.formattedMessage })
+                .containsExactly("order webhook url is not an absolute http(s) URL, so no order events are sent")
+        }
+    }
+
+    @Test
+    fun `a url without a secret is logged as disabled`() {
+        LogCapture(OrderWebhook::class.java.name).use { capture ->
+            OrderWebhook(OrderWebhookProperties(receiver.url, ""), profiles, admin, objectMapper)
+
+            assertThat(capture.events.map { it.formattedMessage })
+                .containsExactly("order webhook url is set but the secret is not, so no order events are sent")
+        }
+    }
+
+    @Test
+    fun `the properties never print the secret`() {
+        assertThat(OrderWebhookProperties(receiver.url, SECRET).toString()).doesNotContain(SECRET)
+    }
+
+    @Test
+    fun `an event arriving after shutdown is dropped and logged`() {
+        val webhook = webhook()
+        webhook.stop()
+
+        LogCapture(OrderWebhook::class.java.name).use { capture ->
+            webhook.onOrderEvent(pending())
+
+            assertThat(capture.events.single().formattedMessage).contains("reason=shutting_down")
+        }
+        assertThat(receiver.nothingWithin(100)).isTrue()
+    }
+
+    @Test
+    fun `an event that cannot be serialized is dropped and logged`() {
+        val failingMapper = mockk<com.fasterxml.jackson.databind.ObjectMapper>()
+        every { failingMapper.writeValueAsBytes(any()) } throws IllegalStateException("boom")
+        val webhook = OrderWebhook(OrderWebhookProperties(receiver.url, SECRET), profiles, admin, failingMapper)
+
+        LogCapture(OrderWebhook::class.java.name).use { capture ->
+            webhook.onOrderEvent(pending())
+            awaitLog(capture, "order_event_dropped")
+            webhook.stop()
+
+            assertThat(capture.events.single().formattedMessage).contains("reason=not_serializable")
+        }
+        assertThat(receiver.nothingWithin(100)).isTrue()
+    }
+
+    @Test
     fun `the webhook is enabled only with both url and secret`() {
         assertThat(OrderWebhookProperties().enabled).isFalse()
         assertThat(OrderWebhookProperties(url = receiver.url).enabled).isFalse()
