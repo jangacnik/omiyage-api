@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import org.springframework.web.ErrorResponse
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.servlet.HandlerInterceptor
 import org.springframework.web.servlet.HandlerMapping
@@ -29,13 +28,10 @@ class AdminAuditInterceptor : HandlerInterceptor {
         )
     }
 
-    // An exception no handler resolved reaches here before the container turns it into an error
-    // response, so response.status still reads 200.
-    private fun outcomeStatus(response: HttpServletResponse, ex: Exception?): Int = when (ex) {
-        null -> response.status
-        is ErrorResponse -> ex.statusCode.value()
-        else -> 500
-    }
+    // GlobalExceptionHandler resolves every exception it can, and then ex is null here. An exception
+    // that still arrives was resolved by nobody, reaches here before the container writes the error,
+    // and becomes a 500 while response.status still reads 200.
+    private fun outcomeStatus(response: HttpServletResponse, ex: Exception?): Int = if (ex == null) response.status else 500
 }
 
 @Component

@@ -61,15 +61,6 @@ class AdminAuditInterceptorTest {
     }
 
     @Test
-    fun `logs the status a thrown ResponseStatusException carries`() {
-        val thrown = org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "nope")
-
-        interceptor.afterCompletion(routed("PATCH", "/api/admin/orders/{id}"), MockHttpServletResponse(), Any(), thrown)
-
-        assertEquals("admin_mutation user=null method=PATCH route=/api/admin/orders/{id} status=409", appender.list.single().formattedMessage)
-    }
-
-    @Test
     fun `does not log read-only requests`() {
         for (method in listOf("GET", "HEAD", "OPTIONS")) {
             interceptor.afterCompletion(MockHttpServletRequest(method, "/api/admin/orders"), MockHttpServletResponse(), Any(), null)
