@@ -13,6 +13,8 @@ import org.springframework.http.MediaType
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.invoke
 import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.core.userdetails.UserDetailsService
+import org.springframework.security.provisioning.InMemoryUserDetailsManager
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 import org.springframework.web.cors.CorsConfiguration
@@ -30,6 +32,11 @@ class SecurityConfig(
 ) {
 
     private val apiDocsPublic = environment.acceptsProfiles(Profiles.of("dev"))
+
+    // Authentication is JWT only. Without a UserDetailsService bean Spring Boot creates a default
+    // user and logs its generated password at startup; an empty one has no users at all.
+    @Bean
+    fun userDetailsService(): UserDetailsService = InMemoryUserDetailsManager()
 
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
