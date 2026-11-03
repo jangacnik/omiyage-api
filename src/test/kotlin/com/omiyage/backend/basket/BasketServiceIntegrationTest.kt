@@ -80,6 +80,35 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `an update that omits fields keeps their current values`() {
+        val alice = user()
+        val line = basketService.add(alice, customLine().copy(customDescription = "Boxed"))
+
+        val updated = basketService.update(alice, line.id, UpdateBasketLineRequest(maxPrice = BigDecimal("900.00")))
+
+        assertEquals("Figure", updated.customTitle)
+        assertEquals("Boxed", updated.customDescription)
+        assertEquals(2, updated.quantity)
+        assertEquals(0, BigDecimal("900.00").compareTo(updated.maxPrice))
+
+        val requantified = basketService.update(alice, line.id, UpdateBasketLineRequest(quantity = 4))
+
+        assertEquals(4, requantified.quantity)
+        assertEquals(0, BigDecimal("900.00").compareTo(requantified.maxPrice))
+    }
+
+    @Test
+    fun `a blank title is rejected on a custom line`() {
+        val alice = user()
+        val line = basketService.add(alice, customLine())
+
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException::class.java) {
+            basketService.update(alice, line.id, UpdateBasketLineRequest(customTitle = " "))
+        }.statusCode)
+        assertEquals("Figure", basketService.list(alice).single().customTitle)
+    }
+
+    @Test
     fun `remove deletes one line and clear deletes all`() {
         val alice = user()
         val first = basketService.add(alice, customLine("A"))
