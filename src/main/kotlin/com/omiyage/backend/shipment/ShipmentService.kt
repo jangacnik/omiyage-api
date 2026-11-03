@@ -2,6 +2,7 @@ package com.omiyage.backend.shipment
 
 import com.omiyage.backend.order.Order
 import com.omiyage.backend.order.OrderDto
+import com.omiyage.backend.order.OrderEventPublisher
 import com.omiyage.backend.order.OrderItemStatus
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.OrderStatus
@@ -29,6 +30,7 @@ class ShipmentService(
     private val shippingRates: ShippingRateService,
     private val exchangeRates: ExchangeRateService,
     private val meishiNicknames: MeishiNicknameClient,
+    private val orderEvents: OrderEventPublisher,
 ) {
 
     private val events = org.slf4j.LoggerFactory.getLogger("events")
@@ -259,12 +261,14 @@ class ShipmentService(
         val now = OffsetDateTime.now()
         shipment.orders.forEach { order ->
             if (order.status == OrderStatus.CANCELLED || order.status == OrderStatus.DELIVERED) return@forEach
+            val previousStatus = order.status
             order.status = OrderStatus.SENT
             order.updatedAt = now
             order.items.forEach { item ->
                 item.status = OrderItemStatus.SHIPPED
                 item.updatedAt = now
             }
+            orderEvents.statusChanged(order, previousStatus)
         }
     }
 

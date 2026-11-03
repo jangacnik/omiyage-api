@@ -49,14 +49,15 @@ class BasketService(
     @Transactional
     fun update(principal: MeishiPrincipal, id: UUID, request: UpdateBasketLineRequest): BasketLineDto {
         val line = lineOrThrow(principal, id)
-        val title = request.customTitle?.takeIf { it.isNotBlank() }
-        if (line.inventoryItemId == null && title == null) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a custom line needs a title")
+        request.customTitle?.let { title ->
+            if (line.inventoryItemId == null && title.isBlank()) {
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a custom line needs a title")
+            }
+            line.customTitle = title.ifBlank { null }
         }
-        line.customTitle = title
-        line.customDescription = request.customDescription
-        line.maxPrice = request.maxPrice
-        line.quantity = request.quantity
+        request.customDescription?.let { line.customDescription = it }
+        request.maxPrice?.let { line.maxPrice = it }
+        request.quantity?.let { line.quantity = it }
         line.updatedAt = OffsetDateTime.now()
         return line.toDto()
     }

@@ -9,7 +9,7 @@ import java.util.UUID
 interface CombineRequestRepository : JpaRepository<CombineRequest, UUID> {
     fun existsByRequesterOrder_IdAndTargetShipment_IdAndStatus(requesterOrderId: UUID, targetShipmentId: UUID, status: CombineRequestStatus): Boolean
     fun findByTargetShipment_OwnerUserIdAndStatus(ownerUserId: UUID, status: CombineRequestStatus): List<CombineRequest>
-    fun findByRequesterOrder_UserIdAndStatus(requesterUserId: UUID, status: CombineRequestStatus): List<CombineRequest>
+    fun findByRequesterOrder_UserIdAndStatusIn(requesterUserId: UUID, statuses: Collection<CombineRequestStatus>): List<CombineRequest>
     fun findByStatus(status: CombineRequestStatus): List<CombineRequest>
 
     // Both FK columns are NOT NULL with no ON DELETE clause, so a combine_requests row left

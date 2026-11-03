@@ -54,6 +54,9 @@ omiyage:
     api-url: ${MEISHI_API_URL:http://localhost:8080}
   cors:
     allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
+  order-webhook:
+    url: ${ORDER_WEBHOOK_URL:}
+    secret: ${ORDER_WEBHOOK_SECRET:}
 
 springdoc:
   api-docs:
