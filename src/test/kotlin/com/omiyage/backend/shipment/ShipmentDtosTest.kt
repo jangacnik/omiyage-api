@@ -109,6 +109,30 @@ class ShipmentDtosTest {
     }
 
     @Test
+    fun `a zero-weight last order never absorbs a negative rounding drift`() {
+        val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
+        val weightless = orderWeighing(0)
+        shipment.orders.addAll(listOf(orderWeighing(1), orderWeighing(1), weightless))
+
+        val dto = shipment.toDto({ _, _, _ -> ShippingQuote(1, 7) }, ::stubToEur, ::stubToEurBare)
+
+        val shares = dto.orders.map { requireNotNull(it.shippingCostShareJpy) }
+        assertEquals(1, shares.sum())
+        assertEquals(0, dto.orders.first { it.id == weightless.id }.shippingCostShareJpy)
+        assertEquals(true, shares.all { it >= 0 })
+    }
+
+    @Test
+    fun `rounding drift larger than any single share is spread over the orders`() {
+        val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
+        repeat(8) { shipment.orders.add(orderWeighing(1)) }
+
+        val dto = shipment.toDto({ _, _, _ -> ShippingQuote(4, 7) }, ::stubToEur, ::stubToEurBare)
+
+        assertEquals(listOf(0, 0, 0, 0, 1, 1, 1, 1), dto.orders.map { it.shippingCostShareJpy }.map { requireNotNull(it) }.sorted())
+    }
+
+    @Test
     fun `toMemberDto strips admin-only pricing but keeps it in the item total it already computed`() {
         val shipment = Shipment(id = UUID.randomUUID(), destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
         val order = orderWeighing(300)
