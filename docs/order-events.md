@@ -30,7 +30,8 @@ the identical body, timestamp and signature; nothing is ever re-signed.
 ## Retries
 
 Delays between attempts: 1 s, 5 s, 30 s, 120 s (5 attempts). Each attempt has a 2 s connect and 5 s
-request timeout, so the schedule ends at most 156 s + 5 x 7 s = **191 s** after the timestamp.
+request timeout, and the discordName lookup before the first attempt can take up to 7 s more, so the
+schedule ends at most 7 s + 156 s + 5 x 7 s = **198 s** after the timestamp.
 
 Hard limit: every attempt ends within **5 minutes** of the signed timestamp. An attempt that could
 not finish by then (because events backed up behind a slow receiver) is not sent; the event is
@@ -104,7 +105,7 @@ lookup fails. A shipment co-member's order moved by the shipment owner's submit 
 | `ORDER_WEBHOOK_URL` | Deployment env, e.g. the bot's ClusterIP service URL | empty |
 | `ORDER_WEBHOOK_SECRET` | Kubernetes Secret `omiyage-webhook`, key `secret`, namespace `default`, shared with omiyage-bot, referenced as optional | empty |
 
-The feature is off unless both are set, so the API boots and runs unchanged while the Secret is missing.
+The feature is off unless both are set and the URL is an absolute http(s) URL (an invalid URL is logged once at startup), so the API boots and runs unchanged while the Secret is missing.
 
 ```sh
 kubectl -n default create secret generic omiyage-webhook --from-literal=secret='<random 32+ byte value>'
