@@ -136,8 +136,10 @@ class OrderWebhook(
                 events.info("order_event_delivered eventId={} attempts={}", eventId, attempt + 1)
                 slots.release()
             }
-            (status == null || isRetryable(status)) && attempt < properties.retryDelays.size ->
+            (status == null || isRetryable(status)) && attempt < properties.retryDelays.size -> {
                 executor.schedule({ attempt(signed, attempt + 1) }, properties.retryDelays[attempt].toMillis(), TimeUnit.MILLISECONDS)
+                log.info("order_event_retry_scheduled eventId={} attempt={} status={}", eventId, attempt + 1, status)
+            }
             else -> {
                 log.warn("order_event_gave_up eventId={} attempts={} status={}", eventId, attempt + 1, status)
                 slots.release()

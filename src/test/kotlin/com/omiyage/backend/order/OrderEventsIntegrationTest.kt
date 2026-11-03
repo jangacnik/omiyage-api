@@ -13,10 +13,12 @@ import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.shipment.ShipmentStatus
 import com.omiyage.backend.shipment.UpdateShipmentRequest
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.web.server.ResponseStatusException
@@ -52,7 +54,18 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
     @Autowired
     lateinit var objectMapper: ObjectMapper
 
+    @Autowired
+    lateinit var jdbc: JdbcTemplate
+
     private val owner = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
+
+    // These orders are committed, and other suites count orders by status across the shared database.
+    @AfterEach
+    fun deleteCommittedOrders() {
+        jdbc.update("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", owner.id)
+        jdbc.update("DELETE FROM orders WHERE user_id = ?", owner.id)
+        jdbc.update("DELETE FROM shipments WHERE owner_user_id = ?", owner.id)
+    }
 
     private fun nextEvent(): JsonNode {
         val received = receiver.next()

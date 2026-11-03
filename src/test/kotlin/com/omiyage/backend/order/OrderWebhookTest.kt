@@ -52,6 +52,13 @@ class OrderWebhookTest {
     private fun profile(id: UUID, discordName: String?) =
         UserProfileDto(id, "bob", null, null, null, null, null, null, null, null, null, discordName = discordName)
 
+    private fun awaitLog(capture: LogCapture, prefix: String) {
+        val deadline = Instant.now().plusSeconds(10)
+        while (capture.events.none { it.formattedMessage.startsWith(prefix) } && Instant.now() < deadline) {
+            Thread.sleep(20)
+        }
+    }
+
     private fun ReceivedWebhook.json() = objectMapper.readTree(body)
 
     @AfterEach
@@ -134,10 +141,7 @@ class OrderWebhookTest {
 
         LogCapture(OrderWebhook::class.java.name).use { capture ->
             unreachable.onOrderEvent(pending())
-            val deadline = Instant.now().plusSeconds(10)
-            while (capture.events.none { it.formattedMessage.startsWith("order_event_gave_up") } && Instant.now() < deadline) {
-                Thread.sleep(20)
-            }
+            awaitLog(capture, "order_event_gave_up")
 
             val messages = capture.events.map { it.formattedMessage }
             assertThat(messages.filter { it.startsWith("order_event_attempt_failed") }).hasSize(2)
@@ -169,6 +173,7 @@ class OrderWebhookTest {
         LogCapture(OrderWebhook::class.java.name).use { capture ->
             webhook.onOrderEvent(pending())
             receiver.next()
+            awaitLog(capture, "order_event_retry_scheduled")
             webhook.stop()
 
             assertThat(capture.events.map { it.formattedMessage }).contains("order_events_dropped_on_shutdown count=1")
