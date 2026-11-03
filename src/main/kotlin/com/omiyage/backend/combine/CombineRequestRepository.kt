@@ -3,13 +3,24 @@ package com.omiyage.backend.combine
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import java.time.OffsetDateTime
 import java.util.UUID
 
 interface CombineRequestRepository : JpaRepository<CombineRequest, UUID> {
     fun existsByRequesterOrder_IdAndTargetShipment_IdAndStatus(requesterOrderId: UUID, targetShipmentId: UUID, status: CombineRequestStatus): Boolean
     fun findByTargetShipment_OwnerUserIdAndStatus(ownerUserId: UUID, status: CombineRequestStatus): List<CombineRequest>
-    fun findByRequesterOrder_UserIdAndStatusIn(requesterUserId: UUID, statuses: Collection<CombineRequestStatus>): List<CombineRequest>
+
+    @Query(
+        "SELECT r FROM CombineRequest r WHERE r.requesterOrder.userId = :requesterUserId " +
+            "AND (r.status = :pending OR (r.status = :declined AND r.respondedAt > :declinedAfter))",
+    )
+    fun findOutgoing(
+        @Param("requesterUserId") requesterUserId: UUID,
+        @Param("declinedAfter") declinedAfter: OffsetDateTime,
+        @Param("pending") pending: CombineRequestStatus,
+        @Param("declined") declined: CombineRequestStatus,
+    ): List<CombineRequest>
     fun findByStatus(status: CombineRequestStatus): List<CombineRequest>
 
     // Both FK columns are NOT NULL with no ON DELETE clause, so a combine_requests row left

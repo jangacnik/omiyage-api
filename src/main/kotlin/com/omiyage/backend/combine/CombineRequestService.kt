@@ -14,13 +14,8 @@ import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.UUID
 
-private val OUTGOING_STATUSES = listOf(CombineRequestStatus.PENDING, CombineRequestStatus.DECLINED)
+// A requester sees their pending requests, and declined ones for 14 days so the decline is not silent.
 private val DECLINED_VISIBLE_FOR = Duration.ofDays(14)
-
-/** A requester sees their pending requests, and declined ones for 14 days so the decline is not silent. */
-internal fun isListedAsOutgoing(status: CombineRequestStatus, respondedAt: OffsetDateTime?, now: OffsetDateTime): Boolean =
-    status == CombineRequestStatus.PENDING ||
-        (status == CombineRequestStatus.DECLINED && respondedAt != null && respondedAt.isAfter(now.minus(DECLINED_VISIBLE_FOR)))
 
 @Service
 class CombineRequestService(
@@ -60,10 +55,8 @@ class CombineRequestService(
 
     @Transactional(readOnly = true)
     fun listOutgoing(principal: MeishiPrincipal): List<CombineRequestDto> {
-        val now = OffsetDateTime.now()
-        return requests.findByRequesterOrder_UserIdAndStatusIn(principal.id, OUTGOING_STATUSES)
-            .filter { isListedAsOutgoing(it.status, it.respondedAt, now) }
-            .map { it.toDto() }
+        val declinedAfter = OffsetDateTime.now().minus(DECLINED_VISIBLE_FOR)
+        return requests.findOutgoing(principal.id, declinedAfter, CombineRequestStatus.PENDING, CombineRequestStatus.DECLINED).map { it.toDto() }
     }
 
     @Transactional(readOnly = true)

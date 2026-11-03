@@ -147,14 +147,25 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val fresh = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
         val old = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
         val pending = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
-        combineRequestService.decline(bob, fresh.id)
-        combineRequestService.decline(bob, old.id)
-        entityManager.find(CombineRequest::class.java, old.id).respondedAt = java.time.OffsetDateTime.now().minusDays(15)
+        val nearlyExpired = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
+        val justExpired = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
+        listOf(fresh, old, nearlyExpired, justExpired).forEach { combineRequestService.decline(bob, it.id) }
+        val now = java.time.OffsetDateTime.now()
+        entityManager.find(CombineRequest::class.java, old.id).respondedAt = now.minusDays(15)
+        entityManager.find(CombineRequest::class.java, nearlyExpired.id).respondedAt = now.minusDays(14).plusMinutes(1)
+        entityManager.find(CombineRequest::class.java, justExpired.id).respondedAt = now.minusDays(14).minusMinutes(1)
         entityManager.flush()
 
         val outgoing = combineRequestService.listOutgoing(alice)
 
-        assertEquals(setOf(fresh.id to CombineRequestStatus.DECLINED, pending.id to CombineRequestStatus.PENDING), outgoing.map { it.id to it.status }.toSet())
+        assertEquals(
+            setOf(
+                fresh.id to CombineRequestStatus.DECLINED,
+                nearlyExpired.id to CombineRequestStatus.DECLINED,
+                pending.id to CombineRequestStatus.PENDING,
+            ),
+            outgoing.map { it.id to it.status }.toSet(),
+        )
         assertNotNull(outgoing.single { it.id == fresh.id }.respondedAt)
         assertTrue(combineRequestService.listOutgoing(carol).isEmpty())
         assertTrue(combineRequestService.listOutgoing(bob).isEmpty())
