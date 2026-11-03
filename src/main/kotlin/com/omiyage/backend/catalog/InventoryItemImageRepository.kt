@@ -8,6 +8,6 @@ import java.util.UUID
 
 interface InventoryItemImageRepository : JpaRepository<InventoryItemImage, UUID> {
     @Modifying
-    @Query(value = "DELETE FROM inventory_item_images WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff", nativeQuery = true)
+    @Query(nativeQuery = true)
     fun purgeDeletedBefore(cutoff: OffsetDateTime): Int
 }

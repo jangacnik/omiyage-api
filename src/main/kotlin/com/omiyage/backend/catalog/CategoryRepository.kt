@@ -10,6 +10,6 @@ interface CategoryRepository : JpaRepository<Category, UUID> {
     fun existsBySlug(slug: String): Boolean
 
     @Modifying
-    @Query(value = "DELETE FROM categories WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff", nativeQuery = true)
+    @Query(nativeQuery = true)
     fun purgeDeletedBefore(cutoff: OffsetDateTime): Int
 }
