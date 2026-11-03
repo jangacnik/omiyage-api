@@ -6,7 +6,6 @@ import com.omiyage.backend.order.totalWeightGrams
 import com.omiyage.backend.order.toDto
 import jakarta.validation.constraints.NotEmpty
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -64,34 +63,21 @@ fun Shipment.toDto(
     val totalCostJpy = quote?.costJpy
     val totalCostEur = totalCostJpy?.let(toEurWithMarkup)
 
-    val ordersWithShares = orders.map { order ->
-        val weight = weightByOrder[order]
-        val shareJpy = if (weight != null && totalCostJpy != null && totalWeight > BigDecimal.ZERO) {
-            BigDecimal(totalCostJpy).multiply(weight).divide(totalWeight, 0, RoundingMode.HALF_UP).toInt()
-        } else {
-            null
-        }
-        order.toDto(includeProfit = true, toEur = toEur).copy(orderWeightGrams = weight, shippingCostShareJpy = shareJpy, shippingCostShareEur = shareJpy?.let(toEurWithMarkup))
-    }
-    // Per-order shares are rounded independently and can be off by a bit from the total in both
-    // currencies - fold that drift into the last billable order (a cancelled one has no share).
-    val lastBillableIndex = ordersWithShares.indexOfLast { it.shippingCostShareJpy != null }
-    val reconciledOrders = if (totalCostJpy != null && lastBillableIndex >= 0) {
-        val driftJpy = totalCostJpy - ordersWithShares.sumOf { it.shippingCostShareJpy ?: 0 }
-        val roundedSumEur = ordersWithShares.fold(BigDecimal.ZERO) { sum, dto -> sum + (dto.shippingCostShareEur ?: BigDecimal.ZERO) }
-        val driftEur = (totalCostEur ?: BigDecimal.ZERO) - roundedSumEur
-        ordersWithShares.mapIndexed { index, dto ->
-            if (index == lastBillableIndex) {
-                dto.copy(
-                    shippingCostShareJpy = (dto.shippingCostShareJpy ?: 0) + driftJpy,
-                    shippingCostShareEur = (dto.shippingCostShareEur ?: BigDecimal.ZERO) + driftEur,
-                )
-            } else {
-                dto
-            }
-        }
-    } else {
-        ordersWithShares
+    val billableOrders = weightByOrder.keys.sortedBy { it.id }
+    val billableWeights = billableOrders.map { weightByOrder.getValue(it) }
+    val shareJpyByOrder = totalCostJpy?.let { cost ->
+        billableOrders.zip(allocateByWeight(cost.toLong(), billableWeights).map { it.toInt() }).toMap()
+    }.orEmpty()
+    val shareEurByOrder = totalCostEur?.let { cost ->
+        billableOrders.zip(allocateByWeight(cost.movePointRight(2).longValueExact(), billableWeights).map { BigDecimal.valueOf(it, 2) }).toMap()
+    }.orEmpty()
+
+    val reconciledOrders = orders.map { order ->
+        order.toDto(includeProfit = true, toEur = toEur).copy(
+            orderWeightGrams = weightByOrder[order],
+            shippingCostShareJpy = shareJpyByOrder[order],
+            shippingCostShareEur = shareEurByOrder[order],
+        )
     }
 
     return ShipmentDto(
