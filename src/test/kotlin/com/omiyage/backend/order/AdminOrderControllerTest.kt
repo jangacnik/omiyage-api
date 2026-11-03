@@ -92,6 +92,24 @@ class AdminOrderControllerTest {
     }
 
     @Test
+    fun `add to inventory is rejected for a non-admin user`() {
+        mockMvc.post("/api/admin/orders/${UUID.randomUUID()}/items/${UUID.randomUUID()}/add-to-inventory") {
+            header("Authorization", "Bearer ${userToken()}")
+        }.andExpect { status { isForbidden() } }
+    }
+
+    @Test
+    fun `add to inventory succeeds for an admin`() {
+        val orderId = UUID.randomUUID()
+        val itemId = UUID.randomUUID()
+        every { service.adminAddItemToInventory(orderId, itemId) } returns sampleOrder()
+
+        mockMvc.post("/api/admin/orders/$orderId/items/$itemId/add-to-inventory") {
+            header("Authorization", "Bearer ${adminToken()}")
+        }.andExpect { status { isCreated() } }
+    }
+
+    @Test
     fun `list is rejected for a non-admin user`() {
         mockMvc.get("/api/admin/orders") { header("Authorization", "Bearer ${userToken()}") }
             .andExpect { status { isForbidden() } }

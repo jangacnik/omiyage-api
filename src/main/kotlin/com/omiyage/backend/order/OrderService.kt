@@ -231,6 +231,37 @@ class OrderService(
         return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
+    // A custom (non-catalog) request is not in Inventory until an admin decides it belongs there.
+    // Added at zero stock, which already means "still requestable, just signals the admin to go
+    // source it" (see buildOrderItem's inventoryItemId branch), so no new status is needed.
+    @Transactional
+    fun adminAddItemToInventory(orderId: UUID, itemId: UUID): OrderDto {
+        val order = findOrThrow(orderId)
+        val item = ownItemOrThrow(order, itemId)
+        val title = item.customTitle
+        val condition = item.condition
+        if (item.inventoryItem != null || title == null || condition == null) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "only a custom order item can be added to inventory")
+        }
+        if (inventoryItems.existsByTitleIgnoreCaseAndConditionAndLink(title, condition, item.link)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "an inventory item with this title, condition and link already exists")
+        }
+        val newItem = InventoryItem(
+            title = title,
+            description = item.customDescription,
+            link = item.link,
+            condition = condition,
+            priceAmount = item.maxPrice ?: java.math.BigDecimal.ZERO,
+            currency = item.currency,
+            stockQuantity = 0,
+            isPreorder = item.isPreorder,
+            expectedReleaseDate = item.expectedReleaseDate,
+        )
+        item.customImageKey?.let { newItem.images.add(InventoryItemImage(inventoryItem = newItem, objectKey = it)) }
+        inventoryItems.save(newItem)
+        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+    }
+
     @Transactional
     fun adminMarkItemPaid(orderId: UUID, itemId: UUID, paid: Boolean): OrderDto {
         val order = findOrThrow(orderId)
@@ -664,7 +695,6 @@ class OrderService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a preorder item must have an expected release date")
         }
         request.imageKey?.let { media.requireExisting(listOf(it)) }
-        addRequestedItemToInventory(request)
         return OrderItem(
             order = order,
             customTitle = request.title,
@@ -680,28 +710,6 @@ class OrderService(
         )
     }
 
-    // A custom (non-catalog) request has nothing in Inventory yet - surface it there too, at zero
-    // stock, so the next person browsing the catalog sees it exists and can request it the normal
-    // way instead of retyping it. Zero stock already means "still requestable, just signals the
-    // admin to go source it" (see the inventoryItemId branch above), so no new status is needed.
-    private fun addRequestedItemToInventory(request: CreateOrderItemRequest) {
-        if (inventoryItems.existsByTitleIgnoreCaseAndConditionAndLink(requireNotNull(request.title), requireNotNull(request.condition), request.link)) return
-        val newItem = InventoryItem(
-            title = requireNotNull(request.title),
-            description = request.description,
-            link = request.link,
-            condition = requireNotNull(request.condition),
-            priceAmount = request.maxPrice ?: java.math.BigDecimal.ZERO,
-            currency = request.currency,
-            stockQuantity = 0,
-            isPreorder = request.isPreorder,
-            expectedReleaseDate = request.expectedReleaseDate,
-        )
-        if (request.imageKey != null) {
-            newItem.images.add(InventoryItemImage(inventoryItem = newItem, objectKey = request.imageKey))
-        }
-        inventoryItems.save(newItem)
-    }
 
     private fun findOrThrow(id: UUID): Order =
         orders.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found") }

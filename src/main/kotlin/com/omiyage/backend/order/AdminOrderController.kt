@@ -78,6 +78,10 @@ class AdminOrderController(private val service: OrderService, private val shipme
     fun removeItem(@PathVariable id: UUID, @PathVariable itemId: UUID): OrderDto =
         service.adminRemoveItem(id, itemId)
 
+    @PostMapping("/{id}/items/{itemId}/add-to-inventory")
+    fun addItemToInventory(@PathVariable id: UUID, @PathVariable itemId: UUID): ResponseEntity<OrderDto> =
+        ResponseEntity.status(HttpStatus.CREATED).body(service.adminAddItemToInventory(id, itemId))
+
     @PatchMapping("/{id}/items/{itemId}/paid")
     fun markItemPaid(
         @PathVariable id: UUID,
