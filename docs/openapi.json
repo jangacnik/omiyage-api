@@ -3842,6 +3842,7 @@
             "properties" : {
               "jpyPerEur" : {
                 "type" : "number",
+                "maximum" : 999999.9999,
                 "minimum" : 0.01
               }
             }
@@ -3851,6 +3852,7 @@
             "properties" : {
               "shippingJpyPerEur" : {
                 "type" : "number",
+                "maximum" : 999999.9999,
                 "minimum" : 0.01
               }
             }
