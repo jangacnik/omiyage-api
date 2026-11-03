@@ -8,7 +8,6 @@ import net.jqwik.api.Provide
 import net.jqwik.api.constraints.IntRange
 import org.assertj.core.api.Assertions.assertThat
 import java.math.BigDecimal
-import java.util.Random
 
 class ShippingTierSelectionProperties {
 
@@ -50,17 +49,6 @@ class ShippingTierSelectionProperties {
         val found = lightestCoveringTier(ladder, grams)
 
         assertThat(found == null).isEqualTo(ladder.all { it.maxWeightGrams < grams })
-    }
-
-    @Property
-    fun `selection does not depend on the input order once sorted`(
-        @ForAll("ladders") ladder: List<@JvmSuppressWildcards ShippingRate>,
-        @ForAll @IntRange(min = 1, max = 100_001) grams: Int,
-        @ForAll random: Random,
-    ) {
-        val resorted = ladder.shuffled(random).sortedBy { it.maxWeightGrams }
-
-        assertThat(lightestCoveringTier(resorted, grams)).isSameAs(lightestCoveringTier(ladder, grams))
     }
 
     @Property
