@@ -42,17 +42,23 @@ class ExchangeRateService(private val settings: ExchangeRateSettingRepository) {
      *  Not for anything customer-facing - see toEurWithMarkup for that. */
     @Transactional(readOnly = true)
     fun toEur(jpyAmount: BigDecimal): BigDecimal =
-        jpyAmount.divide(getRate(), 2, RoundingMode.HALF_UP)
+        jpyToEur(jpyAmount, getRate())
 
     /** Converts a JPY shipping cost to EUR, at the shipping-only rate and including the hidden
      *  markup - never expose the intermediate (pre-markup) amount anywhere the markup could be
      *  reverse-engineered. */
     @Transactional(readOnly = true)
     fun toEurWithMarkup(jpyAmount: Int): BigDecimal =
-        BigDecimal(jpyAmount).divide(getShippingRate(), 6, RoundingMode.HALF_UP)
-            .multiply(SHIPPING_MARKUP)
-            .setScale(2, RoundingMode.HALF_UP)
+        jpyToEurWithMarkup(jpyAmount, getShippingRate())
 
     private fun setting(): ExchangeRateSetting =
         settings.findById(SETTING_ID).orElseThrow { IllegalStateException("exchange rate setting row is missing") }
 }
+
+internal fun jpyToEur(jpyAmount: BigDecimal, jpyPerEur: BigDecimal): BigDecimal =
+    jpyAmount.divide(jpyPerEur, 2, RoundingMode.HALF_UP)
+
+internal fun jpyToEurWithMarkup(jpyAmount: Int, jpyPerEur: BigDecimal): BigDecimal =
+    BigDecimal(jpyAmount).divide(jpyPerEur, 6, RoundingMode.HALF_UP)
+        .multiply(SHIPPING_MARKUP)
+        .setScale(2, RoundingMode.HALF_UP)
