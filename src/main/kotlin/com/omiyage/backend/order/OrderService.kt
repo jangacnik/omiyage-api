@@ -96,7 +96,7 @@ class OrderService(
 
     @Transactional(readOnly = true)
     fun listMine(principal: MeishiPrincipal, pageable: Pageable): PageResponse<OrderDto> =
-        orders.findByUserId(principal.id, pageable).toPageResponse { it.toDto() }
+        orders.findByUserId(principal.id, withIdTiebreak(pageable)).toPageResponse { it.toDto() }
 
     @Transactional(readOnly = true)
     fun getById(id: UUID, principal: MeishiPrincipal): OrderDto {
@@ -126,7 +126,7 @@ class OrderService(
                 }
             else -> {
                 val property = if (sortBy == AdminOrderSortBy.CREATED_AT) "createdAt" else "updatedAt"
-                val sorted = PageRequest.of(pageable.pageNumber, pageable.pageSize, Sort.by(direction, property))
+                val sorted = withIdTiebreak(PageRequest.of(pageable.pageNumber, pageable.pageSize, Sort.by(direction, property)))
                 orders.findFiltered(status, excludeStatus, sorted)
             }
         }
@@ -710,6 +710,11 @@ class OrderService(
         }
         inventoryItems.save(newItem)
     }
+
+    // Orders often share a timestamp; without a unique last sort key, Postgres may order the ties
+    // differently on each page, so paging repeats some orders and skips others (#101).
+    private fun withIdTiebreak(pageable: Pageable): Pageable =
+        if (pageable.isUnpaged) pageable else PageRequest.of(pageable.pageNumber, pageable.pageSize, pageable.sort.and(Sort.by("id")))
 
     private fun findOrThrow(id: UUID): Order =
         orders.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found") }
