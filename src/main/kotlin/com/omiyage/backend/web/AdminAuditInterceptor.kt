@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import org.springframework.web.ErrorResponse
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.servlet.HandlerInterceptor
 import org.springframework.web.servlet.HandlerMapping
@@ -24,8 +25,16 @@ class AdminAuditInterceptor : HandlerInterceptor {
         val admin = SecurityContextHolder.getContext().authentication?.principal as? MeishiPrincipal
         auditLog.info(
             "admin_mutation user={} method={} route={} status={}",
-            admin?.id, request.method, route, response.status,
+            admin?.id, request.method, route, outcomeStatus(response, ex),
         )
+    }
+
+    // An exception no handler resolved reaches here before the container turns it into an error
+    // response, so response.status still reads 200.
+    private fun outcomeStatus(response: HttpServletResponse, ex: Exception?): Int = when (ex) {
+        null -> response.status
+        is ErrorResponse -> ex.statusCode.value()
+        else -> 500
     }
 }
 
