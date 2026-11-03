@@ -10,8 +10,17 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.UUID
+
+private val OUTGOING_STATUSES = listOf(CombineRequestStatus.PENDING, CombineRequestStatus.DECLINED)
+private val DECLINED_VISIBLE_FOR = Duration.ofDays(14)
+
+/** A requester sees their pending requests, and declined ones for 14 days so the decline is not silent. */
+internal fun isListedAsOutgoing(status: CombineRequestStatus, respondedAt: OffsetDateTime?, now: OffsetDateTime): Boolean =
+    status == CombineRequestStatus.PENDING ||
+        (status == CombineRequestStatus.DECLINED && respondedAt != null && respondedAt.isAfter(now.minus(DECLINED_VISIBLE_FOR)))
 
 @Service
 class CombineRequestService(
@@ -50,8 +59,12 @@ class CombineRequestService(
         requests.findByTargetShipment_OwnerUserIdAndStatus(principal.id, CombineRequestStatus.PENDING).map { it.toDto() }
 
     @Transactional(readOnly = true)
-    fun listOutgoing(principal: MeishiPrincipal): List<CombineRequestDto> =
-        requests.findByRequesterOrder_UserIdAndStatus(principal.id, CombineRequestStatus.PENDING).map { it.toDto() }
+    fun listOutgoing(principal: MeishiPrincipal): List<CombineRequestDto> {
+        val now = OffsetDateTime.now()
+        return requests.findByRequesterOrder_UserIdAndStatusIn(principal.id, OUTGOING_STATUSES)
+            .filter { isListedAsOutgoing(it.status, it.respondedAt, now) }
+            .map { it.toDto() }
+    }
 
     @Transactional(readOnly = true)
     fun listAllPending(): List<CombineRequestDto> = requests.findByStatus(CombineRequestStatus.PENDING).map { it.toDto() }
