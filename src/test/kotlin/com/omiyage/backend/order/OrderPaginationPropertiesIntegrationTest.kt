@@ -55,6 +55,26 @@ class OrderPaginationPropertiesIntegrationTest : PostgresIntegrationTest() {
         (0 until totalPages).flatMap { fetch(it) }
 
     @Test
+    fun `orders with the same timestamp each appear once, one per page (#101)`() {
+        val owner = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
+        val tied = List(3) { orders.save(Order(userId = owner.id, status = OrderStatus.PURCHASED, createdAt = base, updatedAt = base)).id }
+        entityManager.flush()
+        entityManager.clear()
+
+        val mine = (0..2).flatMap { page ->
+            orderService.listMine(owner, PageRequest.of(page, 1, Sort.by(Sort.Direction.DESC, "createdAt"))).content.map { it.id }
+        }
+        val admin = (0..2).flatMap { page ->
+            // Ascending: these are the oldest orders in the database, so they fill the first pages.
+            orderService.adminList(null, emptySet(), AdminOrderSortBy.CREATED_AT, Sort.Direction.ASC, PageRequest.of(page, 1), "Bearer none")
+                .content.map { it.id }
+        }
+
+        assertThat(mine).containsExactlyInAnyOrderElementsOf(tied)
+        assertThat(admin).containsExactlyInAnyOrderElementsOf(tied)
+    }
+
+    @Test
     fun `listMine pages hold every order exactly once, newest first`() {
         repeat(CASES) { case ->
             val seed = System.nanoTime() + case
