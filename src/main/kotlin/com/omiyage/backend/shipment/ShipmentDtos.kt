@@ -6,7 +6,6 @@ import com.omiyage.backend.order.totalWeightGrams
 import com.omiyage.backend.order.toDto
 import jakarta.validation.constraints.NotEmpty
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.time.OffsetDateTime
 import java.util.UUID
 
