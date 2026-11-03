@@ -190,6 +190,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val inventoryItem = inventoryService.create(
             InventoryItemRequest(
                 title = "Already catalogued",
+                description = null,
                 condition = Condition.NEW,
                 priceAmount = BigDecimal("10"),
                 currency = Currency.EUR,
