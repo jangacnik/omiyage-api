@@ -26,13 +26,14 @@ import javax.crypto.spec.SecretKeySpec
 const val TIMESTAMP_HEADER = "X-Omiyage-Timestamp"
 const val SIGNATURE_HEADER = "X-Omiyage-Signature"
 
-// Every attempt resends the bytes signed at the first one, so the whole retry span (156 s of delays
-// plus at most 5 x 7 s of timeouts, 191 s) must stay inside the bot's 300 s replay window.
+// The bot accepts a timestamp up to 10 minutes old; every attempt must end within EVENT_LIFETIME of
+// it. These delays plus 5 attempts of at most 7 s each end after 191 s, well inside that.
 internal val DEFAULT_RETRY_DELAYS = listOf(Duration.ofSeconds(1), Duration.ofSeconds(5), Duration.ofSeconds(30), Duration.ofMinutes(2))
 private val CONNECT_TIMEOUT = Duration.ofSeconds(2)
 private val REQUEST_TIMEOUT = Duration.ofSeconds(5)
 private val SHUTDOWN_GRACE = Duration.ofSeconds(5)
 private const val MAX_PENDING_EVENTS = 1000
+private val EVENT_LIFETIME = Duration.ofMinutes(5)
 
 @ConfigurationProperties(prefix = "omiyage.order-webhook")
 data class OrderWebhookProperties(
@@ -100,8 +101,7 @@ class OrderWebhook(
         val order = pending.event.order
         val event = pending.event.copy(order = order.copy(discordName = discordName(order.userId, pending.actor)))
         val body = objectMapper.writeValueAsBytes(event)
-        val timestamp = Instant.now().epochSecond
-        attempt(SignedEvent(event.eventId, body, timestamp, signWebhook(properties.secret, timestamp, body)), 0)
+        attempt(SignedEvent(event.eventId, body, pending.signedAt, signWebhook(properties.secret, pending.signedAt, body)), 0)
     }
 
     // Best effort: MeishiApi owns discordName and only answers with a user or admin token.
@@ -119,6 +119,12 @@ class OrderWebhook(
 
     private fun attempt(signed: SignedEvent, attempt: Int) {
         val eventId = signed.eventId
+        val lastSafeStart = Instant.ofEpochSecond(signed.timestamp) + EVENT_LIFETIME - CONNECT_TIMEOUT - REQUEST_TIMEOUT
+        if (Instant.now().isAfter(lastSafeStart)) {
+            log.warn("order_event_expired eventId={} attempts={}", eventId, attempt)
+            slots.release()
+            return
+        }
         val status = try {
             send(signed)
         } catch (e: Exception) {

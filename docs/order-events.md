@@ -9,7 +9,7 @@ is the receiver. This file is the contract: change it only together with the bot
 
 | Header | Value |
 | --- | --- |
-| `X-Omiyage-Timestamp` | Unix time in seconds when the event was signed, e.g. `1762142400` |
+| `X-Omiyage-Timestamp` | Unix time in seconds when the event was created (same instant as `occurredAt`), e.g. `1762142400` |
 | `X-Omiyage-Signature` | `sha256=` + lowercase hex HMAC-SHA256 |
 
 Signature: `HMAC-SHA256(key = secret as UTF-8, message = "<X-Omiyage-Timestamp>." + raw body bytes)`.
@@ -17,23 +17,25 @@ Signature: `HMAC-SHA256(key = secret as UTF-8, message = "<X-Omiyage-Timestamp>.
 Test vector: secret `test-secret`, timestamp `1762142400`, body `{"id":"1"}` gives
 `sha256=cf765ab67ec2fd104f0b5a7a2c97723d624c6cd12829e6ba100e3f05076f4129` (pinned in `OrderWebhookTest`).
 
-Each event is signed once. Every retry resends the identical body, timestamp and signature. The
-timestamp is therefore the signing time, not the attempt time.
+The timestamp is fixed when the event is created and the body is signed once. Every retry resends
+the identical body, timestamp and signature; nothing is ever re-signed.
 
 ## Receiver rules
 
 1. Recompute the signature over the raw body bytes (before any JSON parsing) and compare in constant time. Mismatch: 401.
-2. Reject a timestamp older than the replay window, **300 seconds**, or more than 60 seconds in the future: 401.
-3. Drop an `eventId` already handled inside the replay window: 2xx, do nothing.
+2. Accept a timestamp from **10 minutes in the past to 1 minute in the future**, otherwise 401.
+3. Drop an `eventId` already handled within those 10 minutes: 2xx, do nothing.
 4. 2xx when handled. 5xx, 408 or 429 for a transient failure, so omiyage-api retries. Any other status ends delivery.
 
 ## Retries
 
 Delays between attempts: 1 s, 5 s, 30 s, 120 s (5 attempts). Each attempt has a 2 s connect and 5 s
-request timeout. Worst case from signing to the last attempt: 156 s of delays + 5 x 7 s = **191 s**,
-inside the 300 s replay window, so a retry of an event whose answer was lost is still a duplicate
-the bot recognises, never a stale event it rejects. If events back up behind a slow receiver, a
-late retry can still miss the window; the bot answers 401 and delivery ends. Nothing is posted twice.
+request timeout, so the schedule ends at most 156 s + 5 x 7 s = **191 s** after the timestamp.
+
+Hard limit: every attempt ends within **5 minutes** of the signed timestamp. An attempt that could
+not finish by then (because events backed up behind a slow receiver) is not sent; the event is
+logged as `order_event_expired` and dropped. Since the bot remembers event ids for 10 minutes, a
+retry of an event whose answer was lost is always caught as a duplicate.
 
 Delivery is at least once while the API runs, with no ordering guarantee between events. Use
 `occurredAt` to order them.

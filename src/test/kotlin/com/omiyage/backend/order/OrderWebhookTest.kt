@@ -46,6 +46,9 @@ class OrderWebhookTest {
         ),
     )
 
+    private fun pending(actor: EventActor? = null, signedAt: Long = Instant.now().epochSecond) =
+        PendingOrderEvent(event(), actor, signedAt)
+
     private fun profile(id: UUID, discordName: String?) =
         UserProfileDto(id, "bob", null, null, null, null, null, null, null, null, null, discordName = discordName)
 
@@ -63,12 +66,13 @@ class OrderWebhookTest {
     @Test
     fun `delivers a signed event with the event id inside the signed body`() {
         val event = event()
+        val signedAt = Instant.now().epochSecond - 60
 
-        webhook().onOrderEvent(PendingOrderEvent(event, actor = null))
+        webhook().onOrderEvent(PendingOrderEvent(event, actor = null, signedAt = signedAt))
 
         val received = receiver.next()
         val timestamp = requireNotNull(received.timestamp).toLong()
-        assertThat(timestamp).isBetween(Instant.now().epochSecond - 5, Instant.now().epochSecond)
+        assertThat(timestamp).isEqualTo(signedAt)
         assertThat(received.signature).isEqualTo(signWebhook(SECRET, timestamp, received.body))
         assertThat(received.json()["eventId"].asText()).isEqualTo(event.eventId.toString())
         assertThat(received.json()["order"]["items"][0]["name"].asText()).isEqualTo("Frieren card")
@@ -79,7 +83,7 @@ class OrderWebhookTest {
     fun `retries a server error with the identical signed request until it succeeds`() {
         receiver.respondWith(500, 503)
 
-        webhook(retryDelays = listOf(Duration.ofMillis(10), Duration.ofMillis(1100))).onOrderEvent(PendingOrderEvent(event(), actor = null))
+        webhook(retryDelays = listOf(Duration.ofMillis(10), Duration.ofMillis(1100))).onOrderEvent(pending())
 
         val attempts = List(3) { receiver.next() }
         assertThat(attempts.map { Triple(String(it.body), it.timestamp, it.signature) }.distinct()).hasSize(1)
@@ -91,17 +95,29 @@ class OrderWebhookTest {
     fun `gives up once every retry is used`() {
         receiver.respondWith(500, 500, 500, 500)
 
-        webhook().onOrderEvent(PendingOrderEvent(event(), actor = null))
+        webhook().onOrderEvent(pending())
 
         repeat(3) { receiver.next() }
         assertThat(receiver.nothingWithin(300)).isTrue()
     }
 
     @Test
+    fun `an event too old to finish within five minutes of its timestamp is dropped unsent`() {
+        LogCapture(OrderWebhook::class.java.name).use { capture ->
+            val webhook = webhook()
+            webhook.onOrderEvent(pending(signedAt = Instant.now().epochSecond - 294))
+            webhook.stop()
+
+            assertThat(capture.events.map { it.formattedMessage }.single()).startsWith("order_event_expired")
+        }
+        assertThat(receiver.nothingWithin(100)).isTrue()
+    }
+
+    @Test
     fun `does not retry a client error such as a rejected signature`() {
         receiver.respondWith(401)
 
-        webhook().onOrderEvent(PendingOrderEvent(event(), actor = null))
+        webhook().onOrderEvent(pending())
 
         receiver.next()
         assertThat(receiver.nothingWithin(300)).isTrue()
@@ -117,7 +133,7 @@ class OrderWebhookTest {
         )
 
         LogCapture(OrderWebhook::class.java.name).use { capture ->
-            unreachable.onOrderEvent(PendingOrderEvent(event(), actor = null))
+            unreachable.onOrderEvent(pending())
             val deadline = Instant.now().plusSeconds(10)
             while (capture.events.none { it.formattedMessage.startsWith("order_event_gave_up") } && Instant.now() < deadline) {
                 Thread.sleep(20)
@@ -136,7 +152,7 @@ class OrderWebhookTest {
         val webhook = webhook()
 
         LogCapture.root().use { capture ->
-            webhook.onOrderEvent(PendingOrderEvent(event(), EventActor(owner, admin = false, authHeader = "Bearer user-token")))
+            webhook.onOrderEvent(pending(EventActor(owner, admin = false, authHeader = "Bearer user-token")))
             receiver.next()
             receiver.next()
             webhook.stop()
@@ -151,7 +167,7 @@ class OrderWebhookTest {
         val webhook = webhook(retryDelays = listOf(Duration.ofHours(1)))
 
         LogCapture(OrderWebhook::class.java.name).use { capture ->
-            webhook.onOrderEvent(PendingOrderEvent(event(), actor = null))
+            webhook.onOrderEvent(pending())
             receiver.next()
             webhook.stop()
 
@@ -164,7 +180,7 @@ class OrderWebhookTest {
     fun `looks up the owner's discordName with the owner's own token`() {
         every { profiles.getMe("Bearer user") } returns profile(owner, "bob_42")
 
-        webhook().onOrderEvent(PendingOrderEvent(event(), EventActor(owner, admin = false, authHeader = "Bearer user")))
+        webhook().onOrderEvent(pending(EventActor(owner, admin = false, authHeader = "Bearer user")))
 
         assertThat(receiver.next().json()["order"]["discordName"].asText()).isEqualTo("bob_42")
     }
@@ -173,14 +189,14 @@ class OrderWebhookTest {
     fun `looks up the owner's discordName through the admin user list when an admin acts`() {
         every { admin.listUsers("Bearer admin") } returns listOf(profile(UUID.randomUUID(), "other"), profile(owner, "bob_42"))
 
-        webhook().onOrderEvent(PendingOrderEvent(event(), EventActor(UUID.randomUUID(), admin = true, authHeader = "Bearer admin")))
+        webhook().onOrderEvent(pending(EventActor(UUID.randomUUID(), admin = true, authHeader = "Bearer admin")))
 
         assertThat(receiver.next().json()["order"]["discordName"].asText()).isEqualTo("bob_42")
     }
 
     @Test
     fun `another member acting leaves discordName null without calling MeishiApi`() {
-        webhook().onOrderEvent(PendingOrderEvent(event(), EventActor(UUID.randomUUID(), admin = false, authHeader = "Bearer other")))
+        webhook().onOrderEvent(pending(EventActor(UUID.randomUUID(), admin = false, authHeader = "Bearer other")))
 
         assertThat(receiver.next().json()["order"]["discordName"].isNull).isTrue()
         verify(exactly = 0) { profiles.getMe(any()) }
@@ -191,7 +207,7 @@ class OrderWebhookTest {
     fun `a failed lookup still delivers the event, without discordName`() {
         every { profiles.getMe(any()) } throws IllegalStateException("meishi down")
 
-        webhook().onOrderEvent(PendingOrderEvent(event(), EventActor(owner, admin = false, authHeader = "Bearer user")))
+        webhook().onOrderEvent(pending(EventActor(owner, admin = false, authHeader = "Bearer user")))
 
         assertThat(receiver.next().json()["order"]["discordName"].isNull).isTrue()
     }

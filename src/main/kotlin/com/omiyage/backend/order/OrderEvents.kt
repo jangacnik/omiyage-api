@@ -42,7 +42,8 @@ data class OrderEventItem(val name: String, val quantity: Int)
  *  token. Not a data class: toString must never print the token. */
 class EventActor(val userId: UUID, val admin: Boolean, val authHeader: String)
 
-class PendingOrderEvent(val event: OrderEvent, val actor: EventActor?)
+/** [signedAt] is the X-Omiyage-Timestamp of every delivery attempt, fixed when the event is created. */
+class PendingOrderEvent(val event: OrderEvent, val actor: EventActor?, val signedAt: Long)
 
 /** Same short id the frontend shows for an order without a nickname. */
 fun orderReference(orderId: UUID): String = orderId.toString().take(8)
@@ -90,8 +91,9 @@ class OrderEventPublisher(
 
     private fun publish(order: Order, type: String, previousStatus: OrderStatus?) {
         if (!properties.enabled) return
-        val event = order.toEvent(UUID.randomUUID(), type, clock.instant().toString(), previousStatus)
-        publisher.publishEvent(PendingOrderEvent(event, currentActor()))
+        val now = clock.instant()
+        val event = order.toEvent(UUID.randomUUID(), type, now.toString(), previousStatus)
+        publisher.publishEvent(PendingOrderEvent(event, currentActor(), now.epochSecond))
     }
 
     private fun currentActor(): EventActor? {

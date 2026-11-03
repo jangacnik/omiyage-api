@@ -67,6 +67,7 @@ class OrderEventPublisherTest {
         val pending = publishedEvent()
         assertThat(pending.event.type).isEqualTo(ORDER_STATUS_CHANGED)
         assertThat(pending.event.occurredAt).isEqualTo("2026-11-03T10:00:00Z")
+        assertThat(pending.signedAt).isEqualTo(Instant.parse("2026-11-03T10:00:00Z").epochSecond)
         assertThat(pending.event.order.previousStatus).isEqualTo(OrderStatus.REQUESTED)
         assertThat(pending.event.order.status).isEqualTo(OrderStatus.IN_PROGRESS)
         assertThat(pending.event.order.itemsTotalEur).isEqualTo("0.00")
