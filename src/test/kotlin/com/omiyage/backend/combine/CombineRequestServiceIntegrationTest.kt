@@ -14,6 +14,7 @@ import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -136,6 +137,27 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
 
         assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, bobShipment.id) }
+    }
+
+    @Test
+    fun `a declined request stays in the requester's outgoing list for 14 days, invisible to others`() {
+        val alice = user()
+        val bob = user()
+        val carol = user()
+        val fresh = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
+        val old = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
+        val pending = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
+        combineRequestService.decline(bob, fresh.id)
+        combineRequestService.decline(bob, old.id)
+        entityManager.find(CombineRequest::class.java, old.id).respondedAt = java.time.OffsetDateTime.now().minusDays(15)
+        entityManager.flush()
+
+        val outgoing = combineRequestService.listOutgoing(alice)
+
+        assertEquals(setOf(fresh.id to CombineRequestStatus.DECLINED, pending.id to CombineRequestStatus.PENDING), outgoing.map { it.id to it.status }.toSet())
+        assertNotNull(outgoing.single { it.id == fresh.id }.respondedAt)
+        assertTrue(combineRequestService.listOutgoing(carol).isEmpty())
+        assertTrue(combineRequestService.listOutgoing(bob).isEmpty())
     }
 
     @Test

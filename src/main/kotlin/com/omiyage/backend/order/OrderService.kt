@@ -67,6 +67,7 @@ class OrderService(
     private val meishiAdmin: MeishiAdminClient,
     private val exchangeRates: ExchangeRateService,
     private val media: MediaService,
+    private val orderEvents: OrderEventPublisher,
 ) {
 
     private val log = org.slf4j.LoggerFactory.getLogger(OrderService::class.java)
@@ -89,6 +90,7 @@ class OrderService(
         request.items.forEach { order.items.add(buildOrderItem(order, it)) }
         val saved = orders.save(order)
         events.info("order_created orderId={} userId={} itemCount={}", saved.id, userId, saved.items.size)
+        orderEvents.orderCreated(saved)
         return saved.toDto(includeProfit, exchangeRates::toEur)
     }
 
@@ -149,12 +151,14 @@ class OrderService(
             throw ResponseStatusException(HttpStatus.CONFLICT, "cannot change order status from ${order.status} to $status")
         }
         events.info("order_status_changed orderId={} from={} to={}", id, order.status, status)
+        val previousStatus = order.status
         if (status == OrderStatus.CANCELLED) {
             cancelAndDetach(order)
         } else {
             order.status = status
             order.updatedAt = OffsetDateTime.now()
         }
+        orderEvents.statusChanged(order, previousStatus)
         return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
@@ -320,7 +324,9 @@ class OrderService(
         if (order.items.any { it.status in LOCKED_ITEM_STATUSES }) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "order has items already bought or shipped and cannot be cancelled")
         }
+        val previousStatus = order.status
         cancelAndDetach(order)
+        orderEvents.statusChanged(order, previousStatus)
         events.info("order_cancelled orderId={} userId={}", orderId, principal.id)
         return order.toDto()
     }
@@ -388,8 +394,10 @@ class OrderService(
         }
         val targets = shipment.orders.filter { it.isOpen && it.items.none { item -> item.isPreorder } }
         targets.forEach { target ->
+            val previousStatus = target.status
             target.status = OrderStatus.PREPARING_SHIPPING
             target.updatedAt = OffsetDateTime.now()
+            orderEvents.statusChanged(target, previousStatus)
         }
         events.info("order_submitted_for_shipping orderId={} shipmentId={} orderCount={}", orderId, shipment.id, targets.size)
         return order.toDto()
