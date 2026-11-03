@@ -4,6 +4,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.UUID
 
 @Service
@@ -62,8 +64,7 @@ class ShippingRateService(private val rates: ShippingRateRepository, private val
      *  if no tier for this [method]/[destination] combination covers a parcel this heavy. */
     @Transactional(readOnly = true)
     fun priceFor(method: ShippingMethod, destination: ShipmentDestination, totalGrams: Int): ShippingQuote? =
-        rates.findByDestinationAndShippingMethodOrderByMaxWeightGramsAsc(destination, method)
-            .firstOrNull { it.maxWeightGrams >= totalGrams }
+        lightestCoveringTier(rates.findByDestinationAndShippingMethodOrderByMaxWeightGramsAsc(destination, method), totalGrams)
             ?.let { ShippingQuote(it.costJpy, it.estimatedDays) }
 
     private fun findOrThrow(id: UUID): ShippingRate =
@@ -71,3 +72,9 @@ class ShippingRateService(private val rates: ShippingRateRepository, private val
 }
 
 data class ShippingQuote(val costJpy: Int, val estimatedDays: Int)
+
+/** [tiers] must be sorted by ascending maxWeightGrams. */
+internal fun lightestCoveringTier(tiers: List<ShippingRate>, totalGrams: Int): ShippingRate? =
+    tiers.firstOrNull { it.maxWeightGrams >= totalGrams }
+
+internal fun billedGrams(totalWeight: BigDecimal): Int = totalWeight.setScale(0, RoundingMode.CEILING).toInt()
