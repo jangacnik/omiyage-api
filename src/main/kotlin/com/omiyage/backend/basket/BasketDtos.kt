@@ -42,9 +42,10 @@ data class AddBasketLineRequest(
 
 data class AddBasketToOrderRequest(@field:NotNull val orderId: UUID?)
 
+/** Partial update: an omitted (or null) field keeps its current value. */
 data class UpdateBasketLineRequest(
     @field:Size(max = 200) val customTitle: String? = null,
     val customDescription: String? = null,
     @field:DecimalMin("0.00") val maxPrice: BigDecimal? = null,
-    @field:Min(1) val quantity: Int = 1,
+    @field:Min(1) val quantity: Int? = null,
 )
