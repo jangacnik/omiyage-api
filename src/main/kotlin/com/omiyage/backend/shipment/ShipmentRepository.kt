@@ -11,6 +11,6 @@ interface ShipmentRepository : JpaRepository<Shipment, UUID> {
     fun findByStatusNot(status: ShipmentStatus): List<Shipment>
 
     @Modifying
-    @Query(value = "DELETE FROM shipments WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff", nativeQuery = true)
+    @Query(nativeQuery = true)
     fun purgeDeletedBefore(cutoff: OffsetDateTime): Int
 }

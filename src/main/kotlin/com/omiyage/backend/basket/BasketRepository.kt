@@ -13,13 +13,6 @@ interface BasketRepository : JpaRepository<BasketLine, UUID> {
     fun deleteByUserId(userId: UUID): Long
 
     @Modifying(clearAutomatically = true)
-    @Query(
-        """
-        DELETE FROM basket_lines WHERE user_id IN (
-            SELECT user_id FROM basket_lines GROUP BY user_id HAVING MAX(updated_at) < :cutoff
-        )
-        """,
-        nativeQuery = true,
-    )
+    @Query(nativeQuery = true)
     fun purgeUntouchedSince(@Param("cutoff") cutoff: OffsetDateTime): Int
 }
