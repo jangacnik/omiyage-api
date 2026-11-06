@@ -85,9 +85,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         assertEquals("Ghibli museum ticket", order.items[0].title)
         assertNull(order.items[0].inventoryItemId)
 
-        val inventoryItem = inventoryItemRepository.findAll().single { it.title == "Ghibli museum ticket" }
-        assertEquals(0, inventoryItem.stockQuantity)
-        assertEquals(0, BigDecimal("2000").compareTo(inventoryItem.priceAmount))
+        assertTrue(inventoryItemRepository.findAll().none { it.title == "Ghibli museum ticket" })
     }
 
     private fun customRequest(title: String, nickname: String? = null, quantity: Int = 1) = CreateOrderRequest(
@@ -104,7 +102,6 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
         assertEquals(first.id, second.id)
         assertEquals(1, orderRepository.findByUserId(owner.id, org.springframework.data.domain.Pageable.unpaged()).content.size)
-        assertEquals(1, inventoryItemRepository.findAll().count { it.title.equals("Frieren card", ignoreCase = true) })
     }
 
     @Test
@@ -130,24 +127,85 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun `a custom request reuses an existing inventory item with the same title, condition and link`() {
-        orderService.create(user(), customRequest("Shared card"))
-        orderService.create(user(), customRequest("shared card"))
+    fun `a custom request does not touch inventory`() {
+        val before = inventoryItemRepository.count()
 
-        assertEquals(1, inventoryItemRepository.findAll().count { it.title.equals("Shared card", ignoreCase = true) })
+        orderService.create(user(), customRequest("Not in inventory card"))
+
+        assertEquals(before, inventoryItemRepository.count())
     }
 
     @Test
-    fun `a custom request with no max price still lands in inventory, at zero price`() {
-        val request = CreateOrderRequest(
-            items = listOf(CreateOrderItemRequest(title = "Mystery snack box", condition = Condition.NEW, currency = Currency.JPY)),
+    fun `an admin can add a custom order item to inventory at zero stock`() {
+        val order = orderService.create(
+            user(),
+            CreateOrderRequest(
+                items = listOf(
+                    CreateOrderItemRequest(
+                        title = "Manual add card",
+                        condition = Condition.NEW,
+                        currency = Currency.JPY,
+                        maxPrice = BigDecimal("1500"),
+                    ),
+                ),
+            ),
         )
 
-        orderService.create(user(), request)
+        orderService.adminAddItemToInventory(order.id, order.items[0].id)
+
+        val inventoryItem = inventoryItemRepository.findAll().single { it.title == "Manual add card" }
+        assertEquals(0, inventoryItem.stockQuantity)
+        assertEquals(0, BigDecimal("1500").compareTo(inventoryItem.priceAmount))
+    }
+
+    @Test
+    fun `adding a custom item with no max price to inventory uses zero price`() {
+        val order = orderService.create(
+            user(),
+            CreateOrderRequest(
+                items = listOf(CreateOrderItemRequest(title = "Mystery snack box", condition = Condition.NEW, currency = Currency.JPY)),
+            ),
+        )
+
+        orderService.adminAddItemToInventory(order.id, order.items[0].id)
 
         val inventoryItem = inventoryItemRepository.findAll().single { it.title == "Mystery snack box" }
-        assertEquals(0, inventoryItem.stockQuantity)
         assertEquals(0, BigDecimal.ZERO.compareTo(inventoryItem.priceAmount))
+    }
+
+    @Test
+    fun `adding the same custom item to inventory twice is a conflict`() {
+        val order = orderService.create(user(), customRequest("Twice card"))
+        orderService.adminAddItemToInventory(order.id, order.items[0].id)
+
+        val error = assertThrows(ResponseStatusException::class.java) {
+            orderService.adminAddItemToInventory(order.id, order.items[0].id)
+        }
+
+        assertEquals(409, error.statusCode.value())
+    }
+
+    @Test
+    fun `an inventory-linked order item cannot be added to inventory`() {
+        val inventoryItem = inventoryService.create(
+            InventoryItemRequest(
+                title = "Already catalogued",
+                description = null,
+                condition = Condition.NEW,
+                priceAmount = BigDecimal("10"),
+                currency = Currency.EUR,
+            ),
+        )
+        val order = orderService.create(
+            user(),
+            CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = inventoryItem.id, currency = Currency.EUR))),
+        )
+
+        val error = assertThrows(ResponseStatusException::class.java) {
+            orderService.adminAddItemToInventory(order.id, order.items[0].id)
+        }
+
+        assertEquals(400, error.statusCode.value())
     }
 
     @Test

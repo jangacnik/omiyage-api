@@ -898,6 +898,41 @@
             "tags" : [ "admin-order-controller" ]
           }
         },
+        "/api/admin/orders/{id}/items/{itemId}/add-to-inventory" : {
+          "post" : {
+            "operationId" : "addItemToInventory",
+            "parameters" : [ {
+              "in" : "path",
+              "name" : "id",
+              "required" : true,
+              "schema" : {
+                "type" : "string",
+                "format" : "uuid"
+              }
+            }, {
+              "in" : "path",
+              "name" : "itemId",
+              "required" : true,
+              "schema" : {
+                "type" : "string",
+                "format" : "uuid"
+              }
+            } ],
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "$ref" : "#/components/schemas/OrderDto"
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "tags" : [ "admin-order-controller" ]
+          }
+        },
         "/api/admin/orders/{id}/items/{itemId}/details" : {
           "patch" : {
             "operationId" : "updateItemContent",
