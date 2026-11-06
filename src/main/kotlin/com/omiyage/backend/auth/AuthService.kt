@@ -30,6 +30,22 @@ class AuthService(private val meishi: MeishiAuthClient) {
             securityLog.warn("login_failed nicknameHash={} status={} clientIp={}", nicknameHash(nickname), e.statusCode.value(), clientIp)
             throw e
         }
+        return rejectFrozen(token)
+    }
+
+    /** Exchanges a hosted-login code for the Meishi JWT. MeishiApi already refuses locked, inactive and frozen
+     *  accounts at the token endpoint; the frozen check below is kept so both login paths behave the same. */
+    fun loginWithMeishiCode(clientId: String, code: String, codeVerifier: String, redirectUri: String, clientIp: String): String {
+        val token = try {
+            meishi.exchangeCode(clientId, code, codeVerifier, redirectUri)
+        } catch (e: ResponseStatusException) {
+            securityLog.warn("sso_exchange_failed status={} clientIp={}", e.statusCode.value(), clientIp)
+            throw e
+        }
+        return rejectFrozen(token)
+    }
+
+    private fun rejectFrozen(token: String): String {
         val me = meishi.getMe(token)
         if (me.status == "FROZEN") {
             securityLog.warn("account_status_blocked userId={} status={}", me.id, me.status)

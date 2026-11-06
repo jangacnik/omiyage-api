@@ -52,6 +52,9 @@ omiyage:
     jwt-secret: ${MEISHI_JWT_SECRET}
     jwt-secret-previous: ${MEISHI_JWT_SECRET_PREVIOUS:}
     api-url: ${MEISHI_API_URL:http://localhost:8080}
+    sso-enabled: ${MEISHI_SSO_ENABLED:false}
+    sso-client-id: ${MEISHI_SSO_CLIENT_ID:omiyage}
+    sso-authorize-url: ${MEISHI_SSO_AUTHORIZE_URL:}
   cors:
     allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
   order-webhook:

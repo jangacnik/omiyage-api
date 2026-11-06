@@ -66,6 +66,39 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `a hosted-login code gives the token for an active account`() {
+        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token"
+        every { meishi.getMe("sso-token") } returns MeishiUserResponse("id", "bob", "USER", "ACTIVE")
+
+        assertEquals("sso-token", service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4"))
+    }
+
+    @Test
+    fun `a hosted-login code for a frozen account is rejected`() {
+        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token"
+        every { meishi.getMe("sso-token") } returns MeishiUserResponse("id", "bob", "USER", "FROZEN")
+
+        val exception = assertThrows(ResponseStatusException::class.java) {
+            service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4")
+        }
+        assertEquals(403, exception.statusCode.value())
+    }
+
+    @Test
+    fun `a failed code exchange is logged with the client ip and never the code`() {
+        every { meishi.exchangeCode(any(), any(), any(), any()) } throws ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED)
+
+        LogCapture("security").use { capture ->
+            assertThrows(ResponseStatusException::class.java) {
+                service.loginWithMeishiCode("omiyage", "CANARY_CODE", "verifier", "https://app/cb", "9.9.9.9")
+            }
+
+            val line = capture.events.single().formattedMessage
+            assertEquals("sso_exchange_failed status=401 clientIp=9.9.9.9", line)
+        }
+    }
+
+    @Test
     fun `nickname hash is eight lowercase hex chars and ignores case and padding`() {
         assertEquals(nicknameHash("Bob"), nicknameHash("  bob "))
         assertTrue(Regex("^[0-9a-f]{8}$").matches(nicknameHash("bob")))

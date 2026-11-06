@@ -31,6 +31,11 @@ class LoginRateLimiter(private val clock: Clock = Clock.systemUTC()) {
         if (!allowed) throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts")
     }
 
+    /** For logins that carry no nickname, such as a hosted-login code exchange. */
+    fun checkAttempt(ip: String) {
+        if (!tryAcquire("ip:$ip", MAX_ATTEMPTS_PER_IP)) throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts")
+    }
+
     private fun sweepExpiredWindows(now: Instant) {
         if (windows.size <= CLEANUP_THRESHOLD || lastSweep.plus(WINDOW) > now) return
         lastSweep = now
