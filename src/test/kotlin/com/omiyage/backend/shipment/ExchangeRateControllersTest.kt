@@ -66,6 +66,21 @@ class ExchangeRateControllersTest {
     }
 
     @Test
+    fun `a rate too large for the column is rejected before it reaches the service`() {
+        mockMvc.put("/api/admin/exchange-rate") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(SetExchangeRateRequest(BigDecimal("1000000")))
+        }.andExpect { status { isBadRequest() } }
+
+        mockMvc.put("/api/admin/exchange-rate/shipping") {
+            header("Authorization", "Bearer ${adminToken()}")
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(SetShippingExchangeRateRequest(BigDecimal("1000000")))
+        }.andExpect { status { isBadRequest() } }
+    }
+
+    @Test
     fun `shipping rate endpoint is rejected for a non-admin user`() {
         mockMvc.get("/api/admin/exchange-rate/shipping") { header("Authorization", "Bearer ${userToken()}") }
             .andExpect { status { isForbidden() } }
