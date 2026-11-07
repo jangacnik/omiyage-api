@@ -3,6 +3,7 @@ package com.omiyage.backend.catalog
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 
@@ -164,5 +166,20 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
         assertEquals(2, all.content.size)
         assertEquals(listOf("In stock"), inStockOnly.content.map { it.title })
+    }
+
+    @Test
+    fun `items with tied sort keys each appear once across pages (#105)`() {
+        val title = "tied-${System.nanoTime()}"
+        val tied = List(3) { inventoryService.create(request(title)).id }
+
+        val sorts = listOf(Sort.unsorted(), Sort.by("title"), Sort.by(Sort.Direction.DESC, "stockQuantity"))
+        sorts.forEach { sort ->
+            val listed = (0..2).flatMap { page ->
+                inventoryService.search(title, null, InventoryStatus.ACTIVE, PageRequest.of(page, 1, sort)).content.map { it.id }
+            }
+
+            assertThat(listed).`as`(sort.toString()).containsExactlyInAnyOrderElementsOf(tied)
+        }
     }
 }
