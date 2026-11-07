@@ -149,7 +149,11 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val pending = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
         val nearlyExpired = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
         val justExpired = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
+        val accepted = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
+        val cancelled = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
         listOf(fresh, old, nearlyExpired, justExpired).forEach { combineRequestService.decline(bob, it.id) }
+        combineRequestService.accept(bob, accepted.id)
+        combineRequestService.cancel(alice, cancelled.id)
         val now = java.time.OffsetDateTime.now()
         entityManager.find(CombineRequest::class.java, old.id).respondedAt = now.minusDays(15)
         entityManager.find(CombineRequest::class.java, nearlyExpired.id).respondedAt = now.minusDays(14).plusMinutes(1)
@@ -166,6 +170,7 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
             ),
             outgoing.map { it.id to it.status }.toSet(),
         )
+        assertTrue(outgoing.none { it.id == accepted.id || it.id == cancelled.id })
         assertNotNull(outgoing.single { it.id == fresh.id }.respondedAt)
         assertTrue(combineRequestService.listOutgoing(carol).isEmpty())
         assertTrue(combineRequestService.listOutgoing(bob).isEmpty())
