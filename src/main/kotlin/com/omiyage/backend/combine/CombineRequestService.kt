@@ -10,8 +10,12 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.UUID
+
+// A requester sees their pending requests, and declined ones for 14 days so the decline is not silent.
+private val DECLINED_VISIBLE_FOR = Duration.ofDays(14)
 
 @Service
 class CombineRequestService(
@@ -50,8 +54,10 @@ class CombineRequestService(
         requests.findByTargetShipment_OwnerUserIdAndStatus(principal.id, CombineRequestStatus.PENDING).map { it.toDto() }
 
     @Transactional(readOnly = true)
-    fun listOutgoing(principal: MeishiPrincipal): List<CombineRequestDto> =
-        requests.findByRequesterOrder_UserIdAndStatus(principal.id, CombineRequestStatus.PENDING).map { it.toDto() }
+    fun listOutgoing(principal: MeishiPrincipal): List<CombineRequestDto> {
+        val declinedAfter = OffsetDateTime.now().minus(DECLINED_VISIBLE_FOR)
+        return requests.findOutgoing(principal.id, declinedAfter, CombineRequestStatus.PENDING, CombineRequestStatus.DECLINED).map { it.toDto() }
+    }
 
     @Transactional(readOnly = true)
     fun listAllPending(): List<CombineRequestDto> = requests.findByStatus(CombineRequestStatus.PENDING).map { it.toDto() }
