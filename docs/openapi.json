@@ -3543,7 +3543,8 @@
               "codeVerifier" : {
                 "type" : "string",
                 "maxLength" : 128,
-                "minLength" : 43
+                "minLength" : 43,
+                "pattern" : "^[A-Za-z0-9\\-._~]+$"
               },
               "redirectUri" : {
                 "type" : "string",
@@ -4477,4 +4478,3 @@
         }
       }
     }
-

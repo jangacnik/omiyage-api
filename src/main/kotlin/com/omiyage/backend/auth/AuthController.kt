@@ -3,7 +3,9 @@ package com.omiyage.backend.auth
 import com.omiyage.backend.config.MeishiProperties
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
+import jakarta.validation.Validator
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -23,7 +25,7 @@ data class LoginRequest(
 
 data class MeishiExchangeRequest(
     @field:NotBlank @field:Size(max = 512) val code: String,
-    @field:NotBlank @field:Size(min = 43, max = 128) val codeVerifier: String,
+    @field:NotBlank @field:Size(min = 43, max = 128) @field:Pattern(regexp = "^[A-Za-z0-9\\-._~]+$") val codeVerifier: String,
     @field:NotBlank @field:Size(max = 2048) val redirectUri: String,
 ) {
     override fun toString() = "MeishiExchangeRequest(redacted)"
@@ -42,6 +44,7 @@ class AuthController(
     private val service: AuthService,
     private val rateLimiter: LoginRateLimiter,
     private val meishi: MeishiProperties,
+    private val validator: Validator,
 ) {
 
     private val securityLog = LoggerFactory.getLogger("security")
@@ -60,15 +63,17 @@ class AuthController(
 
     @GetMapping("/config")
     fun publicConfig(): PublicConfigResponse {
-        val enabled = ssoActive()
+        val enabled = meishi.ssoActive
         return PublicConfigResponse(
             MeishiSsoConfig(enabled, meishi.ssoAuthorizeUrl.takeIf { enabled }, meishi.ssoClientId.takeIf { enabled }),
         )
     }
 
     @PostMapping("/meishi/exchange")
-    fun meishiExchange(@Valid @RequestBody request: MeishiExchangeRequest, httpRequest: HttpServletRequest): TokenResponse {
-        if (!ssoActive()) throw ResponseStatusException(HttpStatus.NOT_FOUND, "meishi sso is disabled")
+    fun meishiExchange(@RequestBody request: MeishiExchangeRequest, httpRequest: HttpServletRequest): TokenResponse {
+        // Checked before validation so a disabled flow is 404 whatever the body looks like.
+        if (!meishi.ssoActive) throw ResponseStatusException(HttpStatus.NOT_FOUND, "meishi sso is disabled")
+        if (validator.validate(request).isNotEmpty()) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid request")
         val ip = clientIp(httpRequest)
         try {
             rateLimiter.checkAttempt(ip)
@@ -79,8 +84,6 @@ class AuthController(
         val token = service.loginWithMeishiCode(meishi.ssoClientId, request.code, request.codeVerifier, request.redirectUri, ip)
         return TokenResponse(token)
     }
-
-    private fun ssoActive() = meishi.ssoEnabled && meishi.ssoAuthorizeUrl.isNotBlank()
 
     // Behind the ingress the last X-Forwarded-For entry is the address the ingress itself saw;
     // earlier entries are client-supplied and spoofable.

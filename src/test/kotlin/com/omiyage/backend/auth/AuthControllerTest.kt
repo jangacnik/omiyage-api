@@ -7,6 +7,7 @@ import com.omiyage.backend.security.JwtAuthenticationFilter
 import com.omiyage.backend.security.JwtVerifier
 import com.omiyage.backend.security.SecurityConfig
 import io.mockk.every
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -88,5 +89,15 @@ class AuthControllerTest {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(MeishiExchangeRequest("code", "v".repeat(43), "https://app/cb"))
         }.andExpect { status { isNotFound() } }
+        verify(exactly = 0) { service.loginWithMeishiCode(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `exchange is 404 while the hosted login is off even for an invalid body`() {
+        mockMvc.post("/api/auth/meishi/exchange") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MeishiExchangeRequest("", "short", ""))
+        }.andExpect { status { isNotFound() } }
+        verify(exactly = 0) { service.loginWithMeishiCode(any(), any(), any(), any(), any()) }
     }
 }

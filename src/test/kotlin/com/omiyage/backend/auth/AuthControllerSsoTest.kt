@@ -7,6 +7,7 @@ import com.omiyage.backend.security.JwtAuthenticationFilter
 import com.omiyage.backend.security.JwtVerifier
 import com.omiyage.backend.security.SecurityConfig
 import io.mockk.every
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -87,6 +88,9 @@ class AuthControllerSsoTest {
     fun `exchange rejects a missing code and a verifier that is too short`() {
         exchange(MeishiExchangeRequest("", VERIFIER, REDIRECT)).andExpect { status { isBadRequest() } }
         exchange(MeishiExchangeRequest("the-code", "short", REDIRECT)).andExpect { status { isBadRequest() } }
+        exchange(MeishiExchangeRequest("the-code", "v".repeat(42) + "!", REDIRECT)).andExpect { status { isBadRequest() } }
+        exchange(MeishiExchangeRequest("the-code", VERIFIER, "")).andExpect { status { isBadRequest() } }
+        verify(exactly = 0) { service.loginWithMeishiCode(any(), any(), any(), any(), any()) }
     }
 
     @Test

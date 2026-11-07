@@ -1,19 +1,27 @@
 package com.omiyage.backend.auth
 
 import com.omiyage.backend.logging.LogCapture
+import com.omiyage.backend.security.JwtVerificationException
+import com.omiyage.backend.security.JwtVerifier
+import com.omiyage.backend.security.MeishiPrincipal
+import com.omiyage.backend.security.Role
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.web.server.ResponseStatusException
+import java.util.UUID
 
 class AuthServiceTest {
 
     private val meishi = mockk<MeishiAuthClient>()
-    private val service = AuthService(meishi)
+    private val verifier = mockk<JwtVerifier>()
+    private val service = AuthService(meishi, verifier)
+    private val principal = MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER)
 
     @Test
     fun `returns the token for an active account`() {
@@ -68,6 +76,7 @@ class AuthServiceTest {
     @Test
     fun `a hosted-login code gives the token for an active account`() {
         every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token"
+        every { verifier.verify("sso-token") } returns principal
         every { meishi.getMe("sso-token") } returns MeishiUserResponse("id", "bob", "USER", "ACTIVE")
 
         assertEquals("sso-token", service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4"))
@@ -76,12 +85,29 @@ class AuthServiceTest {
     @Test
     fun `a hosted-login code for a frozen account is rejected`() {
         every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token"
+        every { verifier.verify("sso-token") } returns principal
         every { meishi.getMe("sso-token") } returns MeishiUserResponse("id", "bob", "USER", "FROZEN")
 
         val exception = assertThrows(ResponseStatusException::class.java) {
             service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4")
         }
         assertEquals(403, exception.statusCode.value())
+    }
+
+    @Test
+    fun `a token omiyage-api would reject is not handed out`() {
+        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token"
+        every { verifier.verify("sso-token") } throws JwtVerificationException("bad signature")
+
+        LogCapture("security").use { capture ->
+            val exception = assertThrows(ResponseStatusException::class.java) {
+                service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4")
+            }
+
+            assertEquals(502, exception.statusCode.value())
+            assertEquals("sso_token_rejected reason=bad signature", capture.events.single().formattedMessage)
+        }
+        verify(exactly = 0) { meishi.getMe(any()) }
     }
 
     @Test

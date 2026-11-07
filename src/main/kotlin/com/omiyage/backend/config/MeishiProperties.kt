@@ -12,4 +12,8 @@ data class MeishiProperties(
     val ssoEnabled: Boolean = false,
     val ssoClientId: String = "omiyage",
     val ssoAuthorizeUrl: String = "",
-)
+) {
+    /** Needs the flag, a client id and an https authorize URL, so a half-filled config never shows a button that cannot work. */
+    val ssoActive: Boolean
+        get() = ssoEnabled && ssoClientId.isNotBlank() && ssoAuthorizeUrl.startsWith("https://", ignoreCase = true)
+}
