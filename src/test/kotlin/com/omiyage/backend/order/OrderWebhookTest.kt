@@ -52,9 +52,11 @@ class OrderWebhookTest {
     private fun profile(id: UUID, discordName: String?) =
         UserProfileDto(id, "bob", null, null, null, null, null, null, null, null, null, discordName = discordName)
 
-    private fun awaitLog(capture: LogCapture, prefix: String) {
+    private fun awaitLog(capture: LogCapture, prefix: String, containing: String = "") {
         val deadline = Instant.now().plusSeconds(10)
-        while (capture.events.none { it.formattedMessage.startsWith(prefix) } && Instant.now() < deadline) {
+        while (capture.events.none { it.formattedMessage.startsWith(prefix) && it.formattedMessage.contains(containing) } &&
+            Instant.now() < deadline
+        ) {
             Thread.sleep(20)
         }
     }
@@ -171,9 +173,10 @@ class OrderWebhookTest {
         val webhook = webhook(retryDelays = listOf(Duration.ofHours(1)))
 
         LogCapture(OrderWebhook::class.java.name).use { capture ->
-            webhook.onOrderEvent(pending())
+            val pending = pending()
+            webhook.onOrderEvent(pending)
             receiver.next()
-            awaitLog(capture, "order_event_retry_scheduled")
+            awaitLog(capture, "order_event_retry_scheduled", pending.event.eventId.toString())
             webhook.stop()
 
             assertThat(capture.events.map { it.formattedMessage }).contains("order_events_dropped_on_shutdown count=1")

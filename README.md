@@ -24,7 +24,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the system diagram and auth flow.
 | Framework | Spring Boot 4.1 (Web, Security, Validation, Data JPA) |
 | Database | PostgreSQL with Flyway migrations |
 | Auth | HS256 JWTs issued by MeishiApi, verified with a shared secret |
-| Observability | Spring Actuator + Micrometer Prometheus |
+| Observability | Spring Actuator health; JSON logs; Micrometer Prometheus on its own cluster-internal port (`OMIYAGE_METRICS_PORT`, off when unset) |
 | API docs | springdoc-openapi |
 | Tests | JUnit 5, MockK, Testcontainers, JaCoCo coverage |
 | Delivery | Docker image, Kubernetes manifests in `deploy/` |
