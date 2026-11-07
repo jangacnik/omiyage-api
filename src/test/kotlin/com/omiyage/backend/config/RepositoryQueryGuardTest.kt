@@ -9,6 +9,7 @@ import org.springframework.core.io.ClassPathResource
 import org.springframework.core.type.filter.AssignableTypeFilter
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.Repository
+import org.springframework.data.repository.query.parser.PartTree
 import java.util.Properties
 
 /** Guards #75: SQL lives only in META-INF/jpa-named-queries.properties and takes input only through bind parameters. */
@@ -24,8 +25,22 @@ class RepositoryQueryGuardTest {
         ClassPathResource("META-INF/jpa-named-queries.properties").inputStream.use { load(it) }
     }
 
-    private fun entityName(repository: Class<*>): String =
-        requireNotNull(ResolvableType.forClass(repository).`as`(Repository::class.java).getGeneric(0).resolve()).simpleName
+    private fun entityClass(repository: Class<*>): Class<*> =
+        requireNotNull(ResolvableType.forClass(repository).`as`(Repository::class.java).getGeneric(0).resolve())
+
+    private fun entityName(repository: Class<*>): String = entityClass(repository).simpleName
+
+    /** Spring Data derives a query from the method name only if the name parses against the entity's properties. */
+    private fun isDerived(methodName: String, entity: Class<*>): Boolean = runCatching { PartTree(methodName, entity) }.isSuccess
+
+    /** Methods Spring Data cannot derive from their name: each needs a statement in the file. */
+    private val nonDerivedMethods: List<String> = repositories.flatMap { repository ->
+        val entity = entityClass(repository)
+        repository.declaredMethods
+            .filterNot { it.isDefault || it.isSynthetic }
+            .filter { it.getAnnotation(Query::class.java)?.nativeQuery == true || !isDerived(it.name, entity) }
+            .map { "${entity.simpleName}.${it.name}" }
+    }
 
     @Test
     fun `the scan finds the repositories`() {
@@ -44,15 +59,20 @@ class RepositoryQueryGuardTest {
     }
 
     @Test
-    fun `every native query method has its statement in the file`() {
-        val missing = repositories.flatMap { repository ->
-            repository.declaredMethods
-                .filter { it.getAnnotation(Query::class.java)?.nativeQuery == true }
-                .map { "${entityName(repository)}.${it.name}" }
-                .filterNot { namedQueries.containsKey(it) }
-        }
+    fun `every method that is not a derived query has its statement in the file`() {
+        assertThat(nonDerivedMethods.filterNot { namedQueries.containsKey(it) }).isEmpty()
+    }
 
-        assertThat(missing).isEmpty()
+    @Test
+    fun `JPQL methods without an annotation count as non-derived`() {
+        assertThat(nonDerivedMethods).contains(
+            "InventoryItem.search",
+            "Order.findFiltered",
+            "Order.findAllOrderByItemCountAsc",
+            "Order.findAllOrderByItemCountDesc",
+            "Order.detachShipment",
+        )
+        assertThat(nonDerivedMethods).doesNotContain("Order.findByUserId", "Order.existsByShipment_Id")
     }
 
     @Test
