@@ -17,13 +17,6 @@ interface CombineRequestRepository : JpaRepository<CombineRequest, UUID> {
     // roll back the whole purge transaction (orders/shipments purge included) every night from
     // then on. Must run before orders/shipments purgeDeletedBefore in the same job.
     @Modifying
-    @Query(
-        value = """
-            DELETE FROM combine_requests
-            WHERE requester_order_id IN (SELECT id FROM orders WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff)
-               OR target_shipment_id IN (SELECT id FROM shipments WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff)
-        """,
-        nativeQuery = true,
-    )
+    @Query(nativeQuery = true)
     fun purgeReferencingPurgeableOrdersOrShipments(cutoff: OffsetDateTime): Int
 }

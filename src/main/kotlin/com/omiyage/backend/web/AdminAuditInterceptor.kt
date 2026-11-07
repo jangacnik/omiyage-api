@@ -24,9 +24,14 @@ class AdminAuditInterceptor : HandlerInterceptor {
         val admin = SecurityContextHolder.getContext().authentication?.principal as? MeishiPrincipal
         auditLog.info(
             "admin_mutation user={} method={} route={} status={}",
-            admin?.id, request.method, route, response.status,
+            admin?.id, request.method, route, outcomeStatus(response, ex),
         )
     }
+
+    // GlobalExceptionHandler resolves every exception it can, and then ex is null here. An exception
+    // that still arrives was resolved by nobody, reaches here before the container writes the error,
+    // and becomes a 500 while response.status still reads 200.
+    private fun outcomeStatus(response: HttpServletResponse, ex: Exception?): Int = if (ex == null) response.status else 500
 }
 
 @Component

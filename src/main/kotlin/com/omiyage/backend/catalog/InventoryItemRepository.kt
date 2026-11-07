@@ -13,19 +13,9 @@ interface InventoryItemRepository : JpaRepository<InventoryItem, UUID> {
     fun existsByTitleIgnoreCaseAndConditionAndLink(title: String, condition: com.omiyage.backend.common.Condition, link: String?): Boolean
 
     @Modifying
-    @Query(value = "DELETE FROM inventory_items WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff", nativeQuery = true)
+    @Query(nativeQuery = true)
     fun purgeDeletedBefore(cutoff: OffsetDateTime): Int
 
-    @Query(
-        """
-        SELECT DISTINCT i FROM InventoryItem i
-        LEFT JOIN i.categories c
-        WHERE (:title = '' OR LOWER(i.title) LIKE LOWER(CONCAT('%', :title, '%')))
-        AND (:categoryId IS NULL OR c.id = :categoryId)
-        AND (:status IS NULL OR i.status = :status)
-        AND (:inStockOnly = false OR i.stockQuantity > 0)
-        """,
-    )
     fun search(
         @Param("title") title: String,
         @Param("categoryId") categoryId: UUID?,
