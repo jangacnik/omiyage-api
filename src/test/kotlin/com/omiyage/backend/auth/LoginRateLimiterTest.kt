@@ -32,6 +32,15 @@ class LoginRateLimiterTest {
     }
 
     @Test
+    fun `blocks the twenty-first attempt from one ip when no nickname is involved`() {
+        repeat(20) { assertDoesNotThrow { limiter.checkAttempt("1.1.1.1") } }
+
+        val e = assertThrows<ResponseStatusException> { limiter.checkAttempt("1.1.1.1") }
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, e.statusCode)
+        assertDoesNotThrow { limiter.checkAttempt("2.2.2.2") }
+    }
+
+    @Test
     fun `blocks the twenty-first attempt from one ip across nicknames`() {
         repeat(20) { assertDoesNotThrow { limiter.checkAttempt("1.1.1.1", "user$it") } }
 

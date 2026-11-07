@@ -1507,6 +1507,24 @@
             "tags" : [ "admin-shipping-rate-controller" ]
           }
         },
+        "/api/auth/config" : {
+          "get" : {
+            "operationId" : "publicConfig",
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "$ref" : "#/components/schemas/PublicConfigResponse"
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "tags" : [ "auth-controller" ]
+          }
+        },
         "/api/auth/login" : {
           "post" : {
             "operationId" : "login",
@@ -1515,6 +1533,34 @@
                 "application/json" : {
                   "schema" : {
                     "$ref" : "#/components/schemas/LoginRequest"
+                  }
+                }
+              },
+              "required" : true
+            },
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "$ref" : "#/components/schemas/TokenResponse"
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "tags" : [ "auth-controller" ]
+          }
+        },
+        "/api/auth/meishi/exchange" : {
+          "post" : {
+            "operationId" : "meishiExchange",
+            "requestBody" : {
+              "content" : {
+                "application/json" : {
+                  "schema" : {
+                    "$ref" : "#/components/schemas/MeishiExchangeRequest"
                   }
                 }
               },
@@ -3486,6 +3532,42 @@
             },
             "required" : [ "paid" ]
           },
+          "MeishiExchangeRequest" : {
+            "type" : "object",
+            "properties" : {
+              "code" : {
+                "type" : "string",
+                "maxLength" : 512,
+                "minLength" : 0
+              },
+              "codeVerifier" : {
+                "type" : "string",
+                "maxLength" : 128,
+                "minLength" : 43,
+                "pattern" : "^[A-Za-z0-9\\-._~]+$"
+              },
+              "redirectUri" : {
+                "type" : "string",
+                "maxLength" : 2048,
+                "minLength" : 0
+              }
+            },
+            "required" : [ "code", "codeVerifier", "redirectUri" ]
+          },
+          "MeishiSsoConfig" : {
+            "type" : "object",
+            "properties" : {
+              "authorizeUrl" : {
+                "type" : "string"
+              },
+              "clientId" : {
+                "type" : "string"
+              },
+              "enabled" : {
+                "type" : "boolean"
+              }
+            }
+          },
           "MemberShipmentDto" : {
             "type" : "object",
             "properties" : {
@@ -3850,6 +3932,14 @@
               "currency" : {
                 "type" : "string",
                 "enum" : [ "JPY", "EUR" ]
+              }
+            }
+          },
+          "PublicConfigResponse" : {
+            "type" : "object",
+            "properties" : {
+              "meishiSso" : {
+                "$ref" : "#/components/schemas/MeishiSsoConfig"
               }
             }
           },

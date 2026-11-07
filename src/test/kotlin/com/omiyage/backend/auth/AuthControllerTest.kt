@@ -7,6 +7,7 @@ import com.omiyage.backend.security.JwtAuthenticationFilter
 import com.omiyage.backend.security.JwtVerifier
 import com.omiyage.backend.security.SecurityConfig
 import io.mockk.every
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -15,6 +16,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 
 @WebMvcTest(controllers = [AuthController::class])
@@ -69,5 +71,33 @@ class AuthControllerTest {
             contentType = MediaType.APPLICATION_JSON
             content = body
         }.andExpect { status { isTooManyRequests() } }
+    }
+
+    @Test
+    fun `public config reports the hosted login as off by default`() {
+        mockMvc.get("/api/auth/config").andExpect {
+            status { isOk() }
+            jsonPath("$.meishiSso.enabled") { value(false) }
+            jsonPath("$.meishiSso.authorizeUrl") { doesNotExist() }
+            jsonPath("$.meishiSso.clientId") { doesNotExist() }
+        }
+    }
+
+    @Test
+    fun `exchange is 404 while the hosted login is off`() {
+        mockMvc.post("/api/auth/meishi/exchange") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MeishiExchangeRequest("code", "v".repeat(43), "https://app/cb"))
+        }.andExpect { status { isNotFound() } }
+        verify(exactly = 0) { service.loginWithMeishiCode(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `exchange is 404 while the hosted login is off even for an invalid body`() {
+        mockMvc.post("/api/auth/meishi/exchange") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(MeishiExchangeRequest("", "short", ""))
+        }.andExpect { status { isNotFound() } }
+        verify(exactly = 0) { service.loginWithMeishiCode(any(), any(), any(), any(), any()) }
     }
 }
