@@ -68,6 +68,22 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    fun `an unreadable field names its path in the body`() {
+        mockMvc.perform(post("/body").contentType(MediaType.APPLICATION_JSON).content("""{"id":"nope"}"""))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.field").value("id"))
+            .andExpect(jsonPath("$.error").value("id is not a valid id"))
+            .andExpect(jsonPath("$.code").value("bad_request"))
+    }
+
+    @Test
+    fun `malformed json has no field`() {
+        mockMvc.perform(post("/body").contentType(MediaType.APPLICATION_JSON).content("{not json"))
+            .andExpect(jsonPath("$.error").value("bad request"))
+            .andExpect(jsonPath("$.field").doesNotExist())
+    }
+
+    @Test
     fun `missing required header is a 400`() {
         mockMvc.perform(get("/header")).andExpect(status().isBadRequest).andExpect(jsonPath("$.error").exists())
     }
