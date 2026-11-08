@@ -17,6 +17,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -78,6 +79,14 @@ class OrderCreateBindingIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `a line without the optional primitives gets their defaults (the cart omits isPreorder)`() {
         order(cart("""{"inventoryItemId":"$itemId","currency":"EUR"}""")).andExpect(status().isCreated).andExpect(jsonPath("$.items[0].quantity").value(1))
+    }
+
+    @Test
+    fun `responses carry the isPreorder key the frontend reads`() {
+        order(cart()).andExpect(status().isCreated).andExpect(jsonPath("$.items[0].isPreorder").value(false))
+        mockMvc.perform(get("/api/inventory").param("title", "Cart item").header("Authorization", "Bearer ${token()}"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content[0].isPreorder").value(false))
     }
 
     @Test
