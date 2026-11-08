@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.orFail
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.omiyage.backend.PostgresIntegrationTest
@@ -89,7 +90,7 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.EUR,
                 stockQuantity = 5,
             ),
-        )
+        ).orFail()
         val customTitle = "Custom ${UUID.randomUUID()}"
 
         val order = orderService.create(

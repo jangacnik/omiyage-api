@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -70,7 +71,7 @@ class AdminItemTemplateControllerTest {
             priceAmount = request.priceAmount,
             boughtPrice = request.boughtPrice,
             weight = request.weight,
-        )
+        ).right()
 
         mockMvc.post("/api/admin/item-templates") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -93,7 +94,7 @@ class AdminItemTemplateControllerTest {
     @Test
     fun `delete succeeds for an admin`() {
         val id = UUID.randomUUID()
-        every { service.delete(id) } just Runs
+        every { service.delete(id) } returns Unit.right()
 
         mockMvc.delete("/api/admin/item-templates/$id") { header("Authorization", "Bearer ${adminToken()}") }
             .andExpect { status { isNoContent() } }

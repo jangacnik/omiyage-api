@@ -1,5 +1,6 @@
 package com.omiyage.backend.web
 
+import arrow.core.right
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
@@ -70,7 +71,7 @@ class AdminAuditConfigTest {
     fun `an admin write under the admin path logs one audit event`() {
         val adminId = UUID.randomUUID()
         val token = TestJwt.sign(TEST_SECRET, subject = adminId.toString(), role = "ADMIN")
-        every { categories.create("Snacks", "snacks") } returns CategoryDto(UUID.randomUUID(), "Snacks", "snacks")
+        every { categories.create("Snacks", "snacks") } returns CategoryDto(UUID.randomUUID(), "Snacks", "snacks").right()
 
         mockMvc.post("/api/admin/categories") {
             header("Authorization", "Bearer $token")

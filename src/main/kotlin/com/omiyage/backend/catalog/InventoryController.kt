@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import com.omiyage.backend.web.getOrRespond
 import com.omiyage.backend.web.PageResponse
 import org.springframework.data.domain.Pageable
 import org.springframework.data.web.PageableDefault
@@ -23,5 +24,5 @@ class InventoryController(private val service: InventoryService) {
     ): PageResponse<InventoryItemDto> = service.search(title, categoryId, InventoryStatus.ACTIVE, pageable, inStockOnly = inStockOnly)
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: UUID): InventoryItemDto = service.getById(id)
+    fun getById(@PathVariable id: UUID): InventoryItemDto = service.getById(id).getOrRespond()
 }

@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.catalog.InventoryItemRequest
 import com.omiyage.backend.catalog.InventoryService
@@ -43,7 +44,7 @@ class OrderStockConcurrencyIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 1,
             ),
-        )
+        ).orFail()
         val start = CountDownLatch(1)
         val pool = Executors.newFixedThreadPool(2)
         val attempts = List(2) {
@@ -61,7 +62,7 @@ class OrderStockConcurrencyIntegrationTest : PostgresIntegrationTest() {
         val results = attempts.map { it.get() }
         pool.shutdown()
 
-        assertEquals(0, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(0, inventoryService.getById(item.id).orFail().stockQuantity)
         assertTrue(results.any { it.isSuccess }, "at least one order must win the last unit")
         val reservedUnits = jdbc.queryForObject(
             "SELECT COALESCE(SUM(reserved_quantity), 0) FROM order_items WHERE inventory_item_id = ?",

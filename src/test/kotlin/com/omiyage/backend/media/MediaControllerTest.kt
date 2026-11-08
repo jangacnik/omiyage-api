@@ -1,5 +1,6 @@
 package com.omiyage.backend.media
 
+import arrow.core.right
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
 import com.omiyage.backend.security.JwtAuthenticationFilter
@@ -48,7 +49,7 @@ class MediaControllerTest {
 
     @Test
     fun `upload returns the generated key`() {
-        every { service.upload(any(), any()) } returns "uploads/generated-key.jpg"
+        every { service.upload(any(), any()) } returns "uploads/generated-key.jpg".right()
         val file = MockMultipartFile("file", "photo.jpg", "image/jpeg", "fake-bytes".toByteArray())
 
         mockMvc.perform(
@@ -59,7 +60,7 @@ class MediaControllerTest {
 
     @Test
     fun `download is public and serves the stored bytes with their content type`() {
-        every { service.get("uploads/$KEY") } returns Media("uploads/$KEY", "image/jpeg", "fake-bytes".toByteArray())
+        every { service.get("uploads/$KEY") } returns Media("uploads/$KEY", "image/jpeg", "fake-bytes".toByteArray()).right()
 
         mockMvc.perform(get("/api/images/uploads/$KEY"))
             .andExpect(status().isOk)

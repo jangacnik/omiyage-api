@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.catalog.InventoryItemRequest
 import com.omiyage.backend.catalog.InventoryService
@@ -195,7 +196,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 priceAmount = BigDecimal("10"),
                 currency = Currency.EUR,
             ),
-        )
+        ).orFail()
         val order = orderService.create(
             user(),
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = inventoryItem.id, currency = Currency.EUR))),
@@ -249,7 +250,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 priceAmount = BigDecimal("500"),
                 currency = Currency.JPY,
             ),
-        )
+        ).orFail()
 
         val order = orderService.create(
             user(),
@@ -271,7 +272,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 boughtPrice = BigDecimal("300"),
             ),
-        )
+        ).orFail()
 
         val order = orderService.adminCreate(
             user().id,
@@ -294,14 +295,14 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 3,
             ),
-        )
+        ).orFail()
 
         orderService.create(
             user(),
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
         )
 
-        assertEquals(1, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(1, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -315,7 +316,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 1,
             ),
-        )
+        ).orFail()
 
         val order = orderService.create(
             user(),
@@ -323,7 +324,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         )
 
         assertEquals(1, order.items.size)
-        assertEquals(0, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(0, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -337,7 +338,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 0,
             ),
-        )
+        ).orFail()
         val owner = user()
         val order = orderService.create(
             owner,
@@ -346,7 +347,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
         orderService.cancelOwn(order.id, owner)
 
-        assertEquals(0, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(0, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -360,17 +361,17 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 5,
             ),
-        )
+        ).orFail()
         val owner = user()
         val order = orderService.create(
             owner,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
         )
-        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(3, inventoryService.getById(item.id).orFail().stockQuantity)
 
         orderService.removeOwnItem(order.id, order.items[0].id, owner)
 
-        assertEquals(5, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(5, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -384,17 +385,17 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 5,
             ),
-        )
+        ).orFail()
         val owner = user()
         val order = orderService.create(
             owner,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
         )
-        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(3, inventoryService.getById(item.id).orFail().stockQuantity)
 
         orderService.cancelOwn(order.id, owner)
 
-        assertEquals(5, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(5, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -408,19 +409,19 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 5,
             ),
-        )
+        ).orFail()
         val owner = user()
         val order = orderService.create(
             owner,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
         )
-        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(3, inventoryService.getById(item.id).orFail().stockQuantity)
 
         orderService.updateOwnItem(order.id, order.items[0].id, owner, UpdateOwnOrderItemRequest(quantity = 4))
-        assertEquals(1, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(1, inventoryService.getById(item.id).orFail().stockQuantity)
 
         orderService.updateOwnItem(order.id, order.items[0].id, owner, UpdateOwnOrderItemRequest(quantity = 1))
-        assertEquals(4, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(4, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test

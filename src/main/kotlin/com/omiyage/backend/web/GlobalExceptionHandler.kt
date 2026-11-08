@@ -41,6 +41,12 @@ class GlobalExceptionHandler {
         return ResponseEntity.status(e.statusCode).body(errorBody(e.statusCode, message))
     }
 
+    @ExceptionHandler(DomainErrorException::class)
+    fun handleDomainError(e: DomainErrorException): ResponseEntity<Map<String, String>> {
+        val failure = e.error.toHttpFailure()
+        return ResponseEntity.status(failure.status).body(errorBody(failure.status, failure.message))
+    }
+
     @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
     fun handleMethodNotAllowed(e: HttpRequestMethodNotSupportedException): ResponseEntity<Map<String, String>> =
         ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(errorBody(HttpStatus.METHOD_NOT_ALLOWED, e.message ?: "method not allowed"))

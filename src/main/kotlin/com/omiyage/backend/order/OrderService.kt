@@ -13,6 +13,7 @@ import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentStatus
 import com.omiyage.backend.user.MeishiAdminClient
 import com.omiyage.backend.web.PageResponse
+import com.omiyage.backend.web.getOrRespond
 import com.omiyage.backend.web.toPageResponse
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
@@ -610,7 +611,7 @@ class OrderService(
         request.title?.let { item.customTitle = it }
         request.description?.let { item.customDescription = it }
         request.imageKey?.let {
-            media.requireExisting(listOf(it))
+            media.requireExisting(listOf(it)).getOrRespond()
             item.customImageKey = it
         }
         request.maxPrice?.let { item.maxPrice = it }
@@ -702,7 +703,7 @@ class OrderService(
         if (request.isPreorder && request.expectedReleaseDate == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a preorder item must have an expected release date")
         }
-        request.imageKey?.let { media.requireExisting(listOf(it)) }
+        request.imageKey?.let { media.requireExisting(listOf(it)).getOrRespond() }
         return OrderItem(
             order = order,
             customTitle = request.title,

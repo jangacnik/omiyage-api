@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.catalog.InventoryItemRequest
 import com.omiyage.backend.catalog.InventoryService
@@ -74,7 +75,7 @@ class OrderStockConservationIntegrationTest : PostgresIntegrationTest() {
                         currency = Currency.EUR,
                         stockQuantity = stock,
                     ),
-                )
+                ).orFail()
                 inventoryIds.add(item.id)
                 item.id to stock
             }.toMap()

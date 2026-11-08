@@ -1,10 +1,16 @@
 package com.omiyage.backend.catalog
 
-import org.springframework.http.HttpStatus
+import arrow.core.Either
+import arrow.core.raise.Raise
+import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
+import com.omiyage.backend.errors.CatalogError
+import com.omiyage.backend.errors.DomainError
+import com.omiyage.backend.errors.transactionalEither
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 
 @Service
 class ItemTemplateService(private val templates: ItemTemplateRepository) {
@@ -25,25 +31,23 @@ class ItemTemplateService(private val templates: ItemTemplateRepository) {
     ).toDto()
 
     @Transactional
-    fun update(id: UUID, request: ItemTemplateRequest): ItemTemplateDto {
-        val template = findOrThrow(id)
+    fun update(id: UUID, request: ItemTemplateRequest): Either<DomainError, ItemTemplateDto> = transactionalEither {
+        val template = findOrRaise(id)
         template.name = request.name
         template.title = request.title
         template.description = request.description
         template.priceAmount = request.priceAmount
         template.boughtPrice = request.boughtPrice
         template.weight = request.weight
-        return template.toDto()
+        template.toDto()
     }
 
     @Transactional
-    fun delete(id: UUID) {
-        if (!templates.existsById(id)) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "item template not found")
-        }
+    fun delete(id: UUID): Either<DomainError, Unit> = transactionalEither {
+        ensure(templates.existsById(id)) { CatalogError.ItemTemplateNotFound }
         templates.deleteById(id)
     }
 
-    private fun findOrThrow(id: UUID): ItemTemplate =
-        templates.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "item template not found") }
+    private fun Raise<DomainError>.findOrRaise(id: UUID): ItemTemplate =
+        ensureNotNull(templates.findById(id).getOrNull()) { CatalogError.ItemTemplateNotFound }
 }

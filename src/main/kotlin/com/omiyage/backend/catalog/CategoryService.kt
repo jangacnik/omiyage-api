@@ -1,9 +1,12 @@
 package com.omiyage.backend.catalog
 
+import arrow.core.Either
+import arrow.core.raise.ensure
+import com.omiyage.backend.errors.CatalogError
+import com.omiyage.backend.errors.DomainError
+import com.omiyage.backend.errors.transactionalEither
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
-import org.springframework.http.HttpStatus
 import java.util.UUID
 
 @Service
@@ -13,18 +16,14 @@ class CategoryService(private val repository: CategoryRepository) {
     fun list(): List<CategoryDto> = repository.findAll().sortedBy { it.name }.map { it.toDto() }
 
     @Transactional
-    fun create(name: String, slug: String): CategoryDto {
-        if (repository.existsBySlug(slug)) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "slug already in use")
-        }
-        return repository.save(Category(name = name, slug = slug)).toDto()
+    fun create(name: String, slug: String): Either<DomainError, CategoryDto> = transactionalEither {
+        ensure(!repository.existsBySlug(slug)) { CatalogError.CategorySlugInUse }
+        repository.save(Category(name = name, slug = slug)).toDto()
     }
 
     @Transactional
-    fun delete(id: UUID) {
-        if (!repository.existsById(id)) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "category not found")
-        }
+    fun delete(id: UUID): Either<DomainError, Unit> = transactionalEither {
+        ensure(repository.existsById(id)) { CatalogError.CategoryNotFound }
         repository.deleteById(id)
     }
 }
