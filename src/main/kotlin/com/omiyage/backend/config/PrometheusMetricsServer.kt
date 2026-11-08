@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.net.InetSocketAddress
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 private const val SCRAPE_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
@@ -28,6 +29,7 @@ class PrometheusMetricsServer(
 
     private val log = LoggerFactory.getLogger("startup")
     private var server: HttpServer? = null
+    private var executor: ExecutorService? = null
 
     val port: Int get() = server?.address?.port ?: -1
 
@@ -35,19 +37,29 @@ class PrometheusMetricsServer(
     fun start() {
         val started = HttpServer.create(InetSocketAddress(requestedPort), 0)
         started.createContext("/metrics") { exchange -> respond(exchange) }
-        started.executor = Executors.newSingleThreadExecutor { task -> Thread(task, "metrics-server").apply { isDaemon = true } }
+        val threads = Executors.newSingleThreadExecutor { task -> Thread(task, "metrics-server").apply { isDaemon = true } }
+        started.executor = threads
         started.start()
         server = started
+        executor = threads
         log.info("metrics_server_started port={}", port)
     }
 
     @PreDestroy
     fun stop() {
         server?.stop(0)
+        executor?.shutdown()
     }
+
+    val isStopped: Boolean get() = executor?.isShutdown ?: true
 
     private fun respond(exchange: HttpExchange) {
         exchange.use {
+            // HttpServer contexts match by path prefix, so /metricsx would reach this handler too.
+            if (it.requestURI.path != "/metrics") {
+                it.sendResponseHeaders(404, -1)
+                return
+            }
             if (it.requestMethod != "GET") {
                 it.sendResponseHeaders(405, -1)
                 return

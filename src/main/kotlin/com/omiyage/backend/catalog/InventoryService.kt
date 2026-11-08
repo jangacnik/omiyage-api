@@ -6,7 +6,9 @@ import com.omiyage.backend.order.OrderItemRepository
 import com.omiyage.backend.shipment.ExchangeRateService
 import com.omiyage.backend.web.PageResponse
 import com.omiyage.backend.web.toPageResponse
+import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -36,7 +38,7 @@ class InventoryService(
         includeCost: Boolean = false,
         inStockOnly: Boolean = false,
     ): PageResponse<InventoryItemDto> =
-        items.search(title?.trim().orEmpty(), categoryId, status, inStockOnly, pageable)
+        items.search(title?.trim().orEmpty(), categoryId, status, inStockOnly, withIdTiebreak(pageable))
             .toPageResponse { it.toDto(includeCost, exchangeRates::toEur) }
 
     @Transactional(readOnly = true)
@@ -147,6 +149,11 @@ class InventoryService(
         item.tags.clear()
         item.tags.addAll(tags)
     }
+
+    // Items often share a sort key (or no sort is given at all); without a unique last key Postgres may
+    // order the ties differently on each page, so paging repeats some items and skips others (#105).
+    private fun withIdTiebreak(pageable: Pageable): Pageable =
+        if (pageable.isUnpaged) pageable else PageRequest.of(pageable.pageNumber, pageable.pageSize, pageable.sort.and(Sort.by("id")))
 
     private fun findOrThrow(id: UUID): InventoryItem =
         items.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "inventory item not found") }
