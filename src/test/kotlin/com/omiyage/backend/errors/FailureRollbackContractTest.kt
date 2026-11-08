@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.basket.AddBasketLineRequest
+import com.omiyage.backend.basket.AddBasketToOrderRequest
+import com.omiyage.backend.combine.CreateCombineRequestRequest
+import com.omiyage.backend.shipment.CreateShipmentRequest
+import org.junit.jupiter.api.AfterEach
+import org.springframework.jdbc.core.JdbcTemplate
 import com.omiyage.backend.catalog.InventoryItemRequest
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
@@ -35,8 +40,31 @@ class FailureRollbackContractTest : PostgresIntegrationTest() {
     @Autowired
     lateinit var objectMapper: ObjectMapper
 
+    @Autowired
+    lateinit var jdbc: JdbcTemplate
+
+    private val createdUsers = mutableListOf<UUID>()
+
+    // The orders, shipments and requests made here are committed, and other suites count rows across the shared database.
+    @AfterEach
+    fun deleteCommittedRows() {
+        createdUsers.forEach { id ->
+            jdbc.update(
+                "DELETE FROM combine_requests WHERE requester_order_id IN (SELECT id FROM orders WHERE user_id = ?) " +
+                    "OR target_shipment_id IN (SELECT id FROM shipments WHERE owner_user_id = ?)",
+                id,
+                id,
+            )
+            jdbc.update("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", id)
+            jdbc.update("DELETE FROM orders WHERE user_id = ?", id)
+            jdbc.update("DELETE FROM shipments WHERE owner_user_id = ?", id)
+            jdbc.update("DELETE FROM basket_lines WHERE user_id = ?", id)
+        }
+    }
+
     private fun token(role: String): Pair<UUID, String> {
         val id = UUID.randomUUID()
+        createdUsers.add(id)
         return id to TestJwt.sign("integration-test-secret", subject = id.toString(), nickname = "n-${id.toString().take(8)}", role = role)
     }
 
@@ -99,5 +127,51 @@ class FailureRollbackContractTest : PostgresIntegrationTest() {
         assertEquals(5, stockOf(goodItemId))
         assertEquals(2, json(send(user, HttpMethod.GET, "/api/basket")).size())
         assertEquals(0, json(send(user, HttpMethod.GET, "/api/orders/mine")).get("content").size())
+    }
+
+    private fun createOrder(token: String): JsonNode {
+        val items = listOf(CreateOrderItemRequest(title = "rollback-${UUID.randomUUID()}", condition = Condition.NEW, currency = Currency.EUR))
+        val result = send(token, HttpMethod.POST, "/api/orders", CreateOrderRequest(items = items))
+        assertEquals(201, result.response.status)
+        return json(result)
+    }
+
+    private fun idOf(node: JsonNode) = UUID.fromString(node.get("id").asText())
+
+    @Test
+    fun `a basket that fails to join an order adds nothing to it and keeps its lines`() {
+        val orderId = idOf(createOrder(user))
+        val goneItemId = createInventoryItem(stock = 5)
+        assertEquals(201, send(user, HttpMethod.POST, "/api/basket/lines", AddBasketLineRequest(customTitle = "extra-${UUID.randomUUID()}", currency = Currency.EUR)).response.status)
+        assertEquals(201, send(user, HttpMethod.POST, "/api/basket/lines", AddBasketLineRequest(inventoryItemId = goneItemId, currency = Currency.EUR)).response.status)
+        assertEquals(204, send(admin, HttpMethod.DELETE, "/api/admin/inventory/$goneItemId").response.status)
+
+        val result = send(user, HttpMethod.POST, "/api/basket/add-to-order", AddBasketToOrderRequest(orderId))
+
+        assertEquals(404, result.response.status)
+        assertEquals(1, json(send(user, HttpMethod.GET, "/api/orders/$orderId")).get("items").size())
+        assertEquals(2, json(send(user, HttpMethod.GET, "/api/basket")).size())
+    }
+
+    @Test
+    fun `a rejected combine request acceptance leaves the accepted one and the pending one as they were`() {
+        val owner = token("USER").second
+        val requester = token("USER").second
+        val targetShipmentId = idOf(
+            json(send(admin, HttpMethod.POST, "/api/admin/shipments", CreateShipmentRequest(orderIds = listOf(idOf(createOrder(owner))))).also { assertEquals(201, it.response.status) }),
+        )
+        val firstOrderId = idOf(createOrder(requester))
+        val secondOrderId = idOf(createOrder(requester))
+        val firstRequest = idOf(json(send(requester, HttpMethod.POST, "/api/orders/combine-requests", CreateCombineRequestRequest(firstOrderId, targetShipmentId))))
+        val secondRequest = idOf(json(send(requester, HttpMethod.POST, "/api/orders/combine-requests", CreateCombineRequestRequest(secondOrderId, targetShipmentId))))
+        assertEquals(200, send(owner, HttpMethod.POST, "/api/orders/combine-requests/$firstRequest/accept").response.status)
+
+        val rejected = send(owner, HttpMethod.POST, "/api/orders/combine-requests/$secondRequest/accept")
+
+        assertEquals(409, rejected.response.status)
+        val incoming = json(send(owner, HttpMethod.GET, "/api/orders/combine-requests/incoming"))
+        assertEquals(listOf(secondRequest), incoming.map { idOf(it) })
+        assertEquals(targetShipmentId.toString(), json(send(requester, HttpMethod.GET, "/api/orders/$firstOrderId")).get("shipmentId").asText())
+        assertEquals(true, json(send(requester, HttpMethod.GET, "/api/orders/$secondOrderId")).get("shipmentId").isNull)
     }
 }

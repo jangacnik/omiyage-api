@@ -6,7 +6,7 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import com.omiyage.backend.errors.CatalogError
 import com.omiyage.backend.errors.DomainError
-import com.omiyage.backend.errors.transactionalEither
+import com.omiyage.backend.common.transactionalEither
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID

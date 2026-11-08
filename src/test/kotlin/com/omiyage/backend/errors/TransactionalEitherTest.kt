@@ -1,6 +1,7 @@
 package com.omiyage.backend.errors
 
 import arrow.core.raise.ensure
+import com.omiyage.backend.common.transactionalEither
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 

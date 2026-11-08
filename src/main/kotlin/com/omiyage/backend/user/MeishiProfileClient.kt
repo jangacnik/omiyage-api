@@ -48,7 +48,7 @@ class MeishiProfileClient(private val client: RestClient, private val objectMapp
         } catch (parseError: Exception) {
             null
         } ?: e.statusText
-        return UserError.UpstreamRejected(e.statusCode, message)
+        return UserError.UpstreamRejected(e.statusCode.value(), message)
     }
 
     private fun execute(call: () -> RestClient.ResponseSpec): Either<DomainError, UserProfileDto> {

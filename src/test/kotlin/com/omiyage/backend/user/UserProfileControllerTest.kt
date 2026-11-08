@@ -96,7 +96,7 @@ class UserProfileControllerTest {
     @Test
     fun `a wrong current password surfaces as 401, not a raw 500`() {
         every { client.changePassword(any(), "wrong", "new-pass-123") } returns
-            UserError.UpstreamRejected(HttpStatus.UNAUTHORIZED, "incorrect password").left()
+            UserError.UpstreamRejected(HttpStatus.UNAUTHORIZED.value(), "incorrect password").left()
 
         mockMvc.patch("/api/users/me/password") {
             header("Authorization", "Bearer ${userToken()}")

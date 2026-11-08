@@ -9,7 +9,7 @@ import com.omiyage.backend.common.Condition
 import com.omiyage.backend.errors.BasketError
 import com.omiyage.backend.errors.CatalogError
 import com.omiyage.backend.errors.DomainError
-import com.omiyage.backend.errors.transactionalEither
+import com.omiyage.backend.common.transactionalEither
 import com.omiyage.backend.order.CreateOrderItemRequest
 import com.omiyage.backend.order.CreateOrderRequest
 import com.omiyage.backend.order.OrderDto

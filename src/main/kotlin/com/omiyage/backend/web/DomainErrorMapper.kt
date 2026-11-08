@@ -142,6 +142,6 @@ private fun AuthError.authFailure(): HttpFailure = when (this) {
 }
 
 private fun UserError.userFailure(): HttpFailure = when (this) {
-    is UserError.UpstreamRejected -> HttpFailure(status, message)
+    is UserError.UpstreamRejected -> HttpFailure(HttpStatusCode.valueOf(status), message)
     UserError.EmptyUpstreamResponse -> failure(HttpStatus.BAD_GATEWAY, "empty response from meishi")
 }

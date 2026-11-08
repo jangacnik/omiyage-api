@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.errorOrFail
 import com.omiyage.backend.errors.failureOf
 import com.omiyage.backend.errors.orFail
 import com.fasterxml.jackson.databind.JsonNode
@@ -79,6 +80,21 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
         owner,
         CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Custom ${UUID.randomUUID()}", condition = Condition.NEW, currency = Currency.EUR))),
     ).orFail()
+
+    @Test
+    fun `a rejected order sends no event`() {
+        while (!receiver.nothingWithin(200)) {
+            // drop events left over from earlier tests
+        }
+        val items = listOf(
+            CreateOrderItemRequest(title = "Custom ${UUID.randomUUID()}", condition = Condition.NEW, currency = Currency.EUR),
+            CreateOrderItemRequest(inventoryItemId = UUID.randomUUID(), currency = Currency.EUR),
+        )
+
+        orderService.create(owner, CreateOrderRequest(items = items)).errorOrFail()
+
+        assertThat(receiver.nothingWithin(1500)).isTrue()
+    }
 
     @Test
     fun `order created carries reference, items and total`() {

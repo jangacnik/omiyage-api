@@ -2,12 +2,13 @@ package com.omiyage.backend.catalog
 
 import arrow.core.Either
 import arrow.core.raise.Raise
+import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.errors.CatalogError
 import com.omiyage.backend.errors.DomainError
-import com.omiyage.backend.errors.transactionalEither
+import com.omiyage.backend.common.transactionalEither
 import com.omiyage.backend.media.MediaService
 import com.omiyage.backend.order.OrderItemRepository
 import com.omiyage.backend.shipment.ExchangeRateService
@@ -48,7 +49,7 @@ class InventoryService(
             .toPageResponse { it.toDto(includeCost, exchangeRates::toEur) }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID, includeCost: Boolean = false): Either<DomainError, InventoryItemDto> = transactionalEither {
+    fun getById(id: UUID, includeCost: Boolean = false): Either<DomainError, InventoryItemDto> = either {
         findOrRaise(id).toDto(includeCost, exchangeRates::toEur)
     }
 

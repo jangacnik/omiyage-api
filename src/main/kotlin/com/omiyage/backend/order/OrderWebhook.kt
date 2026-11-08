@@ -3,7 +3,6 @@ package com.omiyage.backend.order
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.omiyage.backend.user.MeishiAdminClient
 import com.omiyage.backend.user.MeishiProfileClient
-import com.omiyage.backend.web.toHttpFailure
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -143,7 +142,7 @@ class OrderWebhook(
             actor == null -> null
             actor.userId == userId -> profiles.getMe(actor.authHeader).fold(
                 { error ->
-                    log.warn("could not look up discordName for an order event: {}", error.toHttpFailure().message)
+                    log.warn("could not look up discordName for an order event: {}", error::class.simpleName)
                     null
                 },
                 { it.discordName },

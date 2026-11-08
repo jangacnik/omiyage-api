@@ -2,6 +2,7 @@ package com.omiyage.backend.order
 
 import arrow.core.Either
 import arrow.core.raise.Raise
+import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import com.omiyage.backend.catalog.InventoryItem
@@ -12,7 +13,7 @@ import com.omiyage.backend.common.Currency
 import com.omiyage.backend.errors.CatalogError
 import com.omiyage.backend.errors.DomainError
 import com.omiyage.backend.errors.OrderError
-import com.omiyage.backend.errors.transactionalEither
+import com.omiyage.backend.common.transactionalEither
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.shipment.ExchangeRateService
@@ -110,7 +111,7 @@ class OrderService(
         orders.findByUserId(principal.id, withIdTiebreak(pageable)).toPageResponse { it.toDto() }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID, principal: MeishiPrincipal): Either<DomainError, OrderDto> = transactionalEither {
+    fun getById(id: UUID, principal: MeishiPrincipal): Either<DomainError, OrderDto> = either {
         val order = findOrRaise(id)
         val isAdmin = principal.role == Role.ADMIN
         ensure(isAdmin || order.userId == principal.id) { OrderError.OrderNotFound }

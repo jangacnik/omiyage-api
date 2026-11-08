@@ -25,7 +25,7 @@ class DomainErrorMapperTest {
 
     @Test
     fun `an upstream rejection keeps the status and message MeishiApi gave`() {
-        val failure = UserError.UpstreamRejected(HttpStatus.CONFLICT, "nickname taken").toHttpFailure()
+        val failure = UserError.UpstreamRejected(HttpStatus.CONFLICT.value(), "nickname taken").toHttpFailure()
 
         assertEquals(HttpFailure(HttpStatus.CONFLICT, "nickname taken"), failure)
     }

@@ -8,7 +8,7 @@ import com.omiyage.backend.errors.CombineError
 import com.omiyage.backend.errors.DomainError
 import com.omiyage.backend.errors.OrderError
 import com.omiyage.backend.errors.ShipmentError
-import com.omiyage.backend.errors.transactionalEither
+import com.omiyage.backend.common.transactionalEither
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.isOpen
 import com.omiyage.backend.security.MeishiPrincipal

@@ -126,7 +126,7 @@ class AuthServiceTest {
             }
 
             val line = capture.events.single().formattedMessage
-            assertEquals("sso_exchange_failed status=401 clientIp=9.9.9.9", line)
+            assertEquals("sso_exchange_failed error=InvalidCredentials clientIp=9.9.9.9", line)
         }
     }
 

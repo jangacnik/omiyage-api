@@ -7,7 +7,6 @@ import com.omiyage.backend.errors.AuthError
 import com.omiyage.backend.errors.DomainError
 import com.omiyage.backend.security.JwtVerificationException
 import com.omiyage.backend.security.JwtVerifier
-import com.omiyage.backend.web.toHttpFailure
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.security.MessageDigest
@@ -32,7 +31,7 @@ class AuthService(private val meishi: MeishiAuthClient, private val jwtVerifier:
     fun login(nickname: String, password: String, clientIp: String): Either<DomainError, String> = either {
         val token = meishi.login(nickname, password)
             .onLeft {
-                securityLog.warn("login_failed nicknameHash={} status={} clientIp={}", nicknameHash(nickname), it.toHttpFailure().status.value(), clientIp)
+                securityLog.warn("login_failed nicknameHash={} error={} clientIp={}", nicknameHash(nickname), it::class.simpleName, clientIp)
             }
             .bind()
         rejectFrozen(token)
@@ -48,7 +47,7 @@ class AuthService(private val meishi: MeishiAuthClient, private val jwtVerifier:
         clientIp: String,
     ): Either<DomainError, String> = either {
         val token = meishi.exchangeCode(clientId, code, codeVerifier, redirectUri)
-            .onLeft { securityLog.warn("sso_exchange_failed status={} clientIp={}", it.toHttpFailure().status.value(), clientIp) }
+            .onLeft { securityLog.warn("sso_exchange_failed error={} clientIp={}", it::class.simpleName, clientIp) }
             .bind()
         requireTokenWeAccept(token)
         rejectFrozen(token)

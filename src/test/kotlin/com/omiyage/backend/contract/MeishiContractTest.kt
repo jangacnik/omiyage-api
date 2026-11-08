@@ -89,7 +89,7 @@ class MeishiContractTest {
             .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body("""{"error":"nickname taken"}"""))
 
         val failure = MeishiProfileClient(client, objectMapper).changeNickname("Bearer t", "bob").errorOrFail()
-        assertEquals(UserError.UpstreamRejected(HttpStatus.CONFLICT, "nickname taken"), failure)
+        assertEquals(UserError.UpstreamRejected(HttpStatus.CONFLICT.value(), "nickname taken"), failure)
     }
 
     @Test

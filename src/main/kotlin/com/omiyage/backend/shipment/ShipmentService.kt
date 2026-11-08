@@ -2,12 +2,13 @@ package com.omiyage.backend.shipment
 
 import arrow.core.Either
 import arrow.core.raise.Raise
+import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import com.omiyage.backend.errors.DomainError
 import com.omiyage.backend.errors.OrderError
 import com.omiyage.backend.errors.ShipmentError
-import com.omiyage.backend.errors.transactionalEither
+import com.omiyage.backend.common.transactionalEither
 import com.omiyage.backend.order.Order
 import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.order.OrderEventPublisher
@@ -58,7 +59,7 @@ class ShipmentService(
             .map { it.toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur) }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID): Either<DomainError, ShipmentDto> = transactionalEither {
+    fun getById(id: UUID): Either<DomainError, ShipmentDto> = either {
         findOrRaise(id).toDto(shippingRates::priceFor, exchangeRates::toEurWithMarkup, exchangeRates::toEur)
     }
 
