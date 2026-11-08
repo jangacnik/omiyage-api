@@ -51,5 +51,14 @@ class PrometheusMetricsServerTest {
     fun `serves nothing else`() {
         assertEquals(404, send("GET", "/actuator/env").statusCode())
         assertEquals(404, send("GET", "/").statusCode())
+        assertEquals(404, send("GET", "/metricsx").statusCode())
+        assertEquals(404, send("GET", "/metrics/x").statusCode())
+    }
+
+    @Test
+    fun `stop shuts down the request thread`() {
+        server.stop()
+
+        assertTrue(server.isStopped)
     }
 }
