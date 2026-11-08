@@ -1,5 +1,8 @@
 package com.omiyage.backend.user
 
+import com.omiyage.backend.errors.UserError
+import arrow.core.left
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -59,7 +62,7 @@ class UserProfileControllerTest {
 
     @Test
     fun `changes the caller's own nickname`() {
-        every { client.changeNickname(any(), "renamed") } returns profile()
+        every { client.changeNickname(any(), "renamed") } returns profile().right()
 
         mockMvc.patch("/api/users/me/nickname") {
             header("Authorization", "Bearer ${userToken()}")
@@ -81,7 +84,7 @@ class UserProfileControllerTest {
 
     @Test
     fun `changes the caller's own password`() {
-        every { client.changePassword(any(), "old-pass", "new-pass-123") } just Runs
+        every { client.changePassword(any(), "old-pass", "new-pass-123") } returns Unit.right()
 
         mockMvc.patch("/api/users/me/password") {
             header("Authorization", "Bearer ${userToken()}")
@@ -92,8 +95,8 @@ class UserProfileControllerTest {
 
     @Test
     fun `a wrong current password surfaces as 401, not a raw 500`() {
-        every { client.changePassword(any(), "wrong", "new-pass-123") } throws
-            ResponseStatusException(HttpStatus.UNAUTHORIZED, "incorrect password")
+        every { client.changePassword(any(), "wrong", "new-pass-123") } returns
+            UserError.UpstreamRejected(HttpStatus.UNAUTHORIZED, "incorrect password").left()
 
         mockMvc.patch("/api/users/me/password") {
             header("Authorization", "Bearer ${userToken()}")
@@ -104,7 +107,7 @@ class UserProfileControllerTest {
 
     @Test
     fun `profile update forwards only whitelisted fields`() {
-        every { client.updateMe(any(), mapOf("city" to "Tokyo")) } returns profile()
+        every { client.updateMe(any(), mapOf("city" to "Tokyo")) } returns profile().right()
 
         mockMvc.patch("/api/users/me") {
             header("Authorization", "Bearer ${userToken()}")
@@ -117,7 +120,7 @@ class UserProfileControllerTest {
 
     @Test
     fun `profile update forwards discordName`() {
-        every { client.updateMe(any(), mapOf("discordName" to "bob_b")) } returns profile()
+        every { client.updateMe(any(), mapOf("discordName" to "bob_b")) } returns profile().right()
 
         mockMvc.patch("/api/users/me") {
             header("Authorization", "Bearer ${userToken()}")

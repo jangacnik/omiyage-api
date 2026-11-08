@@ -1,5 +1,8 @@
 package com.omiyage.backend.auth
 
+import com.omiyage.backend.errors.orFail
+import com.omiyage.backend.errors.errorOrFail
+import com.omiyage.backend.errors.AuthError
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -25,36 +28,33 @@ class LoginRateLimiterTest {
 
     @Test
     fun `blocks the eleventh attempt for one nickname within a minute`() {
-        repeat(10) { assertDoesNotThrow { limiter.checkAttempt("1.1.1.${it}", "alice") } }
+        repeat(10) { limiter.checkAttempt("1.1.1.${it}", "alice").orFail() }
 
-        val e = assertThrows<ResponseStatusException> { limiter.checkAttempt("9.9.9.9", "Alice") }
-        assertEquals(HttpStatus.TOO_MANY_REQUESTS, e.statusCode)
+        assertEquals(AuthError.TooManyAttempts, limiter.checkAttempt("9.9.9.9", "Alice").errorOrFail())
     }
 
     @Test
     fun `blocks the twenty-first attempt from one ip when no nickname is involved`() {
-        repeat(20) { assertDoesNotThrow { limiter.checkAttempt("1.1.1.1") } }
+        repeat(20) { limiter.checkAttempt("1.1.1.1").orFail() }
 
-        val e = assertThrows<ResponseStatusException> { limiter.checkAttempt("1.1.1.1") }
-        assertEquals(HttpStatus.TOO_MANY_REQUESTS, e.statusCode)
-        assertDoesNotThrow { limiter.checkAttempt("2.2.2.2") }
+        assertEquals(AuthError.TooManyAttempts, limiter.checkAttempt("1.1.1.1").errorOrFail())
+        limiter.checkAttempt("2.2.2.2").orFail()
     }
 
     @Test
     fun `blocks the twenty-first attempt from one ip across nicknames`() {
-        repeat(20) { assertDoesNotThrow { limiter.checkAttempt("1.1.1.1", "user$it") } }
+        repeat(20) { limiter.checkAttempt("1.1.1.1", "user$it").orFail() }
 
-        val e = assertThrows<ResponseStatusException> { limiter.checkAttempt("1.1.1.1", "another") }
-        assertEquals(HttpStatus.TOO_MANY_REQUESTS, e.statusCode)
+        assertEquals(AuthError.TooManyAttempts, limiter.checkAttempt("1.1.1.1", "another").errorOrFail())
     }
 
     @Test
     fun `allows attempts again after the window passes`() {
-        repeat(10) { limiter.checkAttempt("1.1.1.1", "alice") }
-        assertThrows<ResponseStatusException> { limiter.checkAttempt("1.1.1.1", "alice") }
+        repeat(10) { limiter.checkAttempt("1.1.1.1", "alice").orFail() }
+        assertEquals(AuthError.TooManyAttempts, limiter.checkAttempt("1.1.1.1", "alice").errorOrFail())
 
         clock.now = clock.now.plus(Duration.ofMinutes(2))
 
-        assertDoesNotThrow { limiter.checkAttempt("1.1.1.1", "alice") }
+        limiter.checkAttempt("1.1.1.1", "alice").orFail()
     }
 }

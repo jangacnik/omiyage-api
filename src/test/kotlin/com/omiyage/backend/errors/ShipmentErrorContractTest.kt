@@ -242,20 +242,20 @@ class ShipmentErrorContractTest : ErrorContractTest() {
 
     @Test
     fun `a duplicate shipping rate is 409`() {
-        createRate(500)
-        assertConflict(send(admin, HttpMethod.POST, "/api/admin/shipping-rates", rate(500)), "a rate already exists for this destination, method and weight tier")
+        createRate(91001)
+        assertConflict(send(admin, HttpMethod.POST, "/api/admin/shipping-rates", rate(91001)), "a rate already exists for this destination, method and weight tier")
     }
 
     @Test
     fun `updating a shipping rate onto a duplicate is 409`() {
-        createRate(500)
-        val second = createRate(1000)
-        assertConflict(send(admin, HttpMethod.PATCH, "/api/admin/shipping-rates/$second", rate(500)), "a rate already exists for this destination, method and weight tier")
+        createRate(91001)
+        val second = createRate(91002)
+        assertConflict(send(admin, HttpMethod.PATCH, "/api/admin/shipping-rates/$second", rate(91001)), "a rate already exists for this destination, method and weight tier")
     }
 
     @Test
     fun `updating an unknown shipping rate is 404`() {
-        assertNotFound(send(admin, HttpMethod.PATCH, "/api/admin/shipping-rates/${UUID.randomUUID()}", rate(500)), "shipping rate not found")
+        assertNotFound(send(admin, HttpMethod.PATCH, "/api/admin/shipping-rates/${UUID.randomUUID()}", rate(91001)), "shipping rate not found")
     }
 
     @Test

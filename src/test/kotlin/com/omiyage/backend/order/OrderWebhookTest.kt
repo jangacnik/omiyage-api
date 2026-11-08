@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import arrow.core.right
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.omiyage.backend.logging.LogCapture
 import com.omiyage.backend.user.MeishiAdminClient
@@ -153,7 +154,7 @@ class OrderWebhookTest {
 
     @Test
     fun `logs no token, secret or discordName`() {
-        every { profiles.getMe(any()) } returns profile(owner, "bob_42")
+        every { profiles.getMe(any()) } returns profile(owner, "bob_42").right()
         receiver.respondWith(500)
         val webhook = webhook()
 
@@ -186,7 +187,7 @@ class OrderWebhookTest {
 
     @Test
     fun `looks up the owner's discordName with the owner's own token`() {
-        every { profiles.getMe("Bearer user") } returns profile(owner, "bob_42")
+        every { profiles.getMe("Bearer user") } returns profile(owner, "bob_42").right()
 
         webhook().onOrderEvent(pending(EventActor(owner, admin = false, authHeader = "Bearer user")))
 

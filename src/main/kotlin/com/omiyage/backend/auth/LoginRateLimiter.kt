@@ -1,8 +1,11 @@
 package com.omiyage.backend.auth
 
-import org.springframework.http.HttpStatus
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.right
+import com.omiyage.backend.errors.AuthError
+import com.omiyage.backend.errors.DomainError
 import org.springframework.stereotype.Component
-import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -25,16 +28,15 @@ class LoginRateLimiter(private val clock: Clock = Clock.systemUTC()) {
     @Volatile
     private var lastSweep = clock.instant()
 
-    fun checkAttempt(ip: String, nickname: String) {
+    fun checkAttempt(ip: String, nickname: String): Either<DomainError, Unit> {
         val allowed = tryAcquire("ip:$ip", MAX_ATTEMPTS_PER_IP) &&
             tryAcquire("nickname:${nickname.trim().lowercase()}", MAX_ATTEMPTS_PER_NICKNAME)
-        if (!allowed) throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts")
+        return if (allowed) Unit.right() else AuthError.TooManyAttempts.left()
     }
 
     /** For logins that carry no nickname, such as a hosted-login code exchange. */
-    fun checkAttempt(ip: String) {
-        if (!tryAcquire("ip:$ip", MAX_ATTEMPTS_PER_IP)) throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts")
-    }
+    fun checkAttempt(ip: String): Either<DomainError, Unit> =
+        if (tryAcquire("ip:$ip", MAX_ATTEMPTS_PER_IP)) Unit.right() else AuthError.TooManyAttempts.left()
 
     private fun sweepExpiredWindows(now: Instant) {
         if (windows.size <= CLEANUP_THRESHOLD || lastSweep.plus(WINDOW) > now) return

@@ -1,5 +1,6 @@
 package com.omiyage.backend.user
 
+import com.omiyage.backend.web.getOrRespond
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PatchMapping
@@ -19,26 +20,26 @@ class UserProfileController(private val client: MeishiProfileClient) {
 
     @GetMapping
     fun getMe(@RequestHeader("Authorization") authHeader: String): UserProfileDto =
-        client.getMe(authHeader)
+        client.getMe(authHeader).getOrRespond()
 
     @PatchMapping
     fun updateMe(
         @RequestHeader("Authorization") authHeader: String,
         @RequestBody updates: Map<String, Any?>,
-    ): UserProfileDto = client.updateMe(authHeader, updates.filterKeys { it in EDITABLE_PROFILE_FIELDS })
+    ): UserProfileDto = client.updateMe(authHeader, updates.filterKeys { it in EDITABLE_PROFILE_FIELDS }).getOrRespond()
 
     @PatchMapping("/nickname")
     fun changeNickname(
         @RequestHeader("Authorization") authHeader: String,
         @Valid @RequestBody request: ChangeNicknameRequest,
-    ): UserProfileDto = client.changeNickname(authHeader, request.nickname)
+    ): UserProfileDto = client.changeNickname(authHeader, request.nickname).getOrRespond()
 
     @PatchMapping("/password")
     fun changePassword(
         @RequestHeader("Authorization") authHeader: String,
         @Valid @RequestBody request: ChangePasswordRequest,
     ): ResponseEntity<Void> {
-        client.changePassword(authHeader, request.oldPassword, request.newPassword)
+        client.changePassword(authHeader, request.oldPassword, request.newPassword).getOrRespond()
         return ResponseEntity.noContent().build()
     }
 }

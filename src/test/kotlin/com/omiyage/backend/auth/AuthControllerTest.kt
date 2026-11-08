@@ -1,5 +1,6 @@
 package com.omiyage.backend.auth
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -36,7 +37,7 @@ class AuthControllerTest {
 
     @Test
     fun `login is public and does not require a token`() {
-        every { service.login("bob", "hunter2", any()) } returns "the-token"
+        every { service.login("bob", "hunter2", any()) } returns "the-token".right()
 
         mockMvc.post("/api/auth/login") {
             contentType = MediaType.APPLICATION_JSON
@@ -57,7 +58,7 @@ class AuthControllerTest {
 
     @Test
     fun `login is throttled after too many attempts for one nickname`() {
-        every { service.login("carol", "pw", any()) } returns "the-token"
+        every { service.login("carol", "pw", any()) } returns "the-token".right()
         val body = objectMapper.writeValueAsString(LoginRequest("carol", "pw"))
 
         repeat(10) {

@@ -52,10 +52,10 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val a1 = order(alice)
         val a2 = order(alice)
         val b1 = order(bob)
-        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a1.id, a2.id))).orFail().orFail()
-        val shipmentB = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b1.id))).orFail().orFail()
+        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a1.id, a2.id))).orFail()
+        val shipmentB = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b1.id))).orFail()
 
-        val combined = shipmentService.combineShipments(listOf(shipmentA.id, shipmentB.id), title = "Big box").orFail().orFail()
+        val combined = shipmentService.combineShipments(listOf(shipmentA.id, shipmentB.id), title = "Big box").orFail()
 
         assertEquals(3, combined.orders.size)
         assertEquals("Big box", combined.title)
@@ -66,7 +66,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `combining fewer than two shipments is rejected`() {
         val a1 = order(user())
-        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a1.id))).orFail().orFail()
+        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a1.id))).orFail()
 
         failureOf { shipmentService.combineShipments(listOf(shipmentA.id), null) }
     }
@@ -75,11 +75,11 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     fun `cannot combine a shipment that has already shipped`() {
         val owner = user()
         val a = order(owner)
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail()
         orderService.submitForShipping(a.id, owner).orFail()
-        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail().orFail()
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
         val b = order(user())
-        val otherShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id))).orFail().orFail()
+        val otherShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id))).orFail()
 
         failureOf {
             shipmentService.combineShipments(listOf(shipment.id, otherShipment.id), null)
@@ -92,9 +92,9 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val a = order(owner)
         val b = order(owner)
         val c = order(owner)
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id, c.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id, c.id))).orFail()
 
-        val split = shipmentService.splitOff(shipment.id, listOf(a.id, b.id), title = "Split off").orFail().orFail()
+        val split = shipmentService.splitOff(shipment.id, listOf(a.id, b.id), title = "Split off").orFail()
 
         assertEquals(2, split.orders.size)
         assertEquals("Split off", split.title)
@@ -106,7 +106,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = order(owner)
         val b = order(owner)
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id))).orFail()
 
         failureOf {
             shipmentService.splitOff(shipment.id, listOf(a.id, b.id), null)
@@ -117,14 +117,14 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     fun `marking a shipment shipped records shippedAt, and the owner can then mark it arrived`() {
         val owner = user()
         val a = order(owner)
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail()
         orderService.submitForShipping(a.id, owner).orFail()
 
-        val shipped = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail().orFail()
+        val shipped = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
         assertNotNull(shipped.shippedAt)
         assertNull(shipped.arrivedAt)
 
-        val arrived = shipmentService.markArrivedMine(shipment.id, owner.id).orFail().orFail()
+        val arrived = shipmentService.markArrivedMine(shipment.id, owner.id).orFail()
         assertEquals(ShipmentStatus.DELIVERED, arrived.status)
         assertNotNull(arrived.arrivedAt)
     }
@@ -133,13 +133,13 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     fun `listActive excludes delivered shipments, listDelivered returns only them`() {
         val owner = user()
         val a = order(owner)
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail()
         orderService.submitForShipping(a.id, owner).orFail()
-        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail().orFail()
-        shipmentService.markArrivedMine(shipment.id, owner.id).orFail().orFail()
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
+        shipmentService.markArrivedMine(shipment.id, owner.id).orFail()
 
         val b = order(user())
-        val stillPreparing = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id))).orFail().orFail()
+        val stillPreparing = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id))).orFail()
 
         assertFalse(shipmentService.listActive().any { it.id == shipment.id })
         assertTrue(shipmentService.listActive().any { it.id == stillPreparing.id })
@@ -154,11 +154,11 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val a = order(owner)
         val cancelled = order(owner)
         orderService.updateStatus(cancelled.id, OrderStatus.CANCELLED).orFail()
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail()
         orderService.submitForShipping(a.id, owner).orFail()
-        shipmentService.assignOrder(cancelled.id, shipment.id).orFail().orFail()
+        shipmentService.assignOrder(cancelled.id, shipment.id).orFail()
 
-        val shipped = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail().orFail()
+        val shipped = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
 
         val sentOrder = shipped.orders.single { it.id == a.id }
         assertEquals(OrderStatus.SENT, sentOrder.status)
@@ -174,18 +174,18 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val other = user()
         val a = order(owner)
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail()
 
         failureOf {
             shipmentService.updateShippingMine(shipment.id, other.id, ShipmentDestination.AUSTRIA, ShippingMethod.EMS)
         }
 
-        val updated = shipmentService.updateShippingMine(shipment.id, owner.id, ShipmentDestination.AUSTRIA, ShippingMethod.EMS).orFail().orFail()
+        val updated = shipmentService.updateShippingMine(shipment.id, owner.id, ShipmentDestination.AUSTRIA, ShippingMethod.EMS).orFail()
         assertEquals(ShipmentDestination.AUSTRIA, updated.destination)
         assertEquals(ShippingMethod.EMS, updated.shippingMethod)
 
         orderService.submitForShipping(a.id, owner).orFail()
-        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail().orFail()
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
 
         failureOf {
             shipmentService.updateShippingMine(shipment.id, owner.id, ShipmentDestination.SLOVENIA, null)
@@ -197,14 +197,14 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val other = user()
         val a = order(owner)
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail()
         orderService.submitForShipping(a.id, owner).orFail()
-        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail().orFail()
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
 
         failureOf { shipmentService.markArrivedMine(shipment.id, other.id) }
         failureOf { shipmentService.renameMine(shipment.id, other.id, "Nope") }
 
-        val renamed = shipmentService.renameMine(shipment.id, owner.id, "My gifts").orFail().orFail()
+        val renamed = shipmentService.renameMine(shipment.id, owner.id, "My gifts").orFail()
         assertEquals("My gifts", renamed.title)
     }
 
@@ -213,13 +213,13 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val me = user()
         val other = user()
         val myOrder = order(me)
-        val myShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(myOrder.id))).orFail().orFail()
+        val myShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(myOrder.id))).orFail()
         val otherOpenOrder = order(other)
-        val otherOpenShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(otherOpenOrder.id), title = "Other's box")).orFail().orFail()
+        val otherOpenShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(otherOpenOrder.id), title = "Other's box")).orFail()
         val otherShippedOrder = order(other)
-        val otherShippedShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(otherShippedOrder.id))).orFail().orFail()
+        val otherShippedShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(otherShippedOrder.id))).orFail()
         orderService.submitForShipping(otherShippedOrder.id, other).orFail()
-        shipmentService.update(otherShippedShipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail().orFail()
+        shipmentService.update(otherShippedShipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
 
         val browsable = shipmentService.browsableForMember(me.id, "Bearer irrelevant")
 
@@ -236,7 +236,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     fun `cannot mark a shipment arrived before it has shipped`() {
         val owner = user()
         val a = order(owner)
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail().orFail()
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id))).orFail()
 
         failureOf { shipmentService.markArrivedMine(shipment.id, owner.id) }
     }

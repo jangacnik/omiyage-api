@@ -1,5 +1,11 @@
 package com.omiyage.backend.auth
 
+import com.omiyage.backend.errors.statusCode
+import com.omiyage.backend.errors.failureOf
+import com.omiyage.backend.errors.orFail
+import com.omiyage.backend.errors.AuthError
+import arrow.core.left
+import arrow.core.right
 import com.omiyage.backend.logging.LogCapture
 import com.omiyage.backend.security.JwtVerificationException
 import com.omiyage.backend.security.JwtVerifier
@@ -25,34 +31,34 @@ class AuthServiceTest {
 
     @Test
     fun `returns the token for an active account`() {
-        every { meishi.login("bob", "hunter2") } returns "the-token"
-        every { meishi.getMe("the-token") } returns MeishiUserResponse("id", "bob", "USER", "ACTIVE")
+        every { meishi.login("bob", "hunter2") } returns "the-token".right()
+        every { meishi.getMe("the-token") } returns MeishiUserResponse("id", "bob", "USER", "ACTIVE").right()
 
-        assertEquals("the-token", service.login("bob", "hunter2", "1.2.3.4"))
+        assertEquals("the-token", service.login("bob", "hunter2", "1.2.3.4").orFail())
     }
 
     @Test
     fun `rejects a frozen account even with the correct password`() {
-        every { meishi.login("bob", "hunter2") } returns "the-token"
-        every { meishi.getMe("the-token") } returns MeishiUserResponse("id", "bob", "USER", "FROZEN")
+        every { meishi.login("bob", "hunter2") } returns "the-token".right()
+        every { meishi.getMe("the-token") } returns MeishiUserResponse("id", "bob", "USER", "FROZEN").right()
 
-        val exception = assertThrows(ResponseStatusException::class.java) { service.login("bob", "hunter2", "1.2.3.4") }
+        val exception = failureOf { service.login("bob", "hunter2", "1.2.3.4") }
         assertEquals(403, exception.statusCode.value())
     }
 
     @Test
     fun `propagates invalid-credentials failures from MeishiApi`() {
-        every { meishi.login("bob", "wrong") } throws ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED)
+        every { meishi.login("bob", "wrong") } returns AuthError.InvalidCredentials.left()
 
-        assertThrows(ResponseStatusException::class.java) { service.login("bob", "wrong", "1.2.3.4") }
+        failureOf { service.login("bob", "wrong", "1.2.3.4") }
     }
 
     @Test
     fun `failed login logs a nickname hash and client ip but never the nickname`() {
-        every { meishi.login("CANARY_Nick", "wrong") } throws ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED)
+        every { meishi.login("CANARY_Nick", "wrong") } returns AuthError.InvalidCredentials.left()
 
         LogCapture("security").use { capture ->
-            assertThrows(ResponseStatusException::class.java) { service.login("CANARY_Nick", "wrong", "9.9.9.9") }
+            failureOf { service.login("CANARY_Nick", "wrong", "9.9.9.9") }
 
             val line = capture.events.single().formattedMessage
             assertTrue(line.startsWith("login_failed nicknameHash=${nicknameHash("canary_nick")}"))
@@ -63,11 +69,11 @@ class AuthServiceTest {
 
     @Test
     fun `frozen account logs account_status_blocked with the user id`() {
-        every { meishi.login("bob", "hunter2") } returns "the-token"
-        every { meishi.getMe("the-token") } returns MeishiUserResponse("user-7", "bob", "USER", "FROZEN")
+        every { meishi.login("bob", "hunter2") } returns "the-token".right()
+        every { meishi.getMe("the-token") } returns MeishiUserResponse("user-7", "bob", "USER", "FROZEN").right()
 
         LogCapture("security").use { capture ->
-            assertThrows(ResponseStatusException::class.java) { service.login("bob", "hunter2", "1.2.3.4") }
+            failureOf { service.login("bob", "hunter2", "1.2.3.4") }
 
             assertEquals("account_status_blocked userId=user-7 status=FROZEN", capture.events.single().formattedMessage)
         }
@@ -75,20 +81,20 @@ class AuthServiceTest {
 
     @Test
     fun `a hosted-login code gives the token for an active account`() {
-        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token"
+        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token".right()
         every { verifier.verify("sso-token") } returns principal
-        every { meishi.getMe("sso-token") } returns MeishiUserResponse("id", "bob", "USER", "ACTIVE")
+        every { meishi.getMe("sso-token") } returns MeishiUserResponse("id", "bob", "USER", "ACTIVE").right()
 
-        assertEquals("sso-token", service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4"))
+        assertEquals("sso-token", service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4").orFail())
     }
 
     @Test
     fun `a hosted-login code for a frozen account is rejected`() {
-        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token"
+        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token".right()
         every { verifier.verify("sso-token") } returns principal
-        every { meishi.getMe("sso-token") } returns MeishiUserResponse("id", "bob", "USER", "FROZEN")
+        every { meishi.getMe("sso-token") } returns MeishiUserResponse("id", "bob", "USER", "FROZEN").right()
 
-        val exception = assertThrows(ResponseStatusException::class.java) {
+        val exception = failureOf {
             service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4")
         }
         assertEquals(403, exception.statusCode.value())
@@ -96,11 +102,11 @@ class AuthServiceTest {
 
     @Test
     fun `a token omiyage-api would reject is not handed out`() {
-        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token"
+        every { meishi.exchangeCode("omiyage", "code", "verifier", "https://app/cb") } returns "sso-token".right()
         every { verifier.verify("sso-token") } throws JwtVerificationException("bad signature")
 
         LogCapture("security").use { capture ->
-            val exception = assertThrows(ResponseStatusException::class.java) {
+            val exception = failureOf {
                 service.loginWithMeishiCode("omiyage", "code", "verifier", "https://app/cb", "1.2.3.4")
             }
 
@@ -112,10 +118,10 @@ class AuthServiceTest {
 
     @Test
     fun `a failed code exchange is logged with the client ip and never the code`() {
-        every { meishi.exchangeCode(any(), any(), any(), any()) } throws ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED)
+        every { meishi.exchangeCode(any(), any(), any(), any()) } returns AuthError.InvalidCredentials.left()
 
         LogCapture("security").use { capture ->
-            assertThrows(ResponseStatusException::class.java) {
+            failureOf {
                 service.loginWithMeishiCode("omiyage", "CANARY_CODE", "verifier", "https://app/cb", "9.9.9.9")
             }
 

@@ -71,7 +71,7 @@ class AdminItemTemplateControllerTest {
             priceAmount = request.priceAmount,
             boughtPrice = request.boughtPrice,
             weight = request.weight,
-        ).right()
+        )
 
         mockMvc.post("/api/admin/item-templates") {
             header("Authorization", "Bearer ${adminToken()}")

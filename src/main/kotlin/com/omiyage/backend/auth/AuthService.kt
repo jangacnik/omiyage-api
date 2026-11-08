@@ -1,11 +1,15 @@
 package com.omiyage.backend.auth
 
+import arrow.core.Either
+import arrow.core.raise.Raise
+import arrow.core.raise.either
+import com.omiyage.backend.errors.AuthError
+import com.omiyage.backend.errors.DomainError
 import com.omiyage.backend.security.JwtVerificationException
 import com.omiyage.backend.security.JwtVerifier
+import com.omiyage.backend.web.toHttpFailure
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.web.server.ResponseStatusException
 import java.security.MessageDigest
 
 private const val NICKNAME_HASH_LENGTH = 8
@@ -25,44 +29,46 @@ class AuthService(private val meishi: MeishiAuthClient, private val jwtVerifier:
     /** Logs in against MeishiApi, then rejects tokens for accounts Meishi has frozen — MeishiApi's
      *  JWTs carry no status claim, so a frozen account's existing token would otherwise stay valid
      *  until it expires. */
-    fun login(nickname: String, password: String, clientIp: String): String {
-        val token = try {
-            meishi.login(nickname, password)
-        } catch (e: ResponseStatusException) {
-            securityLog.warn("login_failed nicknameHash={} status={} clientIp={}", nicknameHash(nickname), e.statusCode.value(), clientIp)
-            throw e
-        }
-        return rejectFrozen(token)
+    fun login(nickname: String, password: String, clientIp: String): Either<DomainError, String> = either {
+        val token = meishi.login(nickname, password)
+            .onLeft {
+                securityLog.warn("login_failed nicknameHash={} status={} clientIp={}", nicknameHash(nickname), it.toHttpFailure().status.value(), clientIp)
+            }
+            .bind()
+        rejectFrozen(token)
     }
 
     /** Exchanges a hosted-login code for the Meishi JWT. MeishiApi already refuses locked, inactive and frozen
      *  accounts at the token endpoint; the frozen check below is kept so both login paths behave the same. */
-    fun loginWithMeishiCode(clientId: String, code: String, codeVerifier: String, redirectUri: String, clientIp: String): String {
-        val token = try {
-            meishi.exchangeCode(clientId, code, codeVerifier, redirectUri)
-        } catch (e: ResponseStatusException) {
-            securityLog.warn("sso_exchange_failed status={} clientIp={}", e.statusCode.value(), clientIp)
-            throw e
-        }
+    fun loginWithMeishiCode(
+        clientId: String,
+        code: String,
+        codeVerifier: String,
+        redirectUri: String,
+        clientIp: String,
+    ): Either<DomainError, String> = either {
+        val token = meishi.exchangeCode(clientId, code, codeVerifier, redirectUri)
+            .onLeft { securityLog.warn("sso_exchange_failed status={} clientIp={}", it.toHttpFailure().status.value(), clientIp) }
+            .bind()
         requireTokenWeAccept(token)
-        return rejectFrozen(token)
+        rejectFrozen(token)
     }
 
     /** The relay must not hand out a token that omiyage-api would itself reject on the next request. */
-    private fun requireTokenWeAccept(token: String) {
+    private fun Raise<DomainError>.requireTokenWeAccept(token: String) {
         try {
             jwtVerifier.verify(token)
         } catch (e: JwtVerificationException) {
             securityLog.warn("sso_token_rejected reason={}", e.message)
-            throw ResponseStatusException(HttpStatus.BAD_GATEWAY, "identity provider returned an unusable token")
+            raise(AuthError.UnusableIdentityToken)
         }
     }
 
-    private fun rejectFrozen(token: String): String {
-        val me = meishi.getMe(token)
+    private fun Raise<DomainError>.rejectFrozen(token: String): String {
+        val me = meishi.getMe(token).bind()
         if (me.status == "FROZEN") {
             securityLog.warn("account_status_blocked userId={} status={}", me.id, me.status)
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "account is frozen")
+            raise(AuthError.AccountFrozen)
         }
         return token
     }

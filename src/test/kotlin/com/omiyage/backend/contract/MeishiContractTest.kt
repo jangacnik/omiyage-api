@@ -1,5 +1,9 @@
 package com.omiyage.backend.contract
 
+import com.omiyage.backend.errors.errorOrFail
+import com.omiyage.backend.errors.orFail
+import com.omiyage.backend.errors.UserError
+import com.omiyage.backend.errors.AuthError
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.omiyage.backend.auth.MeishiAuthClient
 import com.omiyage.backend.user.MeishiAdminClient
@@ -41,7 +45,7 @@ class MeishiContractTest {
         server.expect(requestTo("http://meishi.test/api/auth/login")).andExpect(method(HttpMethod.POST))
             .andRespond(withSuccess("""{"token":"jwt-token"}""", MediaType.APPLICATION_JSON))
 
-        assertEquals("jwt-token", MeishiAuthClient(client).login("bob", "pw"))
+        assertEquals("jwt-token", MeishiAuthClient(client).login("bob", "pw").orFail())
         server.verify()
     }
 
@@ -49,8 +53,7 @@ class MeishiContractTest {
     fun `login maps a Meishi 401 to 401`() {
         server.expect(requestTo("http://meishi.test/api/auth/login")).andRespond(withStatus(HttpStatus.UNAUTHORIZED))
 
-        val e = assertThrows<ResponseStatusException> { MeishiAuthClient(client).login("bob", "bad") }
-        assertEquals(HttpStatus.UNAUTHORIZED, e.statusCode)
+        assertEquals(AuthError.InvalidCredentials, MeishiAuthClient(client).login("bob", "bad").errorOrFail())
     }
 
     @Test
@@ -65,7 +68,7 @@ class MeishiContractTest {
         server.expect(requestTo("http://meishi.test/api/users/me")).andExpect(header("Authorization", "Bearer t"))
             .andRespond(withSuccess(userJson, MediaType.APPLICATION_JSON))
 
-        val me = MeishiAuthClient(client).getMe("t")
+        val me = MeishiAuthClient(client).getMe("t").orFail()
         assertEquals("bob", me.nickname)
         assertEquals("USER", me.role)
         assertEquals("ACTIVE", me.status)
@@ -75,7 +78,7 @@ class MeishiContractTest {
     fun `profile client reads the profile fields`() {
         server.expect(requestTo("http://meishi.test/api/users/me")).andRespond(withSuccess(userJson, MediaType.APPLICATION_JSON))
 
-        val profile = MeishiProfileClient(client, objectMapper).getMe("Bearer t")
+        val profile = MeishiProfileClient(client, objectMapper).getMe("Bearer t").orFail()
         assertEquals("Tokyo", profile.city)
         assertEquals("bob@example.com", profile.email)
     }
@@ -85,9 +88,8 @@ class MeishiContractTest {
         server.expect(requestTo("http://meishi.test/api/users/me/nickname"))
             .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body("""{"error":"nickname taken"}"""))
 
-        val e = assertThrows<ResponseStatusException> { MeishiProfileClient(client, objectMapper).changeNickname("Bearer t", "bob") }
-        assertEquals(HttpStatus.CONFLICT, e.statusCode)
-        assertEquals("nickname taken", e.reason)
+        val failure = MeishiProfileClient(client, objectMapper).changeNickname("Bearer t", "bob").errorOrFail()
+        assertEquals(UserError.UpstreamRejected(HttpStatus.CONFLICT, "nickname taken"), failure)
     }
 
     @Test

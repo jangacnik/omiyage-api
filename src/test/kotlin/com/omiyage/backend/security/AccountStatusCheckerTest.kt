@@ -1,5 +1,8 @@
 package com.omiyage.backend.security
 
+import com.omiyage.backend.errors.AuthError
+import arrow.core.left
+import arrow.core.right
 import com.omiyage.backend.auth.MeishiAuthClient
 import com.omiyage.backend.auth.MeishiUserResponse
 import io.mockk.every
@@ -35,19 +38,19 @@ class AccountStatusCheckerTest {
 
     @Test
     fun `denies a frozen account`() {
-        every { meishi.getMe("t") } returns me(status = "FROZEN")
+        every { meishi.getMe("t") } returns me(status = "FROZEN").right()
         assertFalse(checker.isAllowed("t", user))
     }
 
     @Test
     fun `denies a demoted admin`() {
-        every { meishi.getMe("t") } returns me(role = "USER")
+        every { meishi.getMe("t") } returns me(role = "USER").right()
         assertFalse(checker.isAllowed("t", admin))
     }
 
     @Test
     fun `allows an active account and caches the answer for the ttl`() {
-        every { meishi.getMe("t") } returns me()
+        every { meishi.getMe("t") } returns me().right()
         assertTrue(checker.isAllowed("t", user))
         assertTrue(checker.isAllowed("t", user))
         verify(exactly = 1) { meishi.getMe("t") }
@@ -59,7 +62,7 @@ class AccountStatusCheckerTest {
 
     @Test
     fun `denies a token meishi itself rejects`() {
-        every { meishi.getMe("t") } throws ResponseStatusException(HttpStatus.UNAUTHORIZED)
+        every { meishi.getMe("t") } returns AuthError.InvalidCredentials.left()
         assertFalse(checker.isAllowed("t", user))
     }
 
@@ -72,7 +75,7 @@ class AccountStatusCheckerTest {
     @Test
     fun `a cached answer for a user token does not let a stale admin token through`() {
         val sameUser = UUID.randomUUID()
-        every { meishi.getMe(any()) } returns me(role = "USER")
+        every { meishi.getMe(any()) } returns me(role = "USER").right()
 
         assertTrue(checker.isAllowed("user-token", MeishiPrincipal(sameUser, "bob", Role.USER)))
         assertFalse(checker.isAllowed("admin-token", MeishiPrincipal(sameUser, "bob", Role.ADMIN)))
@@ -80,7 +83,7 @@ class AccountStatusCheckerTest {
 
     @Test
     fun `allows an admin whose role is confirmed by meishi`() {
-        every { meishi.getMe("t") } returns me(role = "ADMIN")
+        every { meishi.getMe("t") } returns me(role = "ADMIN").right()
         assertTrue(checker.isAllowed("t", admin))
     }
 }
