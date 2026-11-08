@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException
 import org.springframework.web.multipart.support.MissingServletRequestPartException
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.resource.NoResourceFoundException
+import java.util.UUID
 
 /** Keeps error responses in the same `{"error": "..."}` shape MeishiApi uses, so the frontend's
  *  single error-parsing path in apiClient.ts works against either backend. */
@@ -28,23 +29,37 @@ import org.springframework.web.servlet.resource.NoResourceFoundException
 class GlobalExceptionHandler {
 
     private val log = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+    private val events = LoggerFactory.getLogger("events")
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(e: MethodArgumentNotValidException): ResponseEntity<Map<String, String>> {
         val message = e.bindingResult.fieldErrors.joinToString("; ") { "${it.field} ${it.defaultMessage}" }
-        return ResponseEntity.badRequest().body(errorBody(HttpStatus.BAD_REQUEST, message))
+        return badRequest(e, message, e.bindingResult.fieldErrors.firstOrNull()?.field)
     }
 
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatus(e: ResponseStatusException): ResponseEntity<Map<String, String>> {
         val message = e.reason ?: e.statusCode.toString()
+        if (e.statusCode.value() == HttpStatus.BAD_REQUEST.value()) return badRequest(e, message, null)
         return ResponseEntity.status(e.statusCode).body(errorBody(e.statusCode, message))
     }
 
     @ExceptionHandler(DomainErrorException::class)
     fun handleDomainError(e: DomainErrorException): ResponseEntity<Map<String, String>> {
         val failure = e.error.toHttpFailure()
+        if (failure.status.value() == HttpStatus.BAD_REQUEST.value()) return badRequest(e, failure.message, null)
         return ResponseEntity.status(failure.status).body(errorBody(failure.status, failure.message))
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun handleUnreadable(e: HttpMessageNotReadableException): ResponseEntity<Map<String, String>> {
+        val field = jsonFieldPath(e)
+        val message = when {
+            field == null -> "bad request"
+            jsonTargetType(e) == UUID::class.java -> "$field is not a valid id"
+            else -> "$field is missing or invalid"
+        }
+        return badRequest(e, message, field)
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
@@ -60,15 +75,13 @@ class GlobalExceptionHandler {
         ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorBody(HttpStatus.NOT_FOUND, "not found"))
 
     @ExceptionHandler(
-        HttpMessageNotReadableException::class,
         MethodArgumentTypeMismatchException::class,
         MissingServletRequestParameterException::class,
         MissingServletRequestPartException::class,
         MissingRequestHeaderException::class,
         ConstraintViolationException::class,
     )
-    fun handleBadRequest(e: Exception): ResponseEntity<Map<String, String>> =
-        error(HttpStatus.BAD_REQUEST, "bad request")
+    fun handleBadRequest(e: Exception): ResponseEntity<Map<String, String>> = badRequest(e, "bad request", null)
 
     @ExceptionHandler(MaxUploadSizeExceededException::class)
     fun handleUploadTooLarge(e: MaxUploadSizeExceededException): ResponseEntity<Map<String, String>> =
@@ -109,4 +122,12 @@ class GlobalExceptionHandler {
 
     private fun error(status: HttpStatus, message: String) =
         ResponseEntity.status(status).body(errorBody(status, message))
+
+    /** Every 400 is logged with the exception class and the field path, never the rejected value.
+     *  `field` is added to the body when known; `error` and `code` keep their meaning. */
+    private fun badRequest(e: Exception, message: String, field: String?): ResponseEntity<Map<String, String>> {
+        events.warn("request_rejected status=400 exception={} field={}", e.javaClass.simpleName, field ?: "-")
+        val body = errorBody(HttpStatus.BAD_REQUEST, message)
+        return ResponseEntity.badRequest().body(if (field == null) body else body + ("field" to field))
+    }
 }

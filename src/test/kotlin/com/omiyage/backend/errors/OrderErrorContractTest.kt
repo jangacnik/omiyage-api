@@ -77,6 +77,22 @@ class OrderErrorContractTest : ErrorContractTest() {
     }
 
     @Test
+    fun `an order item id that is not a uuid names the field`() {
+        val result = mockMvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/orders")
+                .header("Authorization", "Bearer ${user.token}")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("""{"items":[{"inventoryItemId":"not-a-uuid","currency":"EUR"}]}"""),
+        ).andReturn()
+
+        org.junit.jupiter.api.Assertions.assertEquals(400, result.response.status)
+        val body = json(result)
+        org.junit.jupiter.api.Assertions.assertEquals("items[0].inventoryItemId is not a valid id", body.get("error").asText())
+        org.junit.jupiter.api.Assertions.assertEquals("bad_request", body.get("code").asText())
+        org.junit.jupiter.api.Assertions.assertEquals("items[0].inventoryItemId", body.get("field").asText())
+    }
+
+    @Test
     fun `a delivered order cannot change status`() {
         val orderId = uuidOf(createOrder(user))
         setOrderStatus(admin, orderId, OrderStatus.DELIVERED)
