@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.catalog.InventoryItemRequest
 import com.omiyage.backend.catalog.InventoryService
@@ -55,7 +56,7 @@ class OrderCreateBindingIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.EUR,
                 stockQuantity = 5,
             ),
-        ).id.toString()
+        ).orFail().id.toString()
     }
 
     private fun token(nickname: String = "bob") = TestJwt.sign(TEST_SECRET, nickname = nickname)
