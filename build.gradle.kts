@@ -26,6 +26,9 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("io.arrow-kt:arrow-core:2.2.1.1")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    // Spring MVC binds request bodies with Boot's Jackson 3 mapper, which only applies Kotlin
+    // constructor defaults (isPreorder = false, quantity = 1) when this module is on the classpath.
+    implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("org.springframework.boot:spring-boot-jackson2")
 
     implementation("org.springframework.boot:spring-boot-starter-flyway")

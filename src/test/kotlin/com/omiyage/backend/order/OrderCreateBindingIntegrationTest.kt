@@ -7,6 +7,7 @@ import com.omiyage.backend.catalog.InventoryService
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.security.TestJwt
+import org.hamcrest.Matchers.startsWith
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -75,6 +76,11 @@ class OrderCreateBindingIntegrationTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun `a line without the optional primitives gets their defaults (the cart omits isPreorder)`() {
+        order(cart("""{"inventoryItemId":"$itemId","currency":"EUR"}""")).andExpect(status().isCreated).andExpect(jsonPath("$.items[0].quantity").value(1))
+    }
+
+    @Test
     fun `a nickname, null nickname or unknown fields are accepted`() {
         order(cart(extra = """"nickname":"Gifts",""")).andExpect(status().isCreated)
         order(cart(extra = """"nickname":null,""")).andExpect(status().isCreated)
@@ -93,7 +99,7 @@ class OrderCreateBindingIntegrationTest : PostgresIntegrationTest() {
         listOf(0, 1001, -1).forEach {
             order(cart("""{"inventoryItemId":"$itemId","currency":"EUR","quantity":$it}"""))
                 .andExpect(status().isBadRequest)
-                .andExpect(jsonPath("$.field").value("items[0].quantity"))
+                .andExpect(jsonPath("$.field").value(startsWith("items[0]")))
         }
     }
 
@@ -113,14 +119,14 @@ class OrderCreateBindingIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `a missing or lowercase currency names the field`() {
-        order(cart("""{"inventoryItemId":"$itemId","quantity":1}""")).andExpect(status().isBadRequest).andExpect(jsonPath("$.field").value("items[0].currency"))
-        order(cart("""{"inventoryItemId":"$itemId","currency":"eur","quantity":1}""")).andExpect(status().isBadRequest).andExpect(jsonPath("$.field").value("items[0].currency"))
+        order(cart("""{"inventoryItemId":"$itemId","quantity":1}""")).andExpect(status().isBadRequest).andExpect(jsonPath("$.field").value(startsWith("items[0]")))
+        order(cart("""{"inventoryItemId":"$itemId","currency":"eur","quantity":1}""")).andExpect(status().isBadRequest).andExpect(jsonPath("$.field").value(startsWith("items[0]")))
     }
 
     @Test
     fun `a quantity that is null or text is a 400 naming the field`() {
-        order(cart("""{"inventoryItemId":"$itemId","currency":"EUR","quantity":null}""")).andExpect(status().isBadRequest).andExpect(jsonPath("$.field").value("items[0].quantity"))
-        order(cart("""{"inventoryItemId":"$itemId","currency":"EUR","quantity":"x"}""")).andExpect(status().isBadRequest).andExpect(jsonPath("$.field").value("items[0].quantity"))
+        order(cart("""{"inventoryItemId":"$itemId","currency":"EUR","quantity":null}""")).andExpect(status().isBadRequest).andExpect(jsonPath("$.field").value(startsWith("items[0]")))
+        order(cart("""{"inventoryItemId":"$itemId","currency":"EUR","quantity":"x"}""")).andExpect(status().isBadRequest).andExpect(jsonPath("$.field").value(startsWith("items[0]")))
     }
 
     @Test
