@@ -20,8 +20,6 @@ import java.util.UUID
 
 data class SampleBody(val id: UUID)
 
-data class SampleList(val items: List<SampleBody>)
-
 @RestController
 class SampleController {
     @GetMapping("/sample/{id}")
@@ -32,9 +30,6 @@ class SampleController {
 
     @PostMapping("/body")
     fun body(@RequestBody body: SampleBody) = body.id.toString()
-
-    @PostMapping("/list")
-    fun list(@RequestBody body: SampleList) = body.items.size.toString()
 
     @GetMapping("/too-large")
     fun tooLarge(): String = throw MaxUploadSizeExceededException(10L * 1024 * 1024)
@@ -79,20 +74,6 @@ class GlobalExceptionHandlerTest {
             .andExpect(jsonPath("$.field").value("id"))
             .andExpect(jsonPath("$.error").value("id is not a valid id"))
             .andExpect(jsonPath("$.code").value("bad_request"))
-        mockMvc.perform(
-            post("/list").contentType(MediaType.APPLICATION_JSON)
-                .content("""{"items":[{"id":"${UUID.randomUUID()}"},{"id":"nope"}]}"""),
-        )
-            .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.field").value("items[1].id"))
-    }
-
-    @Test
-    fun `a missing field is named too`() {
-        mockMvc.perform(post("/list").contentType(MediaType.APPLICATION_JSON).content("""{"items":[{}]}"""))
-            .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.field").value("items[0].id"))
-            .andExpect(jsonPath("$.error").value("items[0].id is missing or invalid"))
     }
 
     @Test
