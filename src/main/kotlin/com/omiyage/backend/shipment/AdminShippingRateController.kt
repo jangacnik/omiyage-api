@@ -1,5 +1,6 @@
 package com.omiyage.backend.shipment
 
+import com.omiyage.backend.web.getOrRespond
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -22,15 +23,15 @@ class AdminShippingRateController(private val service: ShippingRateService) {
 
     @PostMapping
     fun create(@Valid @RequestBody request: ShippingRateRequest): ResponseEntity<ShippingRateDto> =
-        ResponseEntity.status(HttpStatus.CREATED).body(service.create(request))
+        ResponseEntity.status(HttpStatus.CREATED).body(service.create(request).getOrRespond())
 
     @PatchMapping("/{id}")
     fun update(@PathVariable id: UUID, @Valid @RequestBody request: ShippingRateRequest): ShippingRateDto =
-        service.update(id, request)
+        service.update(id, request).getOrRespond()
 
     @DeleteMapping("/{id}")
     fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
-        service.delete(id)
+        service.delete(id).getOrRespond()
         return ResponseEntity.noContent().build()
     }
 }

@@ -684,7 +684,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `deleting the last order on a shipment deletes the shipment too`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null)).orFail()
 
         orderService.adminDelete(solo.id).orFail()
 
@@ -696,7 +696,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
         orderService.adminDelete(a.id).orFail()
 
@@ -728,7 +728,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null)).orFail()
 
         val merged = orderService.mergeMine(owner, listOf(target.id, source.id)).orFail()
 
@@ -741,8 +741,8 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
-        val targetShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(target.id), notes = null))
-        val sourceShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null))
+        val targetShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(target.id), notes = null)).orFail()
+        val sourceShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null)).orFail()
 
         val merged = orderService.mergeMine(owner, listOf(target.id, source.id)).orFail()
 
@@ -880,9 +880,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val solo = singleItemOrder(owner, "solo")
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val soloShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        val soloShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null)).orFail()
 
-        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id, a.id, b.id), notes = null))
+        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id, a.id, b.id), notes = null)).orFail()
 
         assertEquals(soloShipment.id, combined.id)
         assertTrue(shipmentRepository.existsById(soloShipment.id))
@@ -895,10 +895,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
-        val shipmentB = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id), notes = null))
+        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
+        val shipmentB = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id), notes = null)).orFail()
 
-        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
         assertEquals(shipmentA.id, combined.id)
         assertTrue(shipmentRepository.existsById(shipmentA.id))
@@ -912,7 +912,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val b = singleItemOrder(owner, "b")
         orderService.updateStatus(b.id, OrderStatus.SENT).orFail()
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
         }
     }
@@ -922,12 +922,12 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
-        shipmentService.assignOrder(a.id, null)
+        shipmentService.assignOrder(a.id, null).orFail()
         assertTrue(shipmentRepository.existsById(shipment.id))
 
-        shipmentService.assignOrder(b.id, null)
+        shipmentService.assignOrder(b.id, null).orFail()
         assertFalse(shipmentRepository.existsById(shipment.id))
     }
 
@@ -1005,9 +1005,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
-        shipmentService.adminDelete(shipment.id)
+        shipmentService.adminDelete(shipment.id).orFail()
 
         assertFalse(shipmentRepository.existsById(shipment.id))
         assertNull(orderService.getById(a.id, owner).orFail().shipmentId)
@@ -1047,7 +1047,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val other = user()
         val mine = singleItemOrder(owner, "mine")
         val theirs = singleItemOrder(other, "theirs")
-        shipmentService.create(CreateShipmentRequest(orderIds = listOf(mine.id, theirs.id), notes = null))
+        shipmentService.create(CreateShipmentRequest(orderIds = listOf(mine.id, theirs.id), notes = null)).orFail()
 
         failureOf { orderService.submitForShipping(theirs.id, other) }
 
@@ -1106,7 +1106,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 ),
             ),
         ).orFail()
-        shipmentService.combine(listOf(mine.id, theirsWithPreorder.id))
+        shipmentService.combine(listOf(mine.id, theirsWithPreorder.id)).orFail()
 
         val submitted = orderService.submitForShipping(mine.id, owner).orFail()
 
@@ -1125,8 +1125,8 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val theirs = singleItemOrder(other, "theirs")
         val orphanOwnerShipment = com.omiyage.backend.shipment.Shipment()
         val saved = shipmentRepository.save(orphanOwnerShipment)
-        shipmentService.assignOrder(mine.id, saved.id)
-        shipmentService.assignOrder(theirs.id, saved.id)
+        shipmentService.assignOrder(mine.id, saved.id).orFail()
+        shipmentService.assignOrder(theirs.id, saved.id).orFail()
 
         failureOf { orderService.submitForShipping(mine.id, owner) }
         failureOf { orderService.submitForShipping(theirs.id, other) }
@@ -1179,12 +1179,12 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `cannot attach an order to a shipment that has already shipped`() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
         orderService.submitForShipping(a.id, owner).orFail()
-        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
         val b = singleItemOrder(owner, "b")
 
-        assertThrows(ResponseStatusException::class.java) { shipmentService.assignOrder(b.id, shipment.id) }
+        failureOf { shipmentService.assignOrder(b.id, shipment.id) }
     }
 
     @Test
@@ -1193,13 +1193,13 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         // own status still says open, but its shipment has (somehow) already shipped.
         val owner = user()
         val a = singleItemOrder(owner, "a")
-        val created = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        val created = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
         val shipment = shipmentRepository.findById(created.id).get()
         shipment.status = ShipmentStatus.SHIPPED
         shipmentRepository.save(shipment)
         val b = singleItemOrder(owner, "b")
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
         }
     }
@@ -1208,9 +1208,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `cannot mark a shipment shipped while a member order is not yet ready`() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
         }
     }
@@ -1219,10 +1219,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `can mark a shipment shipped once every member order has reached preparing-shipping`() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
         orderService.submitForShipping(a.id, owner).orFail()
 
-        val updated = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        val updated = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
 
         assertEquals(ShipmentStatus.SHIPPED, updated.status)
     }
@@ -1231,7 +1231,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `cancelling an order detaches it from its shipment, deleting the shipment once empty`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null)).orFail()
 
         val cancelled = orderService.cancelOwn(solo.id, owner).orFail()
 
@@ -1245,7 +1245,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
         orderService.cancelOwn(a.id, owner).orFail()
 
@@ -1258,7 +1258,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `admin cancelling via status update also detaches the order from its shipment`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null)).orFail()
 
         orderService.updateStatus(solo.id, OrderStatus.CANCELLED).orFail()
 

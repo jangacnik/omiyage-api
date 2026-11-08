@@ -63,7 +63,7 @@ class OrderController(private val service: OrderService, private val shipments: 
         service.splitMine(CurrentUser.principal(), id, request.itemIds).getOrRespond()
 
     @PostMapping("/{id}/leave-shipment")
-    fun leaveShipment(@PathVariable id: UUID): OrderDto = shipments.leaveShipment(id, CurrentUser.principal())
+    fun leaveShipment(@PathVariable id: UUID): OrderDto = shipments.leaveShipment(id, CurrentUser.principal()).getOrRespond()
 
     @PatchMapping("/{id}/items/{itemId}")
     fun updateOwnItem(

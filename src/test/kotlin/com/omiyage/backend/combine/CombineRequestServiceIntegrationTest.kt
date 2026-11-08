@@ -1,5 +1,6 @@
 package com.omiyage.backend.combine
 
+import com.omiyage.backend.errors.failureOf
 import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
@@ -51,7 +52,7 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
     // primitive admin/member shipment creation already uses, rather than relying on submit-for-
     // shipping's side effect (which would also lock the order itself).
     private fun shipmentFor(order: com.omiyage.backend.order.OrderDto) =
-        shipmentService.create(CreateShipmentRequest(orderIds = listOf(order.id)))
+        shipmentService.create(CreateShipmentRequest(orderIds = listOf(order.id))).orFail()
 
     @Test
     fun `accepting a request attaches only the requester's order onto the target shipment`() {
@@ -62,8 +63,8 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val bobOther = order(bob)
         val bobShipment = shipmentFor(bobOrder)
 
-        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
-        val accepted = combineRequestService.accept(bob, request.id)
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id).orFail()
+        val accepted = combineRequestService.accept(bob, request.id).orFail()
 
         assertEquals(CombineRequestStatus.ACCEPTED, accepted.status)
         assertEquals(bobShipment.id, accepted.resultingShipmentId)
@@ -78,10 +79,10 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val bob = user()
         val aliceOrder = order(alice)
         val bobShipment = shipmentFor(order(bob))
-        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.accept(alice, request.id) }
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.decline(alice, request.id) }
+        failureOf { combineRequestService.accept(alice, request.id) }
+        failureOf { combineRequestService.decline(alice, request.id) }
     }
 
     @Test
@@ -90,11 +91,11 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val bob = user()
         val aliceOrder = order(alice)
         val bobShipment = shipmentFor(order(bob))
-        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.cancel(bob, request.id) }
+        failureOf { combineRequestService.cancel(bob, request.id) }
 
-        val cancelled = combineRequestService.cancel(alice, request.id)
+        val cancelled = combineRequestService.cancel(alice, request.id).orFail()
         assertEquals(CombineRequestStatus.CANCELLED, cancelled.status)
     }
 
@@ -105,7 +106,7 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val aliceOtherOrder = order(alice)
         val aliceShipment = shipmentFor(aliceOtherOrder)
 
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, aliceShipment.id) }
+        failureOf { combineRequestService.create(alice, aliceOrder.id, aliceShipment.id) }
     }
 
     @Test
@@ -117,16 +118,16 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val bobShipment = shipmentFor(order(bob))
 
         // Both pass create()'s check, since neither of alice's orders is on bobShipment yet.
-        val request1 = combineRequestService.create(alice, aliceOrder1.id, bobShipment.id)
-        val request2 = combineRequestService.create(alice, aliceOrder2.id, bobShipment.id)
+        val request1 = combineRequestService.create(alice, aliceOrder1.id, bobShipment.id).orFail()
+        val request2 = combineRequestService.create(alice, aliceOrder2.id, bobShipment.id).orFail()
 
-        combineRequestService.accept(bob, request1.id)
+        combineRequestService.accept(bob, request1.id).orFail()
         // Flush + clear to drop the first-level cache - a real second accept() would arrive as
         // its own HTTP request with a fresh persistence context, not share this test's single
         // transaction and its already-loaded (now stale) Shipment.orders collection.
         entityManager.flush()
         entityManager.clear()
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.accept(bob, request2.id) }
+        failureOf { combineRequestService.accept(bob, request2.id) }
     }
 
     @Test
@@ -135,9 +136,9 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val bob = user()
         val aliceOrder = order(alice)
         val bobShipment = shipmentFor(order(bob))
-        combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
+        combineRequestService.create(alice, aliceOrder.id, bobShipment.id).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, bobShipment.id) }
+        failureOf { combineRequestService.create(alice, aliceOrder.id, bobShipment.id) }
     }
 
     @Test
@@ -145,16 +146,16 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val alice = user()
         val bob = user()
         val carol = user()
-        val fresh = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
-        val old = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
-        val pending = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
-        val nearlyExpired = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
-        val justExpired = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
-        val accepted = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
-        val cancelled = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id)
-        listOf(fresh, old, nearlyExpired, justExpired).forEach { combineRequestService.decline(bob, it.id) }
-        combineRequestService.accept(bob, accepted.id)
-        combineRequestService.cancel(alice, cancelled.id)
+        val fresh = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id).orFail()
+        val old = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id).orFail()
+        val pending = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id).orFail()
+        val nearlyExpired = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id).orFail()
+        val justExpired = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id).orFail()
+        val accepted = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id).orFail()
+        val cancelled = combineRequestService.create(alice, order(alice).id, shipmentFor(order(bob)).id).orFail()
+        listOf(fresh, old, nearlyExpired, justExpired).forEach { combineRequestService.decline(bob, it.id).orFail() }
+        combineRequestService.accept(bob, accepted.id).orFail()
+        combineRequestService.cancel(alice, cancelled.id).orFail()
         val now = java.time.OffsetDateTime.now()
         entityManager.find(CombineRequest::class.java, old.id).respondedAt = now.minusDays(15)
         entityManager.find(CombineRequest::class.java, nearlyExpired.id).respondedAt = now.minusDays(14).plusMinutes(1)
@@ -183,10 +184,10 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val bob = user()
         val aliceOrder = order(alice)
         val bobShipment = shipmentFor(order(bob))
-        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
-        combineRequestService.decline(bob, request.id)
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id).orFail()
+        combineRequestService.decline(bob, request.id).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.accept(bob, request.id) }
+        failureOf { combineRequestService.accept(bob, request.id) }
     }
 
     @Test
@@ -195,9 +196,9 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val bob = user()
         val aliceOrder = order(alice)
         val bobShipment = shipmentFor(order(bob))
-        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id)
+        val request = combineRequestService.create(alice, aliceOrder.id, bobShipment.id).orFail()
 
-        val accepted = combineRequestService.forceAccept(request.id)
+        val accepted = combineRequestService.forceAccept(request.id).orFail()
 
         assertEquals(CombineRequestStatus.ACCEPTED, accepted.status)
         assertNotNull(accepted.resultingShipmentId)
@@ -211,8 +212,8 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val bobOrder = order(bob)
         val bobShipment = shipmentFor(bobOrder)
         orderService.submitForShipping(bobOrder.id, bob).orFail()
-        shipmentService.update(bobShipment.id, com.omiyage.backend.shipment.UpdateShipmentRequest(status = com.omiyage.backend.shipment.ShipmentStatus.SHIPPED))
+        shipmentService.update(bobShipment.id, com.omiyage.backend.shipment.UpdateShipmentRequest(status = com.omiyage.backend.shipment.ShipmentStatus.SHIPPED)).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, bobShipment.id) }
+        failureOf { combineRequestService.create(alice, aliceOrder.id, bobShipment.id) }
     }
 }

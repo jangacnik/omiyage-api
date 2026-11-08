@@ -131,7 +131,7 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
         orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS).orFail()
         orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS).orFail()
         val shipmentId = requireNotNull(orderService.submitForShipping(order.id, owner).orFail().shipmentId)
-        shipmentService.update(shipmentId, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        shipmentService.update(shipmentId, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
 
         val changes = List(3) { nextEvent() }
         assertThat(changes.map { it["type"].asText() }).containsOnly(ORDER_STATUS_CHANGED)

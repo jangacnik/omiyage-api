@@ -1,5 +1,7 @@
 package com.omiyage.backend.shipment
 
+import com.omiyage.backend.errors.failureOf
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -46,7 +48,7 @@ class ShippingRateServiceIntegrationTest : PostgresIntegrationTest() {
                 costJpy = 67000,
                 estimatedDays = 8,
             ),
-        )
+        ).orFail()
 
         val quote = service.priceFor(ShippingMethod.EMS, ShipmentDestination.AUSTRIA, 30500)
         assertEquals(67000, quote?.costJpy)
@@ -63,24 +65,24 @@ class ShippingRateServiceIntegrationTest : PostgresIntegrationTest() {
                 costJpy = 2600,
                 estimatedDays = 65,
             ),
-        )
+        ).orFail()
 
         val updated = service.update(
             created.id,
             ShippingRateRequest(created.destination, created.shippingMethod, created.maxWeightGrams, 2700, created.estimatedDays),
-        )
+        ).orFail()
         assertEquals(2700, updated.costJpy)
 
-        service.delete(created.id)
+        service.delete(created.id).orFail()
         assertTrue(service.listAll().none { it.id == created.id })
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             service.update(created.id, ShippingRateRequest(updated.destination, updated.shippingMethod, updated.maxWeightGrams, updated.costJpy, updated.estimatedDays))
         }
     }
 
     @Test
     fun `creating a rate that collides with an existing tier is a clean conflict, not a raw DB error`() {
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             service.create(
                 ShippingRateRequest(
                     destination = ShipmentDestination.SLOVENIA,
@@ -95,19 +97,19 @@ class ShippingRateServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `updating a rate to collide with a different existing tier is a clean conflict`() {
-        val a = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 5000, 3000, 70))
-        val b = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 6000, 3200, 75))
+        val a = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 5000, 3000, 70)).orFail()
+        val b = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 6000, 3200, 75)).orFail()
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             service.update(b.id, ShippingRateRequest(a.destination, a.shippingMethod, a.maxWeightGrams, b.costJpy, b.estimatedDays))
         }
     }
 
     @Test
     fun `updating a rate to its own unchanged tier is not a conflict`() {
-        val a = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 5500, 3000, 70))
+        val a = service.create(ShippingRateRequest(ShipmentDestination.SLOVENIA, ShippingMethod.SURFACE_MAIL, 5500, 3000, 70)).orFail()
 
-        val updated = service.update(a.id, ShippingRateRequest(a.destination, a.shippingMethod, a.maxWeightGrams, 3100, a.estimatedDays))
+        val updated = service.update(a.id, ShippingRateRequest(a.destination, a.shippingMethod, a.maxWeightGrams, 3100, a.estimatedDays)).orFail()
 
         assertEquals(3100, updated.costJpy)
     }

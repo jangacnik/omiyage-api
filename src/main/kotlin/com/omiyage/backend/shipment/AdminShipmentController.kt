@@ -1,5 +1,6 @@
 package com.omiyage.backend.shipment
 
+import com.omiyage.backend.web.getOrRespond
 import com.omiyage.backend.order.MarkItemPaidRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -25,31 +26,31 @@ class AdminShipmentController(private val service: ShipmentService) {
     fun listDelivered(): List<ShipmentDto> = service.listDelivered()
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: UUID): ShipmentDto = service.getById(id)
+    fun getById(@PathVariable id: UUID): ShipmentDto = service.getById(id).getOrRespond()
 
     @PostMapping
     fun create(@Valid @RequestBody request: CreateShipmentRequest): ResponseEntity<ShipmentDto> =
-        ResponseEntity.status(HttpStatus.CREATED).body(service.create(request))
+        ResponseEntity.status(HttpStatus.CREATED).body(service.create(request).getOrRespond())
 
     @PatchMapping("/{id}")
     fun update(@PathVariable id: UUID, @Valid @RequestBody request: UpdateShipmentRequest): ShipmentDto =
-        service.update(id, request)
+        service.update(id, request).getOrRespond()
 
     @DeleteMapping("/{id}")
     fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
-        service.adminDelete(id)
+        service.adminDelete(id).getOrRespond()
         return ResponseEntity.noContent().build()
     }
 
     @PostMapping("/combine")
     fun combineShipments(@Valid @RequestBody request: CombineShipmentsRequest): ShipmentDto =
-        service.combineShipments(request.shipmentIds, request.title)
+        service.combineShipments(request.shipmentIds, request.title).getOrRespond()
 
     @PostMapping("/{id}/split")
     fun split(@PathVariable id: UUID, @Valid @RequestBody request: SplitShipmentRequest): ResponseEntity<ShipmentDto> =
-        ResponseEntity.status(HttpStatus.CREATED).body(service.splitOff(id, request.orderIds, request.title))
+        ResponseEntity.status(HttpStatus.CREATED).body(service.splitOff(id, request.orderIds, request.title).getOrRespond())
 
     @PatchMapping("/{id}/paid")
     fun markPaid(@PathVariable id: UUID, @Valid @RequestBody request: MarkItemPaidRequest): ShipmentDto =
-        service.adminMarkPaid(id, request.paid)
+        service.adminMarkPaid(id, request.paid).getOrRespond()
 }

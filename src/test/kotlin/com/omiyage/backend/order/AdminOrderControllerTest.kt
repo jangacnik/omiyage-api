@@ -209,7 +209,7 @@ class AdminOrderControllerTest {
     fun `assignShipment attaches an order to a shipment`() {
         val orderId = UUID.randomUUID()
         val shipmentId = UUID.randomUUID()
-        every { shipments.assignOrder(orderId, shipmentId) } returns sampleOrder(shipmentId = shipmentId)
+        every { shipments.assignOrder(orderId, shipmentId) } returns sampleOrder(shipmentId = shipmentId).right()
 
         mockMvc.patch("/api/admin/orders/$orderId/shipment") {
             header("Authorization", "Bearer ${adminToken()}")

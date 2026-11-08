@@ -1,18 +1,26 @@
 package com.omiyage.backend.combine
 
+import arrow.core.Either
+import arrow.core.raise.Raise
+import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
+import com.omiyage.backend.errors.CombineError
+import com.omiyage.backend.errors.DomainError
+import com.omiyage.backend.errors.OrderError
+import com.omiyage.backend.errors.ShipmentError
+import com.omiyage.backend.errors.transactionalEither
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.order.isOpen
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.shipment.ShipmentStatus
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 
 // A requester sees their pending requests, and declined ones for 14 days so the decline is not silent.
 private val DECLINED_VISIBLE_FOR = Duration.ofDays(14)
@@ -28,25 +36,19 @@ class CombineRequestService(
     private val events = org.slf4j.LoggerFactory.getLogger("events")
 
     @Transactional
-    fun create(principal: MeishiPrincipal, requesterOrderId: UUID, targetShipmentId: UUID): CombineRequestDto {
-        val requesterOrder = orderOrThrow(requesterOrderId)
-        if (requesterOrder.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
-        val targetShipment = shipmentOrThrow(targetShipmentId)
-        if (targetShipment.orders.any { it.userId == principal.id }) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "you already have an order on this shipment")
-        }
+    fun create(principal: MeishiPrincipal, requesterOrderId: UUID, targetShipmentId: UUID): Either<DomainError, CombineRequestDto> = transactionalEither {
+        val requesterOrder = orderOrRaise(requesterOrderId)
+        ensure(requesterOrder.userId == principal.id) { OrderError.OrderNotFound }
+        val targetShipment = shipmentOrRaise(targetShipmentId)
+        ensure(targetShipment.orders.none { it.userId == principal.id }) { CombineError.AlreadyOnShipment }
         requireOpenAndUnshipped(requesterOrder.isOpen, requesterOrder.shipment?.status)
-        if (targetShipment.status != ShipmentStatus.PREPARING) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "a shipment that has already shipped cannot be combined into")
-        }
-        if (requests.existsByRequesterOrder_IdAndTargetShipment_IdAndStatus(requesterOrderId, targetShipmentId, CombineRequestStatus.PENDING)) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "a pending combine request already exists for this order and shipment")
+        ensure(targetShipment.status == ShipmentStatus.PREPARING) { CombineError.TargetShipmentShipped }
+        ensure(!requests.existsByRequesterOrder_IdAndTargetShipment_IdAndStatus(requesterOrderId, targetShipmentId, CombineRequestStatus.PENDING)) {
+            CombineError.DuplicatePendingRequest
         }
         val saved = requests.save(CombineRequest(requesterOrder = requesterOrder, targetShipment = targetShipment))
         events.info("combine_request_created requestId={} orderId={} shipmentId={}", saved.id, requesterOrderId, targetShipmentId)
-        return saved.toDto()
+        saved.toDto()
     }
 
     @Transactional(readOnly = true)
@@ -63,61 +65,51 @@ class CombineRequestService(
     fun listAllPending(): List<CombineRequestDto> = requests.findByStatus(CombineRequestStatus.PENDING).map { it.toDto() }
 
     @Transactional
-    fun accept(principal: MeishiPrincipal, id: UUID): CombineRequestDto {
-        val request = pendingOrThrow(id)
-        if (request.targetShipment.ownerUserId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "combine request not found")
-        }
-        return doAccept(request)
+    fun accept(principal: MeishiPrincipal, id: UUID): Either<DomainError, CombineRequestDto> = transactionalEither {
+        val request = pendingOrRaise(id)
+        ensure(request.targetShipment.ownerUserId == principal.id) { CombineError.RequestNotFound }
+        doAccept(request)
     }
 
     @Transactional
-    fun forceAccept(id: UUID): CombineRequestDto = doAccept(pendingOrThrow(id))
+    fun forceAccept(id: UUID): Either<DomainError, CombineRequestDto> = transactionalEither { doAccept(pendingOrRaise(id)) }
 
     @Transactional
-    fun decline(principal: MeishiPrincipal, id: UUID): CombineRequestDto {
-        val request = pendingOrThrow(id)
-        if (request.targetShipment.ownerUserId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "combine request not found")
-        }
+    fun decline(principal: MeishiPrincipal, id: UUID): Either<DomainError, CombineRequestDto> = transactionalEither {
+        val request = pendingOrRaise(id)
+        ensure(request.targetShipment.ownerUserId == principal.id) { CombineError.RequestNotFound }
         request.status = CombineRequestStatus.DECLINED
         request.respondedAt = OffsetDateTime.now()
         events.info("combine_request_declined requestId={}", id)
-        return request.toDto()
+        request.toDto()
     }
 
     @Transactional
-    fun cancel(principal: MeishiPrincipal, id: UUID): CombineRequestDto {
-        val request = pendingOrThrow(id)
-        if (request.requesterOrder.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "combine request not found")
-        }
+    fun cancel(principal: MeishiPrincipal, id: UUID): Either<DomainError, CombineRequestDto> = transactionalEither {
+        val request = pendingOrRaise(id)
+        ensure(request.requesterOrder.userId == principal.id) { CombineError.RequestNotFound }
         request.status = CombineRequestStatus.CANCELLED
         request.respondedAt = OffsetDateTime.now()
         events.info("combine_request_cancelled requestId={}", id)
-        return request.toDto()
+        request.toDto()
     }
 
     // Attaches exactly the requester's order onto the target shipment as-is - nothing else on
     // either side moves. Reuses assignOrder(), the same primitive the member-facing "leave
     // shipment" action uses, just in the attach direction.
-    private fun doAccept(request: CombineRequest): CombineRequestDto {
+    private fun Raise<DomainError>.doAccept(request: CombineRequest): CombineRequestDto {
         val requesterOrderId = requireNotNull(request.requesterOrder.id)
         val targetShipmentId = requireNotNull(request.targetShipment.id)
-        val requesterOrder = orderOrThrow(requesterOrderId)
+        val requesterOrder = orderOrRaise(requesterOrderId)
         requireOpenAndUnshipped(requesterOrder.isOpen, requesterOrder.shipment?.status)
-        val targetShipment = shipmentOrThrow(targetShipmentId)
-        if (targetShipment.status != ShipmentStatus.PREPARING) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "a shipment that has already shipped cannot be combined into")
-        }
+        val targetShipment = shipmentOrRaise(targetShipmentId)
+        ensure(targetShipment.status == ShipmentStatus.PREPARING) { CombineError.TargetShipmentShipped }
         // create() only checked this at request time - a second pending request for a different
         // order of the requester's, targeting the same shipment, would still have passed it back
         // then. Re-check here so accepting two such requests can't land the same member on the
         // same shipment twice.
-        if (targetShipment.orders.any { it.userId == requesterOrder.userId }) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "that member already has an order on this shipment")
-        }
-        shipmentService.assignOrder(requesterOrderId, targetShipmentId)
+        ensure(targetShipment.orders.none { it.userId == requesterOrder.userId }) { CombineError.MemberAlreadyOnShipment }
+        shipmentService.assignOrder(requesterOrderId, targetShipmentId).bind()
         request.status = CombineRequestStatus.ACCEPTED
         request.respondedAt = OffsetDateTime.now()
         request.resultingShipmentId = targetShipmentId
@@ -125,26 +117,20 @@ class CombineRequestService(
         return request.toDto()
     }
 
-    private fun requireOpenAndUnshipped(isOpen: Boolean, shipmentStatus: ShipmentStatus?) {
-        if (!isOpen) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "an order that is no longer open cannot be combined")
-        }
-        if (shipmentStatus != null && shipmentStatus != ShipmentStatus.PREPARING) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "an order that has already shipped cannot be combined")
-        }
+    private fun Raise<DomainError>.requireOpenAndUnshipped(isOpen: Boolean, shipmentStatus: ShipmentStatus?) {
+        ensure(isOpen) { CombineError.OrderNotOpen }
+        ensure(shipmentStatus == null || shipmentStatus == ShipmentStatus.PREPARING) { CombineError.OrderAlreadyShipped }
     }
 
-    private fun pendingOrThrow(id: UUID): CombineRequest {
-        val request = requests.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "combine request not found") }
-        if (request.status != CombineRequestStatus.PENDING) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "combine request is no longer pending")
-        }
+    private fun Raise<DomainError>.pendingOrRaise(id: UUID): CombineRequest {
+        val request = ensureNotNull(requests.findById(id).getOrNull()) { CombineError.RequestNotFound }
+        ensure(request.status == CombineRequestStatus.PENDING) { CombineError.RequestNotPending }
         return request
     }
 
-    private fun orderOrThrow(id: UUID) =
-        orders.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found") }
+    private fun Raise<DomainError>.orderOrRaise(id: UUID) =
+        ensureNotNull(orders.findById(id).getOrNull()) { OrderError.OrderNotFound }
 
-    private fun shipmentOrThrow(id: UUID) =
-        shipments.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "shipment not found") }
+    private fun Raise<DomainError>.shipmentOrRaise(id: UUID) =
+        ensureNotNull(shipments.findById(id).getOrNull()) { ShipmentError.ShipmentNotFound }
 }

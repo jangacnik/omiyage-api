@@ -1,12 +1,18 @@
 package com.omiyage.backend.shipment
 
-import org.springframework.http.HttpStatus
+import arrow.core.Either
+import arrow.core.raise.Raise
+import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
+import com.omiyage.backend.errors.DomainError
+import com.omiyage.backend.errors.ShipmentError
+import com.omiyage.backend.errors.transactionalEither
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 
 @Service
 class ShippingRateService(private val rates: ShippingRateRepository, private val exchangeRates: ExchangeRateService) {
@@ -16,9 +22,9 @@ class ShippingRateService(private val rates: ShippingRateRepository, private val
         rates.findAllByOrderByDestinationAscShippingMethodAscMaxWeightGramsAsc().map { it.toDto(exchangeRates::toEurWithMarkup) }
 
     @Transactional
-    fun create(request: ShippingRateRequest): ShippingRateDto {
+    fun create(request: ShippingRateRequest): Either<DomainError, ShippingRateDto> = transactionalEither {
         requireNoDuplicate(request, excludingId = null)
-        return rates.save(
+        rates.save(
             ShippingRate(
                 destination = request.destination,
                 shippingMethod = request.shippingMethod,
@@ -30,33 +36,29 @@ class ShippingRateService(private val rates: ShippingRateRepository, private val
     }
 
     @Transactional
-    fun update(id: UUID, request: ShippingRateRequest): ShippingRateDto {
-        val rate = findOrThrow(id)
+    fun update(id: UUID, request: ShippingRateRequest): Either<DomainError, ShippingRateDto> = transactionalEither {
+        val rate = findOrRaise(id)
         requireNoDuplicate(request, excludingId = id)
         rate.destination = request.destination
         rate.shippingMethod = request.shippingMethod
         rate.maxWeightGrams = request.maxWeightGrams
         rate.costJpy = request.costJpy
         rate.estimatedDays = request.estimatedDays
-        return rate.toDto(exchangeRates::toEurWithMarkup)
+        rate.toDto(exchangeRates::toEurWithMarkup)
     }
 
-    private fun requireNoDuplicate(request: ShippingRateRequest, excludingId: UUID?) {
+    private fun Raise<DomainError>.requireNoDuplicate(request: ShippingRateRequest, excludingId: UUID?) {
         val existing = rates.findByDestinationAndShippingMethodAndMaxWeightGrams(
             request.destination,
             request.shippingMethod,
             request.maxWeightGrams,
         )
-        if (existing != null && existing.id != excludingId) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "a rate already exists for this destination, method and weight tier")
-        }
+        ensure(existing == null || existing.id == excludingId) { ShipmentError.ShippingRateExists }
     }
 
     @Transactional
-    fun delete(id: UUID) {
-        if (!rates.existsById(id)) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "shipping rate not found")
-        }
+    fun delete(id: UUID): Either<DomainError, Unit> = transactionalEither {
+        ensure(rates.existsById(id)) { ShipmentError.ShippingRateNotFound }
         rates.deleteById(id)
     }
 
@@ -67,8 +69,8 @@ class ShippingRateService(private val rates: ShippingRateRepository, private val
         lightestCoveringTier(rates.findByDestinationAndShippingMethodOrderByMaxWeightGramsAsc(destination, method), totalGrams)
             ?.let { ShippingQuote(it.costJpy, it.estimatedDays) }
 
-    private fun findOrThrow(id: UUID): ShippingRate =
-        rates.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "shipping rate not found") }
+    private fun Raise<DomainError>.findOrRaise(id: UUID): ShippingRate =
+        ensureNotNull(rates.findById(id).getOrNull()) { ShipmentError.ShippingRateNotFound }
 }
 
 data class ShippingQuote(val costJpy: Int, val estimatedDays: Int)

@@ -1,5 +1,6 @@
 package com.omiyage.backend.shipment
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -68,7 +69,7 @@ class AdminShippingRateControllerTest {
             costJpy = request.costJpy,
             costEur = java.math.BigDecimal("30.25"),
             estimatedDays = request.estimatedDays,
-        )
+        ).right()
 
         mockMvc.post("/api/admin/shipping-rates") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -80,7 +81,7 @@ class AdminShippingRateControllerTest {
     @Test
     fun `delete succeeds for an admin`() {
         val id = UUID.randomUUID()
-        every { service.delete(id) } just Runs
+        every { service.delete(id) } returns Unit.right()
 
         mockMvc.delete("/api/admin/shipping-rates/$id") { header("Authorization", "Bearer ${adminToken()}") }
             .andExpect { status { isNoContent() } }
