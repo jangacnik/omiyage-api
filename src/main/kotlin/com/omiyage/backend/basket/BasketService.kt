@@ -1,16 +1,22 @@
 package com.omiyage.backend.basket
 
+import arrow.core.Either
+import arrow.core.raise.Raise
+import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.common.Condition
+import com.omiyage.backend.errors.BasketError
+import com.omiyage.backend.errors.CatalogError
+import com.omiyage.backend.errors.DomainError
+import com.omiyage.backend.errors.transactionalEither
 import com.omiyage.backend.order.CreateOrderItemRequest
 import com.omiyage.backend.order.CreateOrderRequest
 import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.order.OrderService
 import com.omiyage.backend.security.MeishiPrincipal
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -26,14 +32,10 @@ class BasketService(
         lines.findByUserIdOrderByCreatedAt(principal.id).map { it.toDto() }
 
     @Transactional
-    fun add(principal: MeishiPrincipal, request: AddBasketLineRequest): BasketLineDto {
+    fun add(principal: MeishiPrincipal, request: AddBasketLineRequest): Either<DomainError, BasketLineDto> = transactionalEither {
         val title = request.customTitle?.takeIf { it.isNotBlank() }
-        if (request.inventoryItemId == null && title == null) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a basket line needs an inventory item or a custom title")
-        }
-        if (request.inventoryItemId != null && !inventory.existsById(request.inventoryItemId)) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "inventory item not found")
-        }
+        ensure(request.inventoryItemId != null || title != null) { BasketError.LineNeedsItemOrTitle }
+        ensure(request.inventoryItemId == null || inventory.existsById(request.inventoryItemId)) { CatalogError.InventoryItemNotFound }
         val line = BasketLine(
             userId = principal.id,
             inventoryItemId = request.inventoryItemId,
@@ -43,27 +45,27 @@ class BasketService(
             maxPrice = request.maxPrice,
             quantity = request.quantity,
         )
-        return lines.save(line).toDto()
+        lines.save(line).toDto()
     }
 
     @Transactional
-    fun update(principal: MeishiPrincipal, id: UUID, request: UpdateBasketLineRequest): BasketLineDto {
-        val line = lineOrThrow(principal, id)
+    fun update(principal: MeishiPrincipal, id: UUID, request: UpdateBasketLineRequest): Either<DomainError, BasketLineDto> = transactionalEither {
+        val line = lineOrRaise(principal, id)
         request.customTitle?.let { title ->
-            if (line.inventoryItemId == null && title.isBlank()) {
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a custom line needs a title")
-            }
+            ensure(line.inventoryItemId != null || title.isNotBlank()) { BasketError.CustomLineNeedsTitle }
             line.customTitle = title.ifBlank { null }
         }
         request.customDescription?.let { line.customDescription = it }
         request.maxPrice?.let { line.maxPrice = it }
         request.quantity?.let { line.quantity = it }
         line.updatedAt = OffsetDateTime.now()
-        return line.toDto()
+        line.toDto()
     }
 
     @Transactional
-    fun remove(principal: MeishiPrincipal, id: UUID) = lines.delete(lineOrThrow(principal, id))
+    fun remove(principal: MeishiPrincipal, id: UUID): Either<DomainError, Unit> = transactionalEither {
+        lines.delete(lineOrRaise(principal, id))
+    }
 
     @Transactional
     fun clear(principal: MeishiPrincipal) {
@@ -71,25 +73,26 @@ class BasketService(
     }
 
     @Transactional
-    fun confirm(principal: MeishiPrincipal): OrderDto {
+    fun confirm(principal: MeishiPrincipal): Either<DomainError, OrderDto> = transactionalEither {
         val basket = nonEmptyBasket(principal)
-        val order = orders.create(principal, CreateOrderRequest(items = basket.map { it.toOrderItemRequest() }))
+        val order = orders.create(principal, CreateOrderRequest(items = basket.map { it.toOrderItemRequest() })).bind()
         lines.deleteAll(basket)
-        return order
+        order
     }
 
     @Transactional
-    fun addToOrder(principal: MeishiPrincipal, orderId: UUID): OrderDto {
+    fun addToOrder(principal: MeishiPrincipal, orderId: UUID): Either<DomainError, OrderDto> = transactionalEither {
         val basket = nonEmptyBasket(principal)
-        val order = orders.addOwnItems(orderId, principal, basket.map { it.toOrderItemRequest() })
+        val order = orders.addOwnItems(orderId, principal, basket.map { it.toOrderItemRequest() }).bind()
         lines.deleteAll(basket)
-        return order
+        order
     }
 
-    private fun nonEmptyBasket(principal: MeishiPrincipal): List<BasketLine> =
-        lines.findByUserIdOrderByCreatedAt(principal.id).ifEmpty {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "basket is empty")
-        }
+    private fun Raise<DomainError>.nonEmptyBasket(principal: MeishiPrincipal): List<BasketLine> {
+        val basket = lines.findByUserIdOrderByCreatedAt(principal.id)
+        ensure(basket.isNotEmpty()) { BasketError.BasketEmpty }
+        return basket
+    }
 
     private fun BasketLine.toOrderItemRequest() = CreateOrderItemRequest(
         inventoryItemId = inventoryItemId,
@@ -101,7 +104,6 @@ class BasketService(
         quantity = quantity,
     )
 
-    private fun lineOrThrow(principal: MeishiPrincipal, id: UUID): BasketLine =
-        lines.findByIdAndUserId(id, principal.id)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "basket line not found")
+    private fun Raise<DomainError>.lineOrRaise(principal: MeishiPrincipal, id: UUID): BasketLine =
+        ensureNotNull(lines.findByIdAndUserId(id, principal.id)) { BasketError.LineNotFound }
 }

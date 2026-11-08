@@ -1,5 +1,8 @@
 package com.omiyage.backend.basket
 
+import com.omiyage.backend.errors.statusCode
+import com.omiyage.backend.errors.failureOf
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Currency
 import com.omiyage.backend.order.OrderRepository
@@ -39,7 +42,7 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     fun `added custom line is listed with its fields`() {
         val alice = user()
 
-        val added = basketService.add(alice, customLine())
+        val added = basketService.add(alice, customLine()).orFail()
 
         val listed = basketService.list(alice)
         assertEquals(listOf(added), listed)
@@ -51,13 +54,13 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     fun `baskets are isolated between users`() {
         val alice = user()
         val bob = user()
-        val line = basketService.add(alice, customLine())
+        val line = basketService.add(alice, customLine()).orFail()
 
         assertTrue(basketService.list(bob).isEmpty())
-        assertEquals(HttpStatus.NOT_FOUND, assertThrows(ResponseStatusException::class.java) {
+        assertEquals(HttpStatus.NOT_FOUND, failureOf {
             basketService.update(bob, line.id, UpdateBasketLineRequest(customTitle = "Hijack"))
         }.statusCode)
-        assertEquals(HttpStatus.NOT_FOUND, assertThrows(ResponseStatusException::class.java) {
+        assertEquals(HttpStatus.NOT_FOUND, failureOf {
             basketService.remove(bob, line.id)
         }.statusCode)
         basketService.clear(bob)
@@ -67,13 +70,13 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `update changes quantity and price`() {
         val alice = user()
-        val line = basketService.add(alice, customLine())
+        val line = basketService.add(alice, customLine()).orFail()
 
         val updated = basketService.update(
             alice,
             line.id,
             UpdateBasketLineRequest(customTitle = "Figure", maxPrice = BigDecimal("900.00"), quantity = 5),
-        )
+        ).orFail()
 
         assertEquals(5, updated.quantity)
         assertEquals(0, BigDecimal("900.00").compareTo(updated.maxPrice))
@@ -82,16 +85,16 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `an update that omits fields keeps their current values`() {
         val alice = user()
-        val line = basketService.add(alice, customLine().copy(customDescription = "Boxed"))
+        val line = basketService.add(alice, customLine().copy(customDescription = "Boxed")).orFail()
 
-        val updated = basketService.update(alice, line.id, UpdateBasketLineRequest(maxPrice = BigDecimal("900.00")))
+        val updated = basketService.update(alice, line.id, UpdateBasketLineRequest(maxPrice = BigDecimal("900.00"))).orFail()
 
         assertEquals("Figure", updated.customTitle)
         assertEquals("Boxed", updated.customDescription)
         assertEquals(2, updated.quantity)
         assertEquals(0, BigDecimal("900.00").compareTo(updated.maxPrice))
 
-        val requantified = basketService.update(alice, line.id, UpdateBasketLineRequest(quantity = 4))
+        val requantified = basketService.update(alice, line.id, UpdateBasketLineRequest(quantity = 4)).orFail()
 
         assertEquals(4, requantified.quantity)
         assertEquals(0, BigDecimal("900.00").compareTo(requantified.maxPrice))
@@ -100,9 +103,9 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `a blank title is rejected on a custom line`() {
         val alice = user()
-        val line = basketService.add(alice, customLine())
+        val line = basketService.add(alice, customLine()).orFail()
 
-        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException::class.java) {
+        assertEquals(HttpStatus.BAD_REQUEST, failureOf {
             basketService.update(alice, line.id, UpdateBasketLineRequest(customTitle = " "))
         }.statusCode)
         assertEquals("Figure", basketService.list(alice).single().customTitle)
@@ -111,10 +114,10 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `remove deletes one line and clear deletes all`() {
         val alice = user()
-        val first = basketService.add(alice, customLine("A"))
-        basketService.add(alice, customLine("B"))
+        val first = basketService.add(alice, customLine("A")).orFail()
+        basketService.add(alice, customLine("B")).orFail()
 
-        basketService.remove(alice, first.id)
+        basketService.remove(alice, first.id).orFail()
         assertEquals(listOf("B"), basketService.list(alice).map { it.customTitle })
 
         basketService.clear(alice)
@@ -123,7 +126,7 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `line without inventory item or title is rejected`() {
-        val error = assertThrows(ResponseStatusException::class.java) {
+        val error = failureOf {
             basketService.add(user(), AddBasketLineRequest(currency = Currency.JPY))
         }
         assertEquals(HttpStatus.BAD_REQUEST, error.statusCode)
@@ -131,7 +134,7 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `unknown inventory item is rejected`() {
-        val error = assertThrows(ResponseStatusException::class.java) {
+        val error = failureOf {
             basketService.add(user(), AddBasketLineRequest(inventoryItemId = UUID.randomUUID(), currency = Currency.JPY))
         }
         assertEquals(HttpStatus.NOT_FOUND, error.statusCode)
@@ -140,10 +143,10 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `confirm creates an order from all lines and empties the basket`() {
         val alice = user()
-        basketService.add(alice, customLine("A"))
-        basketService.add(alice, customLine("B"))
+        basketService.add(alice, customLine("A")).orFail()
+        basketService.add(alice, customLine("B")).orFail()
 
-        val order = basketService.confirm(alice)
+        val order = basketService.confirm(alice).orFail()
 
         assertEquals(setOf("A", "B"), order.items.map { it.title }.toSet())
         assertEquals(alice.id, order.userId)
@@ -154,23 +157,23 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     fun `confirm only takes the callers lines`() {
         val alice = user()
         val bob = user()
-        basketService.add(alice, customLine("A"))
-        basketService.add(bob, customLine("B"))
+        basketService.add(alice, customLine("A")).orFail()
+        basketService.add(bob, customLine("B")).orFail()
 
-        basketService.confirm(alice)
+        basketService.confirm(alice).orFail()
 
         assertEquals(listOf("B"), basketService.list(bob).map { it.customTitle })
     }
 
     @Test
     fun `confirm on an empty basket is rejected`() {
-        val error = assertThrows(ResponseStatusException::class.java) { basketService.confirm(user()) }
+        val error = failureOf { basketService.confirm(user()) }
         assertEquals(HttpStatus.CONFLICT, error.statusCode)
     }
 
     private fun orderWithStatus(owner: MeishiPrincipal, status: OrderStatus): UUID {
-        basketService.add(owner, customLine("Existing"))
-        val orderId = basketService.confirm(owner).id
+        basketService.add(owner, customLine("Existing")).orFail()
+        val orderId = basketService.confirm(owner).orFail().id
         orderRepository.findById(orderId).get().status = status
         return orderId
     }
@@ -180,9 +183,9 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     fun `add to order moves the lines into an open order and empties the basket`(status: OrderStatus) {
         val alice = user()
         val orderId = orderWithStatus(alice, status)
-        basketService.add(alice, customLine("A"))
+        basketService.add(alice, customLine("A")).orFail()
 
-        val order = basketService.addToOrder(alice, orderId)
+        val order = basketService.addToOrder(alice, orderId).orFail()
 
         assertEquals(setOf("Existing", "A"), order.items.map { it.title }.toSet())
         assertTrue(basketService.list(alice).isEmpty())
@@ -193,9 +196,9 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
     fun `add to order is rejected for closed orders and keeps the basket`(status: OrderStatus) {
         val alice = user()
         val orderId = orderWithStatus(alice, status)
-        basketService.add(alice, customLine("A"))
+        basketService.add(alice, customLine("A")).orFail()
 
-        val error = assertThrows(ResponseStatusException::class.java) { basketService.addToOrder(alice, orderId) }
+        val error = failureOf { basketService.addToOrder(alice, orderId) }
 
         assertEquals(HttpStatus.CONFLICT, error.statusCode)
         assertEquals(1, basketService.list(alice).size)
@@ -206,9 +209,9 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
         val alice = user()
         val orderId = orderWithStatus(alice, OrderStatus.REQUESTED)
         val bob = user()
-        basketService.add(bob, customLine("B"))
+        basketService.add(bob, customLine("B")).orFail()
 
-        val error = assertThrows(ResponseStatusException::class.java) { basketService.addToOrder(bob, orderId) }
+        val error = failureOf { basketService.addToOrder(bob, orderId) }
 
         assertEquals(HttpStatus.NOT_FOUND, error.statusCode)
     }
@@ -218,7 +221,7 @@ class BasketServiceIntegrationTest : PostgresIntegrationTest() {
         val alice = user()
         val orderId = orderWithStatus(alice, OrderStatus.REQUESTED)
 
-        val error = assertThrows(ResponseStatusException::class.java) { basketService.addToOrder(alice, orderId) }
+        val error = failureOf { basketService.addToOrder(alice, orderId) }
 
         assertEquals(HttpStatus.CONFLICT, error.statusCode)
     }

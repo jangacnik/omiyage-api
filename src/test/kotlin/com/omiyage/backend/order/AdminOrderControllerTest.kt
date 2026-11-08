@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -79,7 +80,7 @@ class AdminOrderControllerTest {
     fun `create for a user succeeds for an admin`() {
         val userId = UUID.randomUUID()
         val request = CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)))
-        every { service.adminCreate(userId, request) } returns sampleOrder().copy(userId = userId)
+        every { service.adminCreate(userId, request) } returns sampleOrder().copy(userId = userId).right()
 
         mockMvc.post("/api/admin/orders/for-user/$userId") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -102,7 +103,7 @@ class AdminOrderControllerTest {
     fun `add to inventory succeeds for an admin`() {
         val orderId = UUID.randomUUID()
         val itemId = UUID.randomUUID()
-        every { service.adminAddItemToInventory(orderId, itemId) } returns sampleOrder()
+        every { service.adminAddItemToInventory(orderId, itemId) } returns sampleOrder().right()
 
         mockMvc.post("/api/admin/orders/$orderId/items/$itemId/add-to-inventory") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -153,7 +154,7 @@ class AdminOrderControllerTest {
     @Test
     fun `updateStatus succeeds for an admin`() {
         val id = UUID.randomUUID()
-        every { service.updateStatus(id, OrderStatus.SENT) } returns sampleOrder(OrderStatus.SENT)
+        every { service.updateStatus(id, OrderStatus.SENT) } returns sampleOrder(OrderStatus.SENT).right()
 
         mockMvc.patch("/api/admin/orders/$id") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -171,7 +172,7 @@ class AdminOrderControllerTest {
         val itemId = UUID.randomUUID()
         every {
             service.updateItem(orderId, itemId, OrderItemStatus.BOUGHT, java.math.BigDecimal("999.00"))
-        } returns sampleOrder()
+        } returns sampleOrder().right()
 
         mockMvc.patch("/api/admin/orders/$orderId/items/$itemId") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -195,7 +196,7 @@ class AdminOrderControllerTest {
     fun `markItemPaid succeeds for an admin`() {
         val orderId = UUID.randomUUID()
         val itemId = UUID.randomUUID()
-        every { service.adminMarkItemPaid(orderId, itemId, true) } returns sampleOrder()
+        every { service.adminMarkItemPaid(orderId, itemId, true) } returns sampleOrder().right()
 
         mockMvc.patch("/api/admin/orders/$orderId/items/$itemId/paid") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -232,7 +233,7 @@ class AdminOrderControllerTest {
     @Test
     fun `merge succeeds for an admin`() {
         val ids = listOf(UUID.randomUUID(), UUID.randomUUID())
-        every { service.adminMerge(ids) } returns sampleOrder()
+        every { service.adminMerge(ids) } returns sampleOrder().right()
 
         mockMvc.post("/api/admin/orders/merge") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -253,7 +254,7 @@ class AdminOrderControllerTest {
     @Test
     fun `updateNickname succeeds for an admin, for any user's order`() {
         val id = UUID.randomUUID()
-        every { service.adminUpdateNickname(id, "Grandma's Gifts") } returns sampleOrder().copy(nickname = "Grandma's Gifts")
+        every { service.adminUpdateNickname(id, "Grandma's Gifts") } returns sampleOrder().copy(nickname = "Grandma's Gifts").right()
 
         mockMvc.patch("/api/admin/orders/$id/nickname") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -280,7 +281,7 @@ class AdminOrderControllerTest {
         val itemId = UUID.randomUUID()
         val targetId = UUID.randomUUID()
         every { service.adminMoveItems(sourceId, listOf(itemId), targetId) } returns
-            MoveItemsResponseDto(source = sampleOrder(), target = sampleOrder())
+            MoveItemsResponseDto(source = sampleOrder(), target = sampleOrder()).right()
 
         mockMvc.post("/api/admin/orders/$sourceId/items/move") {
             header("Authorization", "Bearer ${adminToken()}")

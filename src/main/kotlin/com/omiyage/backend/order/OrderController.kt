@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.web.getOrRespond
 import com.omiyage.backend.security.CurrentUser
 import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.web.PageResponse
@@ -25,41 +26,41 @@ class OrderController(private val service: OrderService, private val shipments: 
 
     @PostMapping
     fun create(@Valid @RequestBody request: CreateOrderRequest): ResponseEntity<OrderDto> =
-        ResponseEntity.status(HttpStatus.CREATED).body(service.create(CurrentUser.principal(), request))
+        ResponseEntity.status(HttpStatus.CREATED).body(service.create(CurrentUser.principal(), request).getOrRespond())
 
     @GetMapping("/mine")
     fun listMine(@PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC) pageable: Pageable): PageResponse<OrderDto> =
         service.listMine(CurrentUser.principal(), pageable)
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: UUID): OrderDto = service.getById(id, CurrentUser.principal())
+    fun getById(@PathVariable id: UUID): OrderDto = service.getById(id, CurrentUser.principal()).getOrRespond()
 
     @PostMapping("/merge")
     fun mergeMine(@Valid @RequestBody request: MergeOrdersRequest): OrderDto =
-        service.mergeMine(CurrentUser.principal(), request.orderIds)
+        service.mergeMine(CurrentUser.principal(), request.orderIds).getOrRespond()
 
     @PatchMapping("/{id}/nickname")
     fun updateNickname(
         @PathVariable id: UUID,
         @Valid @RequestBody request: UpdateOrderNicknameRequest,
-    ): OrderDto = service.updateNickname(id, CurrentUser.principal(), request.nickname)
+    ): OrderDto = service.updateNickname(id, CurrentUser.principal(), request.nickname).getOrRespond()
 
     @PostMapping("/{id}/items")
     fun addOwnItem(
         @PathVariable id: UUID,
         @Valid @RequestBody request: CreateOrderItemRequest,
     ): ResponseEntity<OrderDto> =
-        ResponseEntity.status(HttpStatus.CREATED).body(service.addOwnItem(id, CurrentUser.principal(), request))
+        ResponseEntity.status(HttpStatus.CREATED).body(service.addOwnItem(id, CurrentUser.principal(), request).getOrRespond())
 
     @PostMapping("/{id}/cancel")
-    fun cancelMine(@PathVariable id: UUID): OrderDto = service.cancelOwn(id, CurrentUser.principal())
+    fun cancelMine(@PathVariable id: UUID): OrderDto = service.cancelOwn(id, CurrentUser.principal()).getOrRespond()
 
     @PostMapping("/{id}/submit-for-shipping")
-    fun submitForShipping(@PathVariable id: UUID): OrderDto = service.submitForShipping(id, CurrentUser.principal())
+    fun submitForShipping(@PathVariable id: UUID): OrderDto = service.submitForShipping(id, CurrentUser.principal()).getOrRespond()
 
     @PostMapping("/{id}/split")
     fun splitMine(@PathVariable id: UUID, @Valid @RequestBody request: SplitOrderRequest): SplitOrderResponseDto =
-        service.splitMine(CurrentUser.principal(), id, request.itemIds)
+        service.splitMine(CurrentUser.principal(), id, request.itemIds).getOrRespond()
 
     @PostMapping("/{id}/leave-shipment")
     fun leaveShipment(@PathVariable id: UUID): OrderDto = shipments.leaveShipment(id, CurrentUser.principal())
@@ -69,9 +70,9 @@ class OrderController(private val service: OrderService, private val shipments: 
         @PathVariable id: UUID,
         @PathVariable itemId: UUID,
         @Valid @RequestBody request: UpdateOwnOrderItemRequest,
-    ): OrderDto = service.updateOwnItem(id, itemId, CurrentUser.principal(), request)
+    ): OrderDto = service.updateOwnItem(id, itemId, CurrentUser.principal(), request).getOrRespond()
 
     @DeleteMapping("/{id}/items/{itemId}")
     fun removeOwnItem(@PathVariable id: UUID, @PathVariable itemId: UUID): OrderDto =
-        service.removeOwnItem(id, itemId, CurrentUser.principal())
+        service.removeOwnItem(id, itemId, CurrentUser.principal()).getOrRespond()
 }

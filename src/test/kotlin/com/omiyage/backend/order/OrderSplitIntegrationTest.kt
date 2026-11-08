@@ -1,5 +1,7 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.failureOf
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
@@ -44,14 +46,14 @@ class OrderSplitIntegrationTest : PostgresIntegrationTest() {
             ),
             nickname = UUID.randomUUID().toString(),
         ),
-    )
+    ).orFail()
 
     @Test
     fun `splitting moves only the chosen items onto a new order`() {
         val owner = user()
         val order = twoItemOrder(owner)
 
-        val result = orderService.splitMine(owner, order.id, listOf(order.items[0].id))
+        val result = orderService.splitMine(owner, order.id, listOf(order.items[0].id)).orFail()
 
         assertEquals(1, result.original.items.size)
         assertEquals("B", result.original.items[0].title)
@@ -66,7 +68,7 @@ class OrderSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val order = twoItemOrder(owner)
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.splitMine(owner, order.id, order.items.map { it.id })
         }
     }
@@ -76,7 +78,7 @@ class OrderSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val order = twoItemOrder(owner)
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.splitMine(user(), order.id, listOf(order.items[0].id))
         }
     }
@@ -87,10 +89,10 @@ class OrderSplitIntegrationTest : PostgresIntegrationTest() {
         val order = twoItemOrder(owner)
         shipmentService.create(CreateShipmentRequest(orderIds = listOf(order.id)))
 
-        val result = orderService.splitMine(owner, order.id, listOf(order.items[0].id))
+        val result = orderService.splitMine(owner, order.id, listOf(order.items[0].id)).orFail()
 
         assertNull(result.created.shipmentId)
-        assertEquals(order.id, orderService.getById(order.id, owner).id)
+        assertEquals(order.id, orderService.getById(order.id, owner).orFail().id)
     }
 
     @Test
@@ -102,7 +104,7 @@ class OrderSplitIntegrationTest : PostgresIntegrationTest() {
 
         shipmentService.leaveShipment(a.id, owner)
 
-        assertNull(orderService.getById(a.id, owner).shipmentId)
+        assertNull(orderService.getById(a.id, owner).orFail().shipmentId)
         assertTrue(shipmentRepository.existsById(shipment.id))
     }
 
@@ -121,7 +123,7 @@ class OrderSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = twoItemOrder(owner)
         val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
-        orderService.submitForShipping(a.id, owner)
+        orderService.submitForShipping(a.id, owner).orFail()
         shipmentService.update(shipment.id, com.omiyage.backend.shipment.UpdateShipmentRequest(status = com.omiyage.backend.shipment.ShipmentStatus.SHIPPED))
 
         assertThrows(ResponseStatusException::class.java) { shipmentService.leaveShipment(a.id, owner) }

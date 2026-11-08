@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
 import java.util.Random
 import java.util.UUID
@@ -108,34 +107,30 @@ class OrderStockConservationIntegrationTest : PostgresIntegrationTest() {
         val expected = run.expectedItems.getValue(user.id)
         val open = openOrders(user.id)
         val order = open.pick(random)
-        try {
-            when (random.nextInt(8)) {
-                0 -> {
-                    val lines = List(1 + random.nextInt(2)) { catalogLine(run) }
-                    expected += orderService.create(user, CreateOrderRequest(items = lines, nickname = UUID.randomUUID().toString())).items.map { it.id }
-                }
-                1 -> if (order != null) {
-                    expected += orderService.addOwnItem(order.id, user, catalogLine(run)).items.map { it.id }
-                }
-                2 -> order?.items?.pick(random)?.let { item ->
-                    orderService.updateOwnItem(order.id, item.id, user, UpdateOwnOrderItemRequest(quantity = 1 + random.nextInt(6)))
-                }
-                3 -> order?.items?.pick(random)?.let { item ->
-                    orderService.removeOwnItem(order.id, item.id, user)
-                    expected -= item.id
-                }
-                4 -> if (order != null) orderService.cancelOwn(order.id, user)
-                5 -> if (open.size >= 2) orderService.mergeMine(user, open.shuffled(random).take(2).map { it.id })
-                6 -> if (order != null && order.items.size >= 2) {
-                    orderService.splitMine(user, order.id, order.items.shuffled(random).take(1 + random.nextInt(order.items.size - 1)).map { it.id })
-                }
-                else -> if (order != null && order.items.size >= 2) {
-                    val target = (open - order).pick(random)
-                    orderService.adminMoveItems(order.id, order.items.shuffled(random).take(1 + random.nextInt(order.items.size - 1)).map { it.id }, target?.id)
-                }
+        when (random.nextInt(8)) {
+            0 -> {
+                val lines = List(1 + random.nextInt(2)) { catalogLine(run) }
+                orderService.create(user, CreateOrderRequest(items = lines, nickname = UUID.randomUUID().toString()))
+                .onRight { created -> expected += created.items.map { it.id } }
             }
-        } catch (e: ResponseStatusException) {
-            // A rule the model does not track rejected the call; it rolled back, so the invariants must still hold.
+            1 -> if (order != null) {
+                orderService.addOwnItem(order.id, user, catalogLine(run)).onRight { updated -> expected += updated.items.map { it.id } }
+            }
+            2 -> order?.items?.pick(random)?.let { item ->
+                orderService.updateOwnItem(order.id, item.id, user, UpdateOwnOrderItemRequest(quantity = 1 + random.nextInt(6)))
+            }
+            3 -> order?.items?.pick(random)?.let { item ->
+                orderService.removeOwnItem(order.id, item.id, user).onRight { expected -= item.id }
+            }
+            4 -> if (order != null) orderService.cancelOwn(order.id, user)
+            5 -> if (open.size >= 2) orderService.mergeMine(user, open.shuffled(random).take(2).map { it.id })
+            6 -> if (order != null && order.items.size >= 2) {
+                orderService.splitMine(user, order.id, order.items.shuffled(random).take(1 + random.nextInt(order.items.size - 1)).map { it.id })
+            }
+            else -> if (order != null && order.items.size >= 2) {
+                val target = (open - order).pick(random)
+                orderService.adminMoveItems(order.id, order.items.shuffled(random).take(1 + random.nextInt(order.items.size - 1)).map { it.id }, target?.id)
+            }
         }
     }
 

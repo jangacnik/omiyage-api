@@ -54,7 +54,7 @@ class OrderStockConcurrencyIntegrationTest : PostgresIntegrationTest() {
                     orderService.create(
                         MeishiPrincipal(UUID.randomUUID(), "bob", Role.USER),
                         CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY))),
-                    )
+                    ).orFail()
                 }
             })
         }

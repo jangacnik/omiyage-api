@@ -1,5 +1,6 @@
 package com.omiyage.backend.shipment
 
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
@@ -41,7 +42,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
     private fun order(principal: MeishiPrincipal) = orderService.create(
         principal,
         CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)), nickname = UUID.randomUUID().toString()),
-    )
+    ).orFail()
 
     @Test
     fun `combining two shipments with different users folds every order into one`() {
@@ -74,7 +75,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = order(owner)
         val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
-        orderService.submitForShipping(a.id, owner)
+        orderService.submitForShipping(a.id, owner).orFail()
         shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
         val b = order(user())
         val otherShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id)))
@@ -116,7 +117,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = order(owner)
         val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
-        orderService.submitForShipping(a.id, owner)
+        orderService.submitForShipping(a.id, owner).orFail()
 
         val shipped = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
         assertNotNull(shipped.shippedAt)
@@ -132,7 +133,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = order(owner)
         val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
-        orderService.submitForShipping(a.id, owner)
+        orderService.submitForShipping(a.id, owner).orFail()
         shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
         shipmentService.markArrivedMine(shipment.id, owner.id)
 
@@ -151,9 +152,9 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = order(owner)
         val cancelled = order(owner)
-        orderService.updateStatus(cancelled.id, OrderStatus.CANCELLED)
+        orderService.updateStatus(cancelled.id, OrderStatus.CANCELLED).orFail()
         val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
-        orderService.submitForShipping(a.id, owner)
+        orderService.submitForShipping(a.id, owner).orFail()
         shipmentService.assignOrder(cancelled.id, shipment.id)
 
         val shipped = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
@@ -182,7 +183,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         assertEquals(ShipmentDestination.AUSTRIA, updated.destination)
         assertEquals(ShippingMethod.EMS, updated.shippingMethod)
 
-        orderService.submitForShipping(a.id, owner)
+        orderService.submitForShipping(a.id, owner).orFail()
         shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
 
         assertThrows(ResponseStatusException::class.java) {
@@ -196,7 +197,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val other = user()
         val a = order(owner)
         val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id)))
-        orderService.submitForShipping(a.id, owner)
+        orderService.submitForShipping(a.id, owner).orFail()
         shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
 
         assertThrows(ResponseStatusException::class.java) { shipmentService.markArrivedMine(shipment.id, other.id) }
@@ -216,7 +217,7 @@ class ShipmentCombineSplitIntegrationTest : PostgresIntegrationTest() {
         val otherOpenShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(otherOpenOrder.id), title = "Other's box"))
         val otherShippedOrder = order(other)
         val otherShippedShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(otherShippedOrder.id)))
-        orderService.submitForShipping(otherShippedOrder.id, other)
+        orderService.submitForShipping(otherShippedOrder.id, other).orFail()
         shipmentService.update(otherShippedShipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
 
         val browsable = shipmentService.browsableForMember(me.id, "Bearer irrelevant")

@@ -1,10 +1,18 @@
 package com.omiyage.backend.order
 
+import arrow.core.Either
+import arrow.core.raise.Raise
+import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
 import com.omiyage.backend.catalog.InventoryItem
 import com.omiyage.backend.catalog.InventoryItemImage
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.media.MediaService
 import com.omiyage.backend.common.Currency
+import com.omiyage.backend.errors.CatalogError
+import com.omiyage.backend.errors.DomainError
+import com.omiyage.backend.errors.OrderError
+import com.omiyage.backend.errors.transactionalEither
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import com.omiyage.backend.shipment.ExchangeRateService
@@ -13,18 +21,16 @@ import com.omiyage.backend.shipment.ShipmentRepository
 import com.omiyage.backend.shipment.ShipmentStatus
 import com.omiyage.backend.user.MeishiAdminClient
 import com.omiyage.backend.web.PageResponse
-import com.omiyage.backend.web.getOrRespond
 import com.omiyage.backend.web.toPageResponse
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 
 // Once an item has actually been bought or shipped, its content/existence is settled - a user
 // can no longer edit or remove it (admin still can, to correct mistakes). Also used by
@@ -75,24 +81,28 @@ class OrderService(
     private val events = org.slf4j.LoggerFactory.getLogger("events")
 
     @Transactional
-    fun create(principal: MeishiPrincipal, request: CreateOrderRequest): OrderDto = createFor(principal.id, request)
+    fun create(principal: MeishiPrincipal, request: CreateOrderRequest): Either<DomainError, OrderDto> = createFor(principal.id, request)
 
     @Transactional
-    fun adminCreate(userId: UUID, request: CreateOrderRequest): OrderDto = createFor(userId, request, includeProfit = true)
+    fun adminCreate(userId: UUID, request: CreateOrderRequest): Either<DomainError, OrderDto> =
+        createFor(userId, request, includeProfit = true)
 
-    private fun createFor(userId: UUID, request: CreateOrderRequest, includeProfit: Boolean = false): OrderDto {
+    private fun createFor(userId: UUID, request: CreateOrderRequest, includeProfit: Boolean = false): Either<DomainError, OrderDto> = transactionalEither {
         val nickname = request.nickname?.trim()?.ifBlank { null }
         orders.lockOrderCreation(userId.toString())
         val wanted = request.items.map { it.signature() }.sorted()
-        orders.findByUserIdAndCreatedAtAfter(userId, OffsetDateTime.now().minus(DUPLICATE_ORDER_WINDOW))
+        val duplicate = orders.findByUserIdAndCreatedAtAfter(userId, OffsetDateTime.now().minus(DUPLICATE_ORDER_WINDOW))
             .firstOrNull { it.status != OrderStatus.CANCELLED && it.nickname == nickname && it.items.map { item -> item.signature() }.sorted() == wanted }
-            ?.let { return it.toDto(includeProfit, exchangeRates::toEur) }
-        val order = Order(userId = userId, notes = request.notes, nickname = nickname)
-        request.items.forEach { order.items.add(buildOrderItem(order, it)) }
-        val saved = orders.save(order)
-        events.info("order_created orderId={} userId={} itemCount={}", saved.id, userId, saved.items.size)
-        orderEvents.orderCreated(saved)
-        return saved.toDto(includeProfit, exchangeRates::toEur)
+        if (duplicate != null) {
+            duplicate.toDto(includeProfit, exchangeRates::toEur)
+        } else {
+            val order = Order(userId = userId, notes = request.notes, nickname = nickname)
+            request.items.forEach { order.items.add(buildOrderItem(order, it)) }
+            val saved = orders.save(order)
+            events.info("order_created orderId={} userId={} itemCount={}", saved.id, userId, saved.items.size)
+            orderEvents.orderCreated(saved)
+            saved.toDto(includeProfit, exchangeRates::toEur)
+        }
     }
 
     @Transactional(readOnly = true)
@@ -100,13 +110,11 @@ class OrderService(
         orders.findByUserId(principal.id, withIdTiebreak(pageable)).toPageResponse { it.toDto() }
 
     @Transactional(readOnly = true)
-    fun getById(id: UUID, principal: MeishiPrincipal): OrderDto {
-        val order = findOrThrow(id)
+    fun getById(id: UUID, principal: MeishiPrincipal): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(id)
         val isAdmin = principal.role == Role.ADMIN
-        if (!isAdmin && order.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
-        return order.toDto(includeProfit = isAdmin, toEur = exchangeRates::toEur)
+        ensure(isAdmin || order.userId == principal.id) { OrderError.OrderNotFound }
+        order.toDto(includeProfit = isAdmin, toEur = exchangeRates::toEur)
     }
 
     @Transactional(readOnly = true)
@@ -146,11 +154,9 @@ class OrderService(
     }
 
     @Transactional
-    fun updateStatus(id: UUID, status: OrderStatus): OrderDto {
-        val order = findOrThrow(id)
-        if (!order.status.canMoveTo(status)) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot change order status from ${order.status} to $status")
-        }
+    fun updateStatus(id: UUID, status: OrderStatus): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(id)
+        ensure(order.status.canMoveTo(status)) { OrderError.StatusChangeNotAllowed(order.status, status) }
         events.info("order_status_changed orderId={} from={} to={}", id, order.status, status)
         val previousStatus = order.status
         if (status == OrderStatus.CANCELLED) {
@@ -160,7 +166,7 @@ class OrderService(
             order.updatedAt = OffsetDateTime.now()
         }
         orderEvents.statusChanged(order, previousStatus)
-        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+        order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     // Bought-for is always JPY (that's the currency the admin actually pays in) and sold-for is
@@ -174,12 +180,9 @@ class OrderService(
         actualPrice: java.math.BigDecimal?,
         soldPrice: java.math.BigDecimal? = null,
         weight: java.math.BigDecimal? = null,
-    ): OrderDto {
-        val item = orderItems.findById(itemId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
-        if (item.order.id != orderId) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found")
-        }
+    ): Either<DomainError, OrderDto> = transactionalEither {
+        val item = ensureNotNull(orderItems.findById(itemId).getOrNull()) { OrderError.OrderItemNotFound }
+        ensure(item.order.id == orderId) { OrderError.OrderItemNotFound }
         events.info("order_item_status_changed orderId={} itemId={} from={} to={}", orderId, itemId, item.status, status)
         item.status = status
         if (status == OrderItemStatus.BOUGHT && item.purchasedAt == null) {
@@ -191,65 +194,58 @@ class OrderService(
         item.soldPriceCurrency = if (soldPrice != null) Currency.EUR else null
         item.weight = weight
         item.updatedAt = OffsetDateTime.now()
-        return item.order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+        item.order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
-    fun addOwnItem(orderId: UUID, principal: MeishiPrincipal, request: CreateOrderItemRequest): OrderDto {
-        val order = findOrThrow(orderId)
-        if (order.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
+    fun addOwnItem(orderId: UUID, principal: MeishiPrincipal, request: CreateOrderItemRequest): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        ensure(order.userId == principal.id) { OrderError.OrderNotFound }
         requireOpen(order)
-        return addItemToOrder(order, request)
+        addItemToOrder(order, request)
     }
 
     @Transactional
-    fun addOwnItems(orderId: UUID, principal: MeishiPrincipal, requests: List<CreateOrderItemRequest>): OrderDto {
-        val order = findOrThrow(orderId)
-        if (order.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
+    fun addOwnItems(orderId: UUID, principal: MeishiPrincipal, requests: List<CreateOrderItemRequest>): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        ensure(order.userId == principal.id) { OrderError.OrderNotFound }
         requireOpen(order)
-        return requests.map { addItemToOrder(order, it) }.last()
+        requests.map { addItemToOrder(order, it) }.last()
     }
 
     @Transactional
-    fun adminAddItem(orderId: UUID, request: CreateOrderItemRequest): OrderDto =
-        addItemToOrder(findOrThrow(orderId), request, includeProfit = true)
+    fun adminAddItem(orderId: UUID, request: CreateOrderItemRequest): Either<DomainError, OrderDto> = transactionalEither {
+        addItemToOrder(findOrRaise(orderId), request, includeProfit = true)
+    }
 
     @Transactional
-    fun updateOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal, request: UpdateOwnOrderItemRequest): OrderDto {
-        val order = findOrThrow(orderId)
-        if (order.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
+    fun updateOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal, request: UpdateOwnOrderItemRequest): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        ensure(order.userId == principal.id) { OrderError.OrderNotFound }
         requireOpen(order)
-        applyItemContentEdit(ownItemOrThrow(order, itemId), request, enforceStatusGuard = true)
-        return order.toDto()
+        applyItemContentEdit(ownItemOrRaise(order, itemId), request, enforceStatusGuard = true)
+        order.toDto()
     }
 
     @Transactional
-    fun adminUpdateItemContent(orderId: UUID, itemId: UUID, request: UpdateOwnOrderItemRequest): OrderDto {
-        val order = findOrThrow(orderId)
-        applyItemContentEdit(ownItemOrThrow(order, itemId), request, enforceStatusGuard = false)
-        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+    fun adminUpdateItemContent(orderId: UUID, itemId: UUID, request: UpdateOwnOrderItemRequest): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        applyItemContentEdit(ownItemOrRaise(order, itemId), request, enforceStatusGuard = false)
+        order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     // A custom (non-catalog) request is not in Inventory until an admin decides it belongs there.
     // Added at zero stock, which already means "still requestable, just signals the admin to go
     // source it" (see buildOrderItem's inventoryItemId branch), so no new status is needed.
     @Transactional
-    fun adminAddItemToInventory(orderId: UUID, itemId: UUID): OrderDto {
-        val order = findOrThrow(orderId)
-        val item = ownItemOrThrow(order, itemId)
+    fun adminAddItemToInventory(orderId: UUID, itemId: UUID): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        val item = ownItemOrRaise(order, itemId)
         val title = item.customTitle
         val condition = item.condition
-        if (item.inventoryItem != null || title == null || condition == null) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "only a custom order item can be added to inventory")
-        }
-        if (inventoryItems.existsByTitleIgnoreCaseAndConditionAndLink(title, condition, item.link)) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "an inventory item with this title, condition and link already exists")
+        ensure(item.inventoryItem == null && title != null && condition != null) { OrderError.ItemNotCustom }
+        ensure(!inventoryItems.existsByTitleIgnoreCaseAndConditionAndLink(title, condition, item.link)) {
+            OrderError.InventoryItemAlreadyExists
         }
         val newItem = InventoryItem(
             title = title,
@@ -264,42 +260,40 @@ class OrderService(
         )
         item.customImageKey?.let { newItem.images.add(InventoryItemImage(inventoryItem = newItem, objectKey = it)) }
         inventoryItems.save(newItem)
-        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+        order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
-    fun adminMarkItemPaid(orderId: UUID, itemId: UUID, paid: Boolean): OrderDto {
-        val order = findOrThrow(orderId)
-        val item = ownItemOrThrow(order, itemId)
+    fun adminMarkItemPaid(orderId: UUID, itemId: UUID, paid: Boolean): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        val item = ownItemOrRaise(order, itemId)
         item.paid = paid
         item.paidAt = if (paid) OffsetDateTime.now() else null
         item.updatedAt = OffsetDateTime.now()
-        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+        order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
-    fun adminMarkOrderPaid(orderId: UUID, paid: Boolean): OrderDto {
-        val order = findOrThrow(orderId)
+    fun adminMarkOrderPaid(orderId: UUID, paid: Boolean): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
         markItemsPaid(order.items, paid)
-        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+        order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional
-    fun removeOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal): OrderDto {
-        val order = findOrThrow(orderId)
-        if (order.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
+    fun removeOwnItem(orderId: UUID, itemId: UUID, principal: MeishiPrincipal): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        ensure(order.userId == principal.id) { OrderError.OrderNotFound }
         requireOpen(order)
-        removeItemFromOrder(order, ownItemOrThrow(order, itemId), enforceStatusGuard = true)
-        return order.toDto()
+        removeItemFromOrder(order, ownItemOrRaise(order, itemId), enforceStatusGuard = true)
+        order.toDto()
     }
 
     @Transactional
-    fun adminRemoveItem(orderId: UUID, itemId: UUID): OrderDto {
-        val order = findOrThrow(orderId)
-        removeItemFromOrder(order, ownItemOrThrow(order, itemId), enforceStatusGuard = false)
-        return order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
+    fun adminRemoveItem(orderId: UUID, itemId: UUID): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        removeItemFromOrder(order, ownItemOrRaise(order, itemId), enforceStatusGuard = false)
+        order.toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
     @Transactional(readOnly = true)
@@ -310,24 +304,17 @@ class OrderService(
     // instead of always spinning up a new one - targetOrderId null still creates a new order, same
     // as splitMine does.
     @Transactional
-    fun adminMoveItems(sourceOrderId: UUID, itemIds: List<UUID>, targetOrderId: UUID?): MoveItemsResponseDto {
-        val source = findOrThrow(sourceOrderId)
+    fun adminMoveItems(sourceOrderId: UUID, itemIds: List<UUID>, targetOrderId: UUID?): Either<DomainError, MoveItemsResponseDto> = transactionalEither {
+        val source = findOrRaise(sourceOrderId)
         val distinctIds = itemIds.distinct()
         val toMove = distinctIds.map { id ->
-            source.items.find { it.id == id }
-                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found: $id")
+            ensureNotNull(source.items.find { it.id == id }) { OrderError.OrderItemIdNotFound(id) }
         }
-        if (toMove.isEmpty() || toMove.size == source.items.size) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "must move at least one item and leave at least one behind")
-        }
+        ensure(toMove.isNotEmpty() && toMove.size != source.items.size) { OrderError.MoveNeedsSomeButNotAllItems }
         val target = if (targetOrderId != null) {
-            if (targetOrderId == sourceOrderId) {
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "target order must be different from the source order")
-            }
-            val existing = findOrThrow(targetOrderId)
-            if (existing.userId != source.userId) {
-                throw ResponseStatusException(HttpStatus.CONFLICT, "cannot move items to an order belonging to a different user")
-            }
+            ensure(targetOrderId != sourceOrderId) { OrderError.MoveTargetIsSource }
+            val existing = findOrRaise(targetOrderId)
+            ensure(existing.userId == source.userId) { OrderError.MoveTargetOfOtherUser }
             existing
         } else {
             orders.save(Order(userId = source.userId, status = source.status))
@@ -340,27 +327,23 @@ class OrderService(
         source.updatedAt = OffsetDateTime.now()
         target.updatedAt = OffsetDateTime.now()
         events.info("items_moved sourceOrderId={} targetOrderId={} itemCount={}", source.id, target.id, toMove.size)
-        return MoveItemsResponseDto(
+        MoveItemsResponseDto(
             source = source.toDto(includeProfit = true, toEur = exchangeRates::toEur),
             target = target.toDto(includeProfit = true, toEur = exchangeRates::toEur),
         )
     }
 
     @Transactional
-    fun cancelOwn(orderId: UUID, principal: MeishiPrincipal): OrderDto {
-        val order = findOrThrow(orderId)
-        if (order.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
+    fun cancelOwn(orderId: UUID, principal: MeishiPrincipal): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        ensure(order.userId == principal.id) { OrderError.OrderNotFound }
         requireOpen(order)
-        if (order.items.any { it.status in LOCKED_ITEM_STATUSES }) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "order has items already bought or shipped and cannot be cancelled")
-        }
+        ensure(order.items.none { it.status in LOCKED_ITEM_STATUSES }) { OrderError.CancelHasLockedItems }
         val previousStatus = order.status
         cancelAndDetach(order)
         orderEvents.statusChanged(order, previousStatus)
         events.info("order_cancelled orderId={} userId={}", orderId, principal.id)
-        return order.toDto()
+        order.toDto()
     }
 
     // Mirrors mergeMine's validation shape, in reverse: pulls the chosen items off the source order
@@ -368,20 +351,15 @@ class OrderService(
     // attached to a shipment, so splitting an item out of a combined shipment falls out of this for
     // free - no separate "remove item from shipment" code path needed.
     @Transactional
-    fun splitMine(principal: MeishiPrincipal, orderId: UUID, itemIds: List<UUID>): SplitOrderResponseDto {
+    fun splitMine(principal: MeishiPrincipal, orderId: UUID, itemIds: List<UUID>): Either<DomainError, SplitOrderResponseDto> = transactionalEither {
         val distinctIds = itemIds.distinct()
-        val source = findOrThrow(orderId)
-        if (source.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
+        val source = findOrRaise(orderId)
+        ensure(source.userId == principal.id) { OrderError.OrderNotFound }
         requireOpen(source)
         val toMove = distinctIds.map { id ->
-            source.items.find { it.id == id }
-                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found: $id")
+            ensureNotNull(source.items.find { it.id == id }) { OrderError.OrderItemIdNotFound(id) }
         }
-        if (toMove.isEmpty() || toMove.size == source.items.size) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "split must move at least one item and leave at least one behind")
-        }
+        ensure(toMove.isNotEmpty() && toMove.size != source.items.size) { OrderError.SplitNeedsSomeButNotAllItems }
 
         val created = Order(userId = source.userId, status = source.status)
         orders.save(created)
@@ -392,7 +370,7 @@ class OrderService(
         }
         source.updatedAt = OffsetDateTime.now()
         events.info("order_split sourceOrderId={} newOrderId={} itemCount={}", source.id, created.id, toMove.size)
-        return SplitOrderResponseDto(original = source.toDto(), created = created.toDto())
+        SplitOrderResponseDto(original = source.toDto(), created = created.toDto())
     }
 
     // Only the order's own owner (no shipment yet) or the shipment's owner (set when orders were
@@ -400,23 +378,19 @@ class OrderService(
     // order on the shipment to PREPARING_SHIPPING, not just the one the caller named, since the
     // shipment moves as a unit even if it holds other users' orders too.
     @Transactional
-    fun submitForShipping(orderId: UUID, principal: MeishiPrincipal): OrderDto {
-        val order = findOrThrow(orderId)
+    fun submitForShipping(orderId: UUID, principal: MeishiPrincipal): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
         val existingShipment = order.shipment
         // A shipment with no owner assigned authorizes nobody - it must never fall back to "the
         // order named in the URL happens to be this caller's", or any co-member of a shipment
         // could submit it by naming their own order, bypassing the owner-only rule entirely.
         val authorizedUserId = if (existingShipment == null) order.userId else existingShipment.ownerUserId
-        if (authorizedUserId == null || authorizedUserId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
+        ensure(authorizedUserId != null && authorizedUserId == principal.id) { OrderError.OrderNotFound }
         requireOpen(order)
         // A preorder item has nothing to ship yet - it hasn't released, so there's no physical
         // package for the courier to take. The order can still be combined with others or split
         // off (see ShipmentService.combine/splitOff), just not submitted while this is unresolved.
-        if (order.items.any { it.isPreorder }) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "order has a preorder item that has not released yet and cannot be submitted for shipping")
-        }
+        ensure(order.items.none { it.isPreorder }) { OrderError.SubmitHasPreorderItem }
         // Every submitted order needs a shipment to track it through delivery, even a solo one
         // nobody ever explicitly combined - create one now instead of leaving it shipment-less
         // (which used to mean it never showed up on the member's own shipments list).
@@ -432,12 +406,12 @@ class OrderService(
             orderEvents.statusChanged(target, previousStatus)
         }
         events.info("order_submitted_for_shipping orderId={} shipmentId={} orderCount={}", orderId, shipment.id, targets.size)
-        return order.toDto()
+        order.toDto()
     }
 
     @Transactional
-    fun adminDelete(orderId: UUID) {
-        val order = findOrThrow(orderId)
+    fun adminDelete(orderId: UUID): Either<DomainError, Unit> = transactionalEither<Unit> {
+        val order = findOrRaise(orderId)
         val shipmentId = order.shipment?.id
         orders.delete(order)
         // Deleting the order can leave its shipment referenced by no order at all - same cleanup
@@ -448,14 +422,10 @@ class OrderService(
     }
 
     @Transactional
-    fun mergeMine(principal: MeishiPrincipal, orderIds: List<UUID>): OrderDto {
-        val selected = loadDistinctOrThrow(orderIds)
-        selected.forEach { order ->
-            if (order.userId != principal.id) {
-                throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-            }
-        }
-        return mergeSelected(selected).also { events.info("orders_merged targetOrderId={} mergedCount={}", it.id, selected.size) }.toDto()
+    fun mergeMine(principal: MeishiPrincipal, orderIds: List<UUID>): Either<DomainError, OrderDto> = transactionalEither {
+        val selected = loadDistinctOrRaise(orderIds)
+        selected.forEach { order -> ensure(order.userId == principal.id) { OrderError.OrderNotFound } }
+        mergeSelected(selected).also { events.info("orders_merged targetOrderId={} mergedCount={}", it.id, selected.size) }.toDto()
     }
 
     // Admin equivalent of mergeMine: no ownership restriction (any user's orders), but merging
@@ -463,37 +433,29 @@ class OrderService(
     // that's blocked here instead - same-user-only is the one rule mergeMine gets for free from
     // "every selected order belongs to the calling principal" that this doesn't.
     @Transactional
-    fun adminMerge(orderIds: List<UUID>): OrderDto {
-        val selected = loadDistinctOrThrow(orderIds)
-        if (selected.map { it.userId }.distinct().size > 1) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot merge orders belonging to different users")
-        }
-        return mergeSelected(selected).also { events.info("orders_merged targetOrderId={} mergedCount={}", it.id, selected.size) }
+    fun adminMerge(orderIds: List<UUID>): Either<DomainError, OrderDto> = transactionalEither {
+        val selected = loadDistinctOrRaise(orderIds)
+        ensure(selected.map { it.userId }.distinct().size <= 1) { OrderError.MergeAcrossUsers }
+        mergeSelected(selected).also { events.info("orders_merged targetOrderId={} mergedCount={}", it.id, selected.size) }
             .toDto(includeProfit = true, toEur = exchangeRates::toEur)
     }
 
-    private fun loadDistinctOrThrow(orderIds: List<UUID>): List<Order> {
+    private fun Raise<DomainError>.loadDistinctOrRaise(orderIds: List<UUID>): List<Order> {
         val distinctIds = orderIds.distinct()
-        if (distinctIds.size < 2) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "select at least two different orders to merge")
-        }
-        return distinctIds.map { findOrThrow(it) }
+        ensure(distinctIds.size >= 2) { OrderError.MergeNeedsTwoOrders }
+        return distinctIds.map { findOrRaise(it) }
     }
 
     /** Folds every selected order's items onto one target order and deletes the rest. Shared by
      *  mergeMine and adminMerge, which differ only in who may select which orders (see each). */
-    private fun mergeSelected(selected: List<Order>): Order {
+    private fun Raise<DomainError>.mergeSelected(selected: List<Order>): Order {
         selected.forEach { order ->
             requireMergeableAsTarget(order)
             val shipmentStatus = order.shipment?.status
-            if (shipmentStatus != null && shipmentStatus != ShipmentStatus.PREPARING) {
-                throw ResponseStatusException(HttpStatus.CONFLICT, "an order that has already shipped cannot be merged")
-            }
+            ensure(shipmentStatus == null || shipmentStatus == ShipmentStatus.PREPARING) { OrderError.MergeShippedOrder }
         }
         val preparingShipping = selected.filter { it.status == OrderStatus.PREPARING_SHIPPING }
-        if (preparingShipping.size > 1) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "cannot merge two orders that have both already been submitted for shipping")
-        }
+        ensure(preparingShipping.size <= 1) { OrderError.MergeBothSubmitted }
         // A submitted-but-not-yet-shipped order is always the target, whichever position the
         // caller selected it in - it's the one order here that can't simply become a "source" and
         // get deleted, since its own status/shipment are what the merge needs to preserve. Every
@@ -538,18 +500,18 @@ class OrderService(
     }
 
     @Transactional
-    fun updateNickname(orderId: UUID, principal: MeishiPrincipal, nickname: String?): OrderDto {
-        val order = findOrThrow(orderId)
-        if (order.userId != principal.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order not found")
-        }
-        return applyNickname(order, nickname)
+    fun updateNickname(orderId: UUID, principal: MeishiPrincipal, nickname: String?): Either<DomainError, OrderDto> = transactionalEither {
+        val order = findOrRaise(orderId)
+        ensure(order.userId == principal.id) { OrderError.OrderNotFound }
+        applyNickname(order, nickname)
     }
 
     // Admin equivalent of updateNickname: no ownership restriction - an admin can title any
     // user's order, e.g. to label it for a shipment before the owner gets around to it.
     @Transactional
-    fun adminUpdateNickname(orderId: UUID, nickname: String?): OrderDto = applyNickname(findOrThrow(orderId), nickname)
+    fun adminUpdateNickname(orderId: UUID, nickname: String?): Either<DomainError, OrderDto> = transactionalEither {
+        applyNickname(findOrRaise(orderId), nickname)
+    }
 
     private fun applyNickname(order: Order, nickname: String?): OrderDto {
         order.nickname = nickname?.trim()?.ifBlank { null }
@@ -579,21 +541,17 @@ class OrderService(
         }
     }
 
-    private fun requireOpen(order: Order) {
-        if (!order.isOpen) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "order is closed and can no longer be edited")
-        }
+    private fun Raise<DomainError>.requireOpen(order: Order) {
+        ensure(order.isOpen) { OrderError.OrderClosed }
     }
 
     // Same as requireOpen, but also allows PREPARING_SHIPPING - only for the order other orders
     // are being merged into, never for an order being edited/added to on its own.
-    private fun requireMergeableAsTarget(order: Order) {
-        if (order.status in setOf(OrderStatus.SENT, OrderStatus.DELIVERED, OrderStatus.CANCELLED)) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "order is closed and can no longer be edited")
-        }
+    private fun Raise<DomainError>.requireMergeableAsTarget(order: Order) {
+        ensure(order.status !in setOf(OrderStatus.SENT, OrderStatus.DELIVERED, OrderStatus.CANCELLED)) { OrderError.OrderClosed }
     }
 
-    private fun addItemToOrder(order: Order, request: CreateOrderItemRequest, includeProfit: Boolean = false): OrderDto {
+    private fun Raise<DomainError>.addItemToOrder(order: Order, request: CreateOrderItemRequest, includeProfit: Boolean = false): OrderDto {
         val item = buildOrderItem(order, request)
         order.items.add(item)
         // order is already persistent here (unlike create(), which persists a brand-new Order and
@@ -604,14 +562,12 @@ class OrderService(
         return order.toDto(includeProfit, exchangeRates::toEur)
     }
 
-    private fun applyItemContentEdit(item: OrderItem, request: UpdateOwnOrderItemRequest, enforceStatusGuard: Boolean) {
-        if (enforceStatusGuard && item.status in LOCKED_ITEM_STATUSES) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought or shipped and can no longer be edited")
-        }
+    private fun Raise<DomainError>.applyItemContentEdit(item: OrderItem, request: UpdateOwnOrderItemRequest, enforceStatusGuard: Boolean) {
+        ensure(!enforceStatusGuard || item.status !in LOCKED_ITEM_STATUSES) { OrderError.ItemLockedForEdit }
         request.title?.let { item.customTitle = it }
         request.description?.let { item.customDescription = it }
         request.imageKey?.let {
-            media.requireExisting(listOf(it)).getOrRespond()
+            media.requireExisting(listOf(it)).bind()
             item.customImageKey = it
         }
         request.maxPrice?.let { item.maxPrice = it }
@@ -627,10 +583,8 @@ class OrderService(
         item.updatedAt = OffsetDateTime.now()
     }
 
-    private fun removeItemFromOrder(order: Order, item: OrderItem, enforceStatusGuard: Boolean) {
-        if (enforceStatusGuard && item.status in LOCKED_ITEM_STATUSES) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "item has already been bought or shipped and can no longer be removed")
-        }
+    private fun Raise<DomainError>.removeItemFromOrder(order: Order, item: OrderItem, enforceStatusGuard: Boolean) {
+        ensure(!enforceStatusGuard || item.status !in LOCKED_ITEM_STATUSES) { OrderError.ItemLockedForRemoval }
         restockIfLinked(item)
         order.items.remove(item)
         orderItems.delete(item)
@@ -644,19 +598,15 @@ class OrderService(
         item.reservedQuantity = 0
     }
 
-    private fun ownItemOrThrow(order: Order, itemId: UUID): OrderItem {
-        val item = orderItems.findById(itemId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found") }
-        if (item.order.id != order.id) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "order item not found")
-        }
+    private fun Raise<DomainError>.ownItemOrRaise(order: Order, itemId: UUID): OrderItem {
+        val item = ensureNotNull(orderItems.findById(itemId).getOrNull()) { OrderError.OrderItemNotFound }
+        ensure(item.order.id == order.id) { OrderError.OrderItemNotFound }
         return item
     }
 
-    private fun buildOrderItem(order: Order, request: CreateOrderItemRequest): OrderItem {
+    private fun Raise<DomainError>.buildOrderItem(order: Order, request: CreateOrderItemRequest): OrderItem {
         if (request.inventoryItemId != null) {
-            val inventoryItem = inventoryItems.findById(request.inventoryItemId)
-                .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "inventory item not found") }
+            val inventoryItem = ensureNotNull(inventoryItems.findById(request.inventoryItemId).getOrNull()) { CatalogError.InventoryItemNotFound }
             // Never go negative and never block the request over it - an item at (or now hitting)
             // 0 stock is still requestable, it's just a signal to the admin to restock/rebuy.
             val reserved = minOf(request.quantity, inventoryItem.stockQuantity)
@@ -694,16 +644,10 @@ class OrderService(
             )
         }
 
-        if (request.title.isNullOrBlank()) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "each order item needs an inventoryItemId or a title")
-        }
-        if (request.condition == null) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "condition is required for a custom order item")
-        }
-        if (request.isPreorder && request.expectedReleaseDate == null) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "a preorder item must have an expected release date")
-        }
-        request.imageKey?.let { media.requireExisting(listOf(it)).getOrRespond() }
+        ensure(!request.title.isNullOrBlank()) { OrderError.ItemNeedsInventoryItemOrTitle }
+        ensure(request.condition != null) { OrderError.CustomItemNeedsCondition }
+        ensure(!request.isPreorder || request.expectedReleaseDate != null) { OrderError.PreorderNeedsReleaseDate }
+        request.imageKey?.let { media.requireExisting(listOf(it)).bind() }
         return OrderItem(
             order = order,
             customTitle = request.title,
@@ -725,6 +669,6 @@ class OrderService(
     private fun withIdTiebreak(pageable: Pageable): Pageable =
         if (pageable.isUnpaged) pageable else PageRequest.of(pageable.pageNumber, pageable.pageSize, pageable.sort.and(Sort.by("id")))
 
-    private fun findOrThrow(id: UUID): Order =
-        orders.findById(id).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "order not found") }
+    private fun Raise<DomainError>.findOrRaise(id: UUID): Order =
+        ensureNotNull(orders.findById(id).getOrNull()) { OrderError.OrderNotFound }
 }

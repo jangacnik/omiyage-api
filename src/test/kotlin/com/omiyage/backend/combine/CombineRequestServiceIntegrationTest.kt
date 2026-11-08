@@ -1,5 +1,6 @@
 package com.omiyage.backend.combine
 
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
@@ -43,7 +44,7 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
     private fun order(principal: MeishiPrincipal) = orderService.create(
         principal,
         CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)), nickname = UUID.randomUUID().toString()),
-    )
+    ).orFail()
 
     // Every browsable target in this feature is an existing shipment (per the new "browse other
     // members' shipments to combine into" flow) - give an order one via the same combine()
@@ -66,9 +67,9 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
 
         assertEquals(CombineRequestStatus.ACCEPTED, accepted.status)
         assertEquals(bobShipment.id, accepted.resultingShipmentId)
-        assertEquals(bobShipment.id, orderService.getById(aliceOrder.id, alice).shipmentId)
-        assertEquals(bobShipment.id, orderService.getById(bobOrder.id, bob).shipmentId)
-        assertEquals(null, orderService.getById(bobOther.id, bob).shipmentId)
+        assertEquals(bobShipment.id, orderService.getById(aliceOrder.id, alice).orFail().shipmentId)
+        assertEquals(bobShipment.id, orderService.getById(bobOrder.id, bob).orFail().shipmentId)
+        assertEquals(null, orderService.getById(bobOther.id, bob).orFail().shipmentId)
     }
 
     @Test
@@ -209,7 +210,7 @@ class CombineRequestServiceIntegrationTest : PostgresIntegrationTest() {
         val aliceOrder = order(alice)
         val bobOrder = order(bob)
         val bobShipment = shipmentFor(bobOrder)
-        orderService.submitForShipping(bobOrder.id, bob)
+        orderService.submitForShipping(bobOrder.id, bob).orFail()
         shipmentService.update(bobShipment.id, com.omiyage.backend.shipment.UpdateShipmentRequest(status = com.omiyage.backend.shipment.ShipmentStatus.SHIPPED))
 
         assertThrows(ResponseStatusException::class.java) { combineRequestService.create(alice, aliceOrder.id, bobShipment.id) }

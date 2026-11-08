@@ -1,5 +1,6 @@
 package com.omiyage.backend.dashboard
 
+import com.omiyage.backend.errors.orFail
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
@@ -59,7 +60,7 @@ class DashboardQueryCountIntegrationTest : PostgresIntegrationTest() {
                 orderService.create(
                     principal,
                     CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Item", condition = Condition.NEW, currency = Currency.JPY)), nickname = UUID.randomUUID().toString()),
-                )
+                ).orFail()
             }
         }
         every { meishiAdminClient.listUsers(any()) } returns principals.map { profileFor(it.id) }
