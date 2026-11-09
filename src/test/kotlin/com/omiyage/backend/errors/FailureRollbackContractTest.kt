@@ -57,6 +57,7 @@ class FailureRollbackContractTest : PostgresIntegrationTest() {
             )
             jdbc.update("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", id)
             jdbc.update("DELETE FROM orders WHERE user_id = ?", id)
+            jdbc.update("UPDATE orders SET shipment_id = NULL WHERE shipment_id IN (SELECT id FROM shipments WHERE owner_user_id = ?)", id)
             jdbc.update("DELETE FROM shipments WHERE owner_user_id = ?", id)
             jdbc.update("DELETE FROM basket_lines WHERE user_id = ?", id)
         }
