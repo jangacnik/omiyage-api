@@ -2,6 +2,7 @@ package com.omiyage.backend.web
 
 import arrow.core.left
 import arrow.core.right
+import com.omiyage.backend.errors.AuthError
 import com.omiyage.backend.errors.MediaError
 import com.omiyage.backend.errors.UserError
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -33,5 +34,13 @@ class DomainErrorMapperTest {
     @Test
     fun `a missing image reads like the bare 404 it always was`() {
         assertEquals(HttpFailure(HttpStatus.NOT_FOUND, "404 NOT_FOUND"), MediaError.ImageNotFound.toHttpFailure())
+    }
+
+    @Test
+    fun `an upstream rate limit is 429 and keeps the Retry-After seconds`() {
+        assertEquals(
+            HttpFailure(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts", retryAfterSeconds = 12),
+            AuthError.UpstreamRateLimited(12).toHttpFailure(),
+        )
     }
 }

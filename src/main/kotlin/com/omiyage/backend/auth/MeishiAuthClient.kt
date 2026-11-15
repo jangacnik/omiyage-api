@@ -6,6 +6,7 @@ import arrow.core.right
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.omiyage.backend.errors.AuthError
 import com.omiyage.backend.errors.DomainError
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
@@ -29,6 +30,9 @@ class MeishiAuthClient(private val client: RestClient) {
                 .retrieve()
                 .body<MeishiTokenResponse>()
         } catch (e: org.springframework.web.client.HttpClientErrorException) {
+            if (e.statusCode.value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+                return AuthError.UpstreamRateLimited(e.responseHeaders?.getFirst(HttpHeaders.RETRY_AFTER)?.toLongOrNull()?.takeIf { it >= 0 }).left()
+            }
             return AuthError.InvalidCredentials.left()
         }
         return response?.token?.right() ?: AuthError.InvalidCredentials.left()

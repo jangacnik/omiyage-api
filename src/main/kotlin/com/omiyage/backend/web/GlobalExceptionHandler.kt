@@ -4,6 +4,7 @@ import org.slf4j.LoggerFactory
 import jakarta.validation.ConstraintViolationException
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.OptimisticLockingFailureException
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.http.ResponseEntity
@@ -48,7 +49,9 @@ class GlobalExceptionHandler {
     fun handleDomainError(e: DomainErrorException): ResponseEntity<Map<String, String>> {
         val failure = e.error.toHttpFailure()
         if (failure.status.value() == HttpStatus.BAD_REQUEST.value()) return badRequest(e, failure.message, null)
-        return ResponseEntity.status(failure.status).body(errorBody(failure.status, failure.message))
+        val response = ResponseEntity.status(failure.status)
+        failure.retryAfterSeconds?.let { response.header(HttpHeaders.RETRY_AFTER, it.toString()) }
+        return response.body(errorBody(failure.status, failure.message))
     }
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
