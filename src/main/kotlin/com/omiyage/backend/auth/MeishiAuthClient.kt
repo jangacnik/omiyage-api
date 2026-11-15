@@ -6,6 +6,7 @@ import arrow.core.right
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.omiyage.backend.errors.AuthError
 import com.omiyage.backend.errors.DomainError
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
@@ -18,6 +19,8 @@ data class MeishiTokenResponse(val token: String)
 data class MeishiOAuthTokenResponse(@JsonProperty("access_token") val accessToken: String?)
 data class MeishiUserResponse(val id: String, val nickname: String?, val role: String, val status: String)
 
+private const val MAX_RETRY_AFTER_SECONDS = 3600L
+
 @Component
 class MeishiAuthClient(private val client: RestClient) {
 
@@ -29,6 +32,10 @@ class MeishiAuthClient(private val client: RestClient) {
                 .retrieve()
                 .body<MeishiTokenResponse>()
         } catch (e: org.springframework.web.client.HttpClientErrorException) {
+            if (e.statusCode.value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+                val retryAfter = e.responseHeaders?.getFirst(HttpHeaders.RETRY_AFTER)?.toLongOrNull()?.takeIf { it >= 0 }
+                return AuthError.UpstreamRateLimited(retryAfter?.let { minOf(it, MAX_RETRY_AFTER_SECONDS) }).left()
+            }
             return AuthError.InvalidCredentials.left()
         }
         return response?.token?.right() ?: AuthError.InvalidCredentials.left()

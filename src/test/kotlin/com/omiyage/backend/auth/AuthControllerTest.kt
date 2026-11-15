@@ -1,9 +1,11 @@
 package com.omiyage.backend.auth
 
+import arrow.core.left
 import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
+import com.omiyage.backend.errors.AuthError
 import com.omiyage.backend.security.JwtAuthenticationFilter
 import com.omiyage.backend.security.JwtVerifier
 import com.omiyage.backend.security.SecurityConfig
@@ -45,6 +47,33 @@ class AuthControllerTest {
         }.andExpect {
             status { isOk() }
             jsonPath("$.token") { value("the-token") }
+        }
+    }
+
+    @Test
+    fun `login answers 429 with Retry-After when MeishiApi is rate limiting`() {
+        every { service.login("dave", "pw", any()) } returns AuthError.UpstreamRateLimited(30).left()
+
+        mockMvc.post("/api/auth/login") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(LoginRequest("dave", "pw"))
+        }.andExpect {
+            status { isTooManyRequests() }
+            header { string("Retry-After", "30") }
+            jsonPath("$.error") { value("too many login attempts") }
+        }
+    }
+
+    @Test
+    fun `a 429 without a Retry-After from upstream has no Retry-After header`() {
+        every { service.login("erin", "pw", any()) } returns AuthError.UpstreamRateLimited(null).left()
+
+        mockMvc.post("/api/auth/login") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(LoginRequest("erin", "pw"))
+        }.andExpect {
+            status { isTooManyRequests() }
+            header { doesNotExist("Retry-After") }
         }
     }
 

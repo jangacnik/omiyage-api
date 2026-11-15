@@ -14,7 +14,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 
 /** The HTTP shape of a [DomainError]; [errorBody] turns it into the JSON body. */
-data class HttpFailure(val status: HttpStatusCode, val message: String)
+data class HttpFailure(val status: HttpStatusCode, val message: String, val retryAfterSeconds: Long? = null)
 
 /** Carries a [DomainError] from a controller to [GlobalExceptionHandler], so controller return
  *  types (and the generated OpenAPI document) stay those of the success case. */
@@ -134,6 +134,7 @@ private fun AuthError.authFailure(): HttpFailure = when (this) {
     AuthError.InvalidCredentials -> failure(HttpStatus.UNAUTHORIZED, "invalid credentials")
     AuthError.InvalidAuthorizationCode -> failure(HttpStatus.UNAUTHORIZED, "invalid authorization code")
     AuthError.TooManyAttempts -> failure(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts")
+    is AuthError.UpstreamRateLimited -> HttpFailure(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts", retryAfterSeconds)
     AuthError.SsoNotEnabledUpstream -> failure(HttpStatus.SERVICE_UNAVAILABLE, "meishi sso is not enabled")
     AuthError.SsoDisabled -> failure(HttpStatus.NOT_FOUND, "meishi sso is disabled")
     AuthError.InvalidRequest -> failure(HttpStatus.BAD_REQUEST, "invalid request")
