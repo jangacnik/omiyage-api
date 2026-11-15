@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import jakarta.validation.constraints.DecimalMin
@@ -28,7 +29,7 @@ data class InventoryItemDto(
     val images: List<String>,
     val categories: List<CategoryDto>,
     val tags: List<String> = emptyList(),
-    val isPreorder: Boolean = false,
+    @get:JsonProperty("isPreorder") val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
     val weight: BigDecimal? = null,
     // Admin-only cost basis - never populated on a response a normal user can read, see toDto(includeCost).
@@ -78,7 +79,7 @@ data class InventoryItemRequest(
     @field:Size(max = 5, message = "an item can have at most 5 images") val imageKeys: List<String> = emptyList(),
     val categoryIds: List<UUID> = emptyList(),
     @field:Size(max = MAX_TAGS) val tags: List<String> = emptyList(),
-    val isPreorder: Boolean = false,
+    @get:JsonProperty("isPreorder") val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
 )
 

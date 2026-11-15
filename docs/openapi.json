@@ -3231,6 +3231,9 @@
                 "type" : "string",
                 "format" : "uuid"
               },
+              "isPreorder" : {
+                "type" : "boolean"
+              },
               "link" : {
                 "type" : "string",
                 "maxLength" : 2048,
@@ -3239,9 +3242,6 @@
               "maxPrice" : {
                 "type" : "number",
                 "minimum" : 0.0
-              },
-              "preorder" : {
-                "type" : "boolean"
               },
               "quantity" : {
                 "type" : "integer",
@@ -3345,11 +3345,11 @@
                   "type" : "string"
                 }
               },
+              "isPreorder" : {
+                "type" : "boolean"
+              },
               "link" : {
                 "type" : "string"
-              },
-              "preorder" : {
-                "type" : "boolean"
               },
               "priceAmount" : {
                 "type" : "number"
@@ -3416,13 +3416,13 @@
                 "maxItems" : 5,
                 "minItems" : 0
               },
+              "isPreorder" : {
+                "type" : "boolean"
+              },
               "link" : {
                 "type" : "string",
                 "maxLength" : 2048,
                 "minLength" : 0
-              },
-              "preorder" : {
-                "type" : "boolean"
               },
               "priceAmount" : {
                 "type" : "number",
@@ -3775,6 +3775,9 @@
                 "type" : "string",
                 "format" : "uuid"
               },
+              "isPreorder" : {
+                "type" : "boolean"
+              },
               "link" : {
                 "type" : "string"
               },
@@ -3787,9 +3790,6 @@
               "paidAt" : {
                 "type" : "string",
                 "format" : "date-time"
-              },
-              "preorder" : {
-                "type" : "boolean"
               },
               "profit" : {
                 "type" : "number"

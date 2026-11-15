@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
 import jakarta.validation.constraints.DecimalMin
@@ -35,7 +36,7 @@ data class OrderItemDto(
     val purchasedAt: OffsetDateTime? = null,
     val quantity: Int,
     val weight: BigDecimal?,
-    val isPreorder: Boolean = false,
+    @get:JsonProperty("isPreorder") val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
     // What the customer is charged - populated for the order's own owner too, not just admins.
     val soldPrice: BigDecimal? = null,
@@ -153,7 +154,7 @@ data class CreateOrderItemRequest(
     @field:DecimalMin("0.0") val maxPrice: BigDecimal? = null,
     @field:Min(1) @field:Max(MAX_ITEM_QUANTITY) val quantity: Int = 1,
     @field:Size(max = 2048) val link: String? = null,
-    val isPreorder: Boolean = false,
+    @get:JsonProperty("isPreorder") val isPreorder: Boolean = false,
     val expectedReleaseDate: LocalDate? = null,
 )
 
