@@ -7,7 +7,6 @@ import net.jqwik.api.ForAll
 import net.jqwik.api.Property
 import net.jqwik.api.Provide
 import org.assertj.core.api.Assertions.assertThat
-import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -57,12 +56,7 @@ class LoginRateLimiterProperties {
     }
 
     private fun LoginRateLimiter.accepts(ip: String, nickname: String): Boolean =
-        try {
-            checkAttempt(ip, nickname)
-            true
-        } catch (_: ResponseStatusException) {
-            false
-        }
+        checkAttempt(ip, nickname).isRight()
 
     @Property(tries = 1000)
     fun `behaves like the plain fixed-window model`(

@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -53,7 +54,7 @@ class AdminCategoryControllerTest {
 
     @Test
     fun `create succeeds for an admin`() {
-        every { service.create("Snacks", "snacks") } returns CategoryDto(UUID.randomUUID(), "Snacks", "snacks")
+        every { service.create("Snacks", "snacks") } returns CategoryDto(UUID.randomUUID(), "Snacks", "snacks").right()
 
         mockMvc.post("/api/admin/categories") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -68,7 +69,7 @@ class AdminCategoryControllerTest {
     @Test
     fun `delete succeeds for an admin`() {
         val id = UUID.randomUUID()
-        every { service.delete(id) } just Runs
+        every { service.delete(id) } returns Unit.right()
 
         mockMvc.delete("/api/admin/categories/$id") { header("Authorization", "Bearer ${adminToken()}") }
             .andExpect { status { isNoContent() } }

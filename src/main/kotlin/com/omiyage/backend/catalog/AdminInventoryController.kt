@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import com.omiyage.backend.web.getOrRespond
 import com.omiyage.backend.web.PageResponse
 import jakarta.validation.Valid
 import org.springframework.data.domain.Pageable
@@ -32,19 +33,19 @@ class AdminInventoryController(private val service: InventoryService) {
 
     @PostMapping
     fun create(@Valid @RequestBody request: InventoryItemRequest): ResponseEntity<InventoryItemDto> =
-        ResponseEntity.status(HttpStatus.CREATED).body(service.create(request))
+        ResponseEntity.status(HttpStatus.CREATED).body(service.create(request).getOrRespond())
 
     @PutMapping("/{id}")
     fun update(@PathVariable id: UUID, @Valid @RequestBody request: InventoryItemRequest): InventoryItemDto =
-        service.update(id, request)
+        service.update(id, request).getOrRespond()
 
     @PatchMapping("/{id}/status")
     fun updateStatus(@PathVariable id: UUID, @Valid @RequestBody request: UpdateStatusRequest): InventoryItemDto =
-        service.updateStatus(id, request.status)
+        service.updateStatus(id, request.status).getOrRespond()
 
     @DeleteMapping("/{id}")
     fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
-        service.delete(id)
+        service.delete(id).getOrRespond()
         return ResponseEntity.noContent().build()
     }
 }

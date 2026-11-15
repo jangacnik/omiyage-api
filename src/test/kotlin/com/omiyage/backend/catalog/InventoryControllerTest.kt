@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import arrow.core.right
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
@@ -101,7 +102,7 @@ class InventoryControllerTest {
     @Test
     fun `getById returns the item`() {
         val item = sampleItem()
-        every { service.getById(item.id) } returns item
+        every { service.getById(item.id) } returns item.right()
 
         mockMvc.get("/api/inventory/${item.id}") { header("Authorization", "Bearer ${token()}") }
             .andExpect {

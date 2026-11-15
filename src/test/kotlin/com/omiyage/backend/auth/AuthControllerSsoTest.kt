@@ -1,5 +1,8 @@
 package com.omiyage.backend.auth
 
+import com.omiyage.backend.errors.AuthError
+import arrow.core.left
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -68,7 +71,7 @@ class AuthControllerSsoTest {
 
     @Test
     fun `exchange is public and returns the token in the login shape`() {
-        every { service.loginWithMeishiCode("omiyage", "the-code", VERIFIER, REDIRECT, any()) } returns "the-token"
+        every { service.loginWithMeishiCode("omiyage", "the-code", VERIFIER, REDIRECT, any()) } returns "the-token".right()
 
         exchange().andExpect {
             status { isOk() }
@@ -78,8 +81,8 @@ class AuthControllerSsoTest {
 
     @Test
     fun `exchange passes on a rejection from the service`() {
-        every { service.loginWithMeishiCode(any(), any(), any(), any(), any()) } throws
-            ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "account is frozen")
+        every { service.loginWithMeishiCode(any(), any(), any(), any(), any()) } returns
+            AuthError.AccountFrozen.left()
 
         exchange().andExpect { status { isForbidden() } }
     }
@@ -95,7 +98,7 @@ class AuthControllerSsoTest {
 
     @Test
     fun `exchange shares the login throttle per client ip`() {
-        every { service.loginWithMeishiCode(any(), any(), any(), any(), any()) } returns "the-token"
+        every { service.loginWithMeishiCode(any(), any(), any(), any(), any()) } returns "the-token".right()
 
         repeat(20) { exchange(clientIp = "203.0.113.9").andExpect { status { isOk() } } }
 

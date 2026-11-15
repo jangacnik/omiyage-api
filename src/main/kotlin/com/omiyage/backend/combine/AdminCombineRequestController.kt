@@ -1,5 +1,6 @@
 package com.omiyage.backend.combine
 
+import com.omiyage.backend.web.getOrRespond
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -15,5 +16,5 @@ class AdminCombineRequestController(private val service: CombineRequestService) 
     fun listPending(): List<CombineRequestDto> = service.listAllPending()
 
     @PostMapping("/{id}/force-accept")
-    fun forceAccept(@PathVariable id: UUID): CombineRequestDto = service.forceAccept(id)
+    fun forceAccept(@PathVariable id: UUID): CombineRequestDto = service.forceAccept(id).getOrRespond()
 }

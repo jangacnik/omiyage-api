@@ -3,6 +3,9 @@ package com.omiyage.backend.catalog
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
 import com.omiyage.backend.common.Currency
+import com.omiyage.backend.errors.CatalogError
+import com.omiyage.backend.errors.errorOrFail
+import com.omiyage.backend.errors.orFail
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -38,8 +41,8 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `search filters by title case-insensitively`() {
-        inventoryService.create(request("Kit Kat matcha"))
-        inventoryService.create(request("Pocky strawberry"))
+        inventoryService.create(request("Kit Kat matcha")).orFail()
+        inventoryService.create(request("Pocky strawberry")).orFail()
 
         val results = inventoryService.search("KIT KAT", null, InventoryStatus.ACTIVE, PageRequest.of(0, 20))
 
@@ -51,15 +54,13 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
     fun `a preorder item requires an expected release date`() {
         val request = request("Upcoming set").copy(isPreorder = true)
 
-        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.web.server.ResponseStatusException::class.java) {
-            inventoryService.create(request)
-        }
+        assertEquals(CatalogError.PreorderNeedsReleaseDate, inventoryService.create(request).errorOrFail())
     }
 
     @Test
     fun `a preorder item with a release date is created and round-trips`() {
         val date = java.time.LocalDate.of(2026, 12, 1)
-        val created = inventoryService.create(request("Upcoming set").copy(isPreorder = true, expectedReleaseDate = date))
+        val created = inventoryService.create(request("Upcoming set").copy(isPreorder = true, expectedReleaseDate = date)).orFail()
 
         assertTrue(created.isPreorder)
         assertEquals(date, created.expectedReleaseDate)
@@ -67,10 +68,10 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `search filters by category`() {
-        val snacks = categoryService.create("Snacks", "snacks-${System.nanoTime()}")
-        val toys = categoryService.create("Toys", "toys-${System.nanoTime()}")
-        inventoryService.create(request("Kit Kat matcha", listOf(snacks.id)))
-        inventoryService.create(request("Gundam model kit", listOf(toys.id)))
+        val snacks = categoryService.create("Snacks", "snacks-${System.nanoTime()}").orFail()
+        val toys = categoryService.create("Toys", "toys-${System.nanoTime()}").orFail()
+        inventoryService.create(request("Kit Kat matcha", listOf(snacks.id))).orFail()
+        inventoryService.create(request("Gundam model kit", listOf(toys.id))).orFail()
 
         val results = inventoryService.search(null, snacks.id, InventoryStatus.ACTIVE, PageRequest.of(0, 20))
 
@@ -80,8 +81,8 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `search only returns ACTIVE items when status filter is ACTIVE`() {
-        val created = inventoryService.create(request("Discontinued snack"))
-        inventoryService.updateStatus(created.id, InventoryStatus.ARCHIVED)
+        val created = inventoryService.create(request("Discontinued snack")).orFail()
+        inventoryService.updateStatus(created.id, InventoryStatus.ARCHIVED).orFail()
 
         val active = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20))
         val all = inventoryService.search(null, null, null, PageRequest.of(0, 20))
@@ -92,7 +93,7 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `search paginates results`() {
-        repeat(5) { inventoryService.create(request("Item $it")) }
+        repeat(5) { inventoryService.create(request("Item $it")).orFail() }
 
         val firstPage = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 2))
         val secondPage = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(1, 2))
@@ -106,7 +107,7 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `search last page has the remainder and no next page`() {
-        repeat(5) { inventoryService.create(request("Item $it")) }
+        repeat(5) { inventoryService.create(request("Item $it")).orFail() }
 
         val lastPage = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(2, 2))
 
@@ -116,7 +117,7 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `search out-of-range page is empty but keeps the total`() {
-        repeat(5) { inventoryService.create(request("Item $it")) }
+        repeat(5) { inventoryService.create(request("Item $it")).orFail() }
 
         val page = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(9, 2))
 
@@ -127,10 +128,10 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `create stores the bought price but hides it unless includeCost is requested`() {
-        val created = inventoryService.create(request("Kit Kat matcha").copy(boughtPrice = BigDecimal("500.00")))
+        val created = inventoryService.create(request("Kit Kat matcha").copy(boughtPrice = BigDecimal("500.00"))).orFail()
 
-        val hidden = inventoryService.getById(created.id)
-        val visible = inventoryService.getById(created.id, includeCost = true)
+        val hidden = inventoryService.getById(created.id).orFail()
+        val visible = inventoryService.getById(created.id, includeCost = true).orFail()
 
         assertNull(hidden.boughtPrice)
         assertEquals(BigDecimal("500.00"), visible.boughtPrice)
@@ -138,7 +139,7 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `search hides boughtPrice by default and includes it for admin callers`() {
-        inventoryService.create(request("Kit Kat matcha").copy(boughtPrice = BigDecimal("500.00")))
+        inventoryService.create(request("Kit Kat matcha").copy(boughtPrice = BigDecimal("500.00"))).orFail()
 
         val hidden = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20))
         val visible = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20), includeCost = true)
@@ -149,17 +150,17 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `create and update store tags, trimmed and blank entries dropped`() {
-        val created = inventoryService.create(request("Kit Kat matcha").copy(tags = listOf(" limited ", "matcha", "")))
+        val created = inventoryService.create(request("Kit Kat matcha").copy(tags = listOf(" limited ", "matcha", ""))).orFail()
         assertEquals(setOf("limited", "matcha"), created.tags.toSet())
 
-        val updated = inventoryService.update(created.id, request("Kit Kat matcha").copy(tags = listOf("clearance")))
+        val updated = inventoryService.update(created.id, request("Kit Kat matcha").copy(tags = listOf("clearance"))).orFail()
         assertEquals(listOf("clearance"), updated.tags)
     }
 
     @Test
     fun `inStockOnly filters out items with zero stock`() {
-        inventoryService.create(request("In stock").copy(stockQuantity = 3))
-        inventoryService.create(request("Out of stock").copy(stockQuantity = 0))
+        inventoryService.create(request("In stock").copy(stockQuantity = 3)).orFail()
+        inventoryService.create(request("Out of stock").copy(stockQuantity = 0)).orFail()
 
         val all = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20))
         val inStockOnly = inventoryService.search(null, null, InventoryStatus.ACTIVE, PageRequest.of(0, 20), inStockOnly = true)
@@ -171,7 +172,7 @@ class InventoryServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `items with tied sort keys each appear once across pages (#105)`() {
         val title = "tied-${System.nanoTime()}"
-        val tied = List(3) { inventoryService.create(request(title)).id }
+        val tied = List(3) { inventoryService.create(request(title)).orFail().id }
 
         val sorts = listOf(Sort.unsorted(), Sort.by("title"), Sort.by(Sort.Direction.DESC, "stockQuantity"))
         sorts.forEach { sort ->

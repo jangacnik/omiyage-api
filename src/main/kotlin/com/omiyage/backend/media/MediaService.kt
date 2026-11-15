@@ -1,12 +1,18 @@
 package com.omiyage.backend.media
 
+import arrow.core.Either
+import arrow.core.raise.Raise
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
+import com.omiyage.backend.errors.DomainError
+import com.omiyage.backend.errors.MediaError
 import com.omiyage.backend.security.MeishiPrincipal
 import com.omiyage.backend.security.Role
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.server.ResponseStatusException
+import kotlin.jvm.optionals.getOrNull
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -32,33 +38,26 @@ class MediaService(private val repository: MediaRepository) {
 
     private val events = LoggerFactory.getLogger("events")
 
-    fun upload(file: MultipartFile, uploader: MeishiPrincipal): String {
-        if (file.isEmpty) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "file is empty")
-        }
+    fun upload(file: MultipartFile, uploader: MeishiPrincipal): Either<DomainError, String> = either {
+        ensure(!file.isEmpty) { MediaError.EmptyFile }
         if (uploader.role != Role.ADMIN) requireWithinDailyQuota(uploader.id)
 
         val bytes = file.bytes
-        val contentType = sniffContentType(bytes)
-        if (contentType == null || contentType != file.contentType) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "file content does not match an allowed image type")
-        }
+        val contentType = ensureNotNull(sniffContentType(bytes)) { MediaError.ContentTypeMismatch }
+        ensure(contentType == file.contentType) { MediaError.ContentTypeMismatch }
 
         val key = "uploads/${UUID.randomUUID()}.${contentType.substringAfter('/')}"
         repository.save(Media(objectKey = key, contentType = contentType, data = bytes, uploaderId = uploader.id))
         events.info("media_uploaded key={} contentType={} sizeBytes={} uploaderId={}", key, contentType, bytes.size, uploader.id)
-        return key
+        key
     }
 
-    fun get(key: String): Media =
-        repository.findById(key).orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+    fun get(key: String): Either<DomainError, Media> = either {
+        ensureNotNull(repository.findById(key).getOrNull()) { MediaError.ImageNotFound }
+    }
 
-    fun requireExisting(keys: Collection<String>) {
-        keys.forEach { key ->
-            if (!isKnownImageKey(key)) {
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown image key: $key")
-            }
-        }
+    fun requireExisting(keys: Collection<String>): Either<DomainError, Unit> = either {
+        keys.forEach { key -> ensure(isKnownImageKey(key)) { MediaError.UnknownImageKey(key) } }
     }
 
     // Keys already stored on an item may predate the media table (object-storage era) and are
@@ -66,10 +65,8 @@ class MediaService(private val repository: MediaRepository) {
     private fun isKnownImageKey(key: String): Boolean =
         (IMAGE_KEY_FORMAT.matches(key) && repository.existsById(key)) || repository.isReferenced(key)
 
-    private fun requireWithinDailyQuota(userId: UUID) {
+    private fun Raise<DomainError>.requireWithinDailyQuota(userId: UUID) {
         val uploadedToday = repository.countByUploaderIdAndCreatedAtAfter(userId, OffsetDateTime.now().minusDays(1))
-        if (uploadedToday >= DAILY_UPLOAD_QUOTA_PER_USER) {
-            throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "daily upload limit reached")
-        }
+        ensure(uploadedToday < DAILY_UPLOAD_QUOTA_PER_USER) { MediaError.DailyQuotaReached }
     }
 }

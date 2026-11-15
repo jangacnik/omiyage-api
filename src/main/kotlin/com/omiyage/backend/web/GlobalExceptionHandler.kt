@@ -44,6 +44,13 @@ class GlobalExceptionHandler {
         return ResponseEntity.status(e.statusCode).body(errorBody(e.statusCode, message))
     }
 
+    @ExceptionHandler(DomainErrorException::class)
+    fun handleDomainError(e: DomainErrorException): ResponseEntity<Map<String, String>> {
+        val failure = e.error.toHttpFailure()
+        if (failure.status.value() == HttpStatus.BAD_REQUEST.value()) return badRequest(e, failure.message, null)
+        return ResponseEntity.status(failure.status).body(errorBody(failure.status, failure.message))
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handleUnreadable(e: HttpMessageNotReadableException): ResponseEntity<Map<String, String>> {
         val field = jsonFieldPath(e)

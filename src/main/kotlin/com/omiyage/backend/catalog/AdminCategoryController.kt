@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import com.omiyage.backend.web.getOrRespond
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -17,11 +18,11 @@ class AdminCategoryController(private val service: CategoryService) {
 
     @PostMapping
     fun create(@Valid @RequestBody request: CreateCategoryRequest): ResponseEntity<CategoryDto> =
-        ResponseEntity.status(HttpStatus.CREATED).body(service.create(request.name, request.slug))
+        ResponseEntity.status(HttpStatus.CREATED).body(service.create(request.name, request.slug).getOrRespond())
 
     @DeleteMapping("/{id}")
     fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
-        service.delete(id)
+        service.delete(id).getOrRespond()
         return ResponseEntity.noContent().build()
     }
 }

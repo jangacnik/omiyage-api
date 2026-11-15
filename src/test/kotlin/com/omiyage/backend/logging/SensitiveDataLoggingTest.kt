@@ -1,5 +1,8 @@
 package com.omiyage.backend.logging
 
+import com.omiyage.backend.errors.AuthError
+import arrow.core.left
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.auth.AuthController
@@ -58,7 +61,7 @@ class SensitiveDataLoggingTest {
 
     @Test
     fun `no canary value reaches any log event across login, validation, bad token and unknown route`() {
-        every { meishi.login(CANARY_NICKNAME, CANARY_PASSWORD) } throws ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid credentials")
+        every { meishi.login(CANARY_NICKNAME, CANARY_PASSWORD) } returns AuthError.InvalidCredentials.left()
 
         LogCapture.root().use { capture ->
             mockMvc.post("/api/auth/login") {
@@ -107,8 +110,8 @@ class SensitiveDataLoggingTest {
 
     @Test
     fun `rate limited logins log the client ip as a security event`() {
-        every { meishi.login("carol", "pw") } returns "t"
-        every { meishi.getMe("t") } returns MeishiUserResponse("u1", "carol", "USER", "ACTIVE")
+        every { meishi.login("carol", "pw") } returns "t".right()
+        every { meishi.getMe("t") } returns MeishiUserResponse("u1", "carol", "USER", "ACTIVE").right()
         LogCapture("security").use { capture ->
             repeat(11) {
                 mockMvc.post("/api/auth/login") {

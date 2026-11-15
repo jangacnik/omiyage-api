@@ -1,5 +1,8 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.errorOrFail
+import com.omiyage.backend.errors.failureOf
+import com.omiyage.backend.errors.orFail
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.omiyage.backend.PostgresIntegrationTest
@@ -76,7 +79,22 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
     private fun customOrder(): OrderDto = orderService.create(
         owner,
         CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Custom ${UUID.randomUUID()}", condition = Condition.NEW, currency = Currency.EUR))),
-    )
+    ).orFail()
+
+    @Test
+    fun `a rejected order sends no event`() {
+        while (!receiver.nothingWithin(200)) {
+            // drop events left over from earlier tests
+        }
+        val items = listOf(
+            CreateOrderItemRequest(title = "Custom ${UUID.randomUUID()}", condition = Condition.NEW, currency = Currency.EUR),
+            CreateOrderItemRequest(inventoryItemId = UUID.randomUUID(), currency = Currency.EUR),
+        )
+
+        orderService.create(owner, CreateOrderRequest(items = items)).errorOrFail()
+
+        assertThat(receiver.nothingWithin(1500)).isTrue()
+    }
 
     @Test
     fun `order created carries reference, items and total`() {
@@ -89,7 +107,7 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.EUR,
                 stockQuantity = 5,
             ),
-        )
+        ).orFail()
         val customTitle = "Custom ${UUID.randomUUID()}"
 
         val order = orderService.create(
@@ -101,7 +119,7 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
                     CreateOrderItemRequest(title = customTitle, condition = Condition.NEW, currency = Currency.EUR, maxPrice = BigDecimal("12.5")),
                 ),
             ),
-        )
+        ).orFail()
 
         val event = nextEvent()
         assertThat(event["type"].asText()).isEqualTo(ORDER_CREATED)
@@ -126,10 +144,10 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
         val order = customOrder()
         assertThat(nextEvent()["type"].asText()).isEqualTo(ORDER_CREATED)
 
-        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS)
-        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS)
-        val shipmentId = requireNotNull(orderService.submitForShipping(order.id, owner).shipmentId)
-        shipmentService.update(shipmentId, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS).orFail()
+        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS).orFail()
+        val shipmentId = requireNotNull(orderService.submitForShipping(order.id, owner).orFail().shipmentId)
+        shipmentService.update(shipmentId, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
 
         val changes = List(3) { nextEvent() }
         assertThat(changes.map { it["type"].asText() }).containsOnly(ORDER_STATUS_CHANGED)
@@ -147,12 +165,12 @@ class OrderEventsIntegrationTest : PostgresIntegrationTest() {
         val order = customOrder()
         nextEvent()
         val repeat = CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Repeat ${UUID.randomUUID()}", condition = Condition.NEW, currency = Currency.EUR)))
-        orderService.create(owner, repeat)
+        orderService.create(owner, repeat).orFail()
         nextEvent()
-        orderService.create(owner, repeat)
+        orderService.create(owner, repeat).orFail()
 
-        orderService.cancelOwn(order.id, owner)
-        assertThrows(ResponseStatusException::class.java) { orderService.updateStatus(order.id, OrderStatus.REQUESTED) }
+        orderService.cancelOwn(order.id, owner).orFail()
+        failureOf { orderService.updateStatus(order.id, OrderStatus.REQUESTED) }
 
         val cancelled = nextEvent()
         assertThat(cancelled["order"]["status"].asText()).isEqualTo("CANCELLED")

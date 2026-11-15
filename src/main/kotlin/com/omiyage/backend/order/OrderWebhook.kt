@@ -140,7 +140,13 @@ class OrderWebhook(
     private fun discordName(userId: UUID, actor: EventActor?): String? = try {
         when {
             actor == null -> null
-            actor.userId == userId -> profiles.getMe(actor.authHeader).discordName
+            actor.userId == userId -> profiles.getMe(actor.authHeader).fold(
+                { error ->
+                    log.warn("could not look up discordName for an order event: {}", error::class.simpleName)
+                    null
+                },
+                { it.discordName },
+            )
             actor.admin -> admin.listUsers(actor.authHeader).firstOrNull { it.id == userId }?.discordName
             else -> null
         }

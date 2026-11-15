@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.common.Condition
@@ -81,7 +82,7 @@ class AdminInventoryControllerTest {
     @Test
     fun `create succeeds for an admin`() {
         val req = request()
-        every { service.create(req) } returns dto(req)
+        every { service.create(req) } returns dto(req).right()
 
         mockMvc.post("/api/admin/inventory") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -119,7 +120,7 @@ class AdminInventoryControllerTest {
     fun `update succeeds for an admin`() {
         val id = UUID.randomUUID()
         val req = request()
-        every { service.update(id, req) } returns dto(req)
+        every { service.update(id, req) } returns dto(req).right()
 
         mockMvc.put("/api/admin/inventory/$id") {
             header("Authorization", "Bearer ${adminToken()}")
@@ -138,7 +139,7 @@ class AdminInventoryControllerTest {
     @Test
     fun `delete succeeds for an admin`() {
         val id = UUID.randomUUID()
-        every { service.delete(id) } just Runs
+        every { service.delete(id) } returns Unit.right()
 
         mockMvc.delete("/api/admin/inventory/$id") {
             header("Authorization", "Bearer ${adminToken()}")

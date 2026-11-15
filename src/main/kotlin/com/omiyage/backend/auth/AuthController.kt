@@ -1,6 +1,11 @@
 package com.omiyage.backend.auth
 
+import arrow.core.raise.either
+import arrow.core.raise.ensure
 import com.omiyage.backend.config.MeishiProperties
+import com.omiyage.backend.errors.AuthError
+import com.omiyage.backend.errors.DomainError
+import com.omiyage.backend.web.getOrRespond
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import jakarta.validation.Validator
@@ -8,13 +13,11 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
 
 data class LoginRequest(
     @field:NotBlank @field:Size(max = 100) val nickname: String,
@@ -52,13 +55,8 @@ class AuthController(
     @PostMapping("/login")
     fun login(@Valid @RequestBody request: LoginRequest, httpRequest: HttpServletRequest): TokenResponse {
         val ip = clientIp(httpRequest)
-        try {
-            rateLimiter.checkAttempt(ip, request.nickname)
-        } catch (e: ResponseStatusException) {
-            securityLog.warn("login_rate_limited clientIp={}", ip)
-            throw e
-        }
-        return TokenResponse(service.login(request.nickname, request.password, ip))
+        rateLimiter.checkAttempt(ip, request.nickname).onLeft { securityLog.warn("login_rate_limited clientIp={}", ip) }.getOrRespond()
+        return TokenResponse(service.login(request.nickname, request.password, ip).getOrRespond())
     }
 
     @GetMapping("/config")
@@ -71,17 +69,14 @@ class AuthController(
 
     @PostMapping("/meishi/exchange")
     fun meishiExchange(@RequestBody request: MeishiExchangeRequest, httpRequest: HttpServletRequest): TokenResponse {
-        // Checked before validation so a disabled flow is 404 whatever the body looks like.
-        if (!meishi.ssoActive) throw ResponseStatusException(HttpStatus.NOT_FOUND, "meishi sso is disabled")
-        if (validator.validate(request).isNotEmpty()) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid request")
-        val ip = clientIp(httpRequest)
-        try {
-            rateLimiter.checkAttempt(ip)
-        } catch (e: ResponseStatusException) {
-            securityLog.warn("login_rate_limited clientIp={}", ip)
-            throw e
-        }
-        val token = service.loginWithMeishiCode(meishi.ssoClientId, request.code, request.codeVerifier, request.redirectUri, ip)
+        val token = either<DomainError, String> {
+            // Checked before validation so a disabled flow is 404 whatever the body looks like.
+            ensure(meishi.ssoActive) { AuthError.SsoDisabled }
+            ensure(validator.validate(request).isEmpty()) { AuthError.InvalidRequest }
+            val ip = clientIp(httpRequest)
+            rateLimiter.checkAttempt(ip).onLeft { securityLog.warn("login_rate_limited clientIp={}", ip) }.bind()
+            service.loginWithMeishiCode(meishi.ssoClientId, request.code, request.codeVerifier, request.redirectUri, ip).bind()
+        }.getOrRespond()
         return TokenResponse(token)
     }
 

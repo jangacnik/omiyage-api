@@ -1,5 +1,6 @@
 package com.omiyage.backend.combine
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -68,7 +69,7 @@ class CombineRequestControllerTest {
         val request = CreateCombineRequestRequest(UUID.randomUUID(), UUID.randomUUID())
         every {
             service.create(match { it.id == userId }, request.requesterOrderId, request.targetShipmentId)
-        } returns sampleDto()
+        } returns sampleDto().right()
 
         mockMvc.post("/api/orders/combine-requests") {
             header("Authorization", "Bearer ${userToken()}")
@@ -104,7 +105,7 @@ class CombineRequestControllerTest {
     @Test
     fun `accept returns the accepted request for the caller`() {
         val id = UUID.randomUUID()
-        every { service.accept(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.ACCEPTED)
+        every { service.accept(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.ACCEPTED).right()
 
         mockMvc.post("/api/orders/combine-requests/$id/accept") { header("Authorization", "Bearer ${userToken()}") }
             .andExpect { status { isOk() }; jsonPath("$.status") { value("ACCEPTED") } }
@@ -113,7 +114,7 @@ class CombineRequestControllerTest {
     @Test
     fun `decline returns the declined request for the caller`() {
         val id = UUID.randomUUID()
-        every { service.decline(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.DECLINED)
+        every { service.decline(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.DECLINED).right()
 
         mockMvc.post("/api/orders/combine-requests/$id/decline") { header("Authorization", "Bearer ${userToken()}") }
             .andExpect { status { isOk() }; jsonPath("$.status") { value("DECLINED") } }
@@ -122,7 +123,7 @@ class CombineRequestControllerTest {
     @Test
     fun `cancel returns the cancelled request for the caller`() {
         val id = UUID.randomUUID()
-        every { service.cancel(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.CANCELLED)
+        every { service.cancel(match { it.id == userId }, id) } returns sampleDto(CombineRequestStatus.CANCELLED).right()
 
         mockMvc.delete("/api/orders/combine-requests/$id") { header("Authorization", "Bearer ${userToken()}") }
             .andExpect { status { isOk() }; jsonPath("$.status") { value("CANCELLED") } }
@@ -150,7 +151,7 @@ class CombineRequestControllerTest {
     @Test
     fun `admin force-accepts a request`() {
         val id = UUID.randomUUID()
-        every { service.forceAccept(id) } returns sampleDto(CombineRequestStatus.ACCEPTED)
+        every { service.forceAccept(id) } returns sampleDto(CombineRequestStatus.ACCEPTED).right()
 
         mockMvc.post("/api/admin/combine-requests/$id/force-accept") { header("Authorization", "Bearer ${adminToken()}") }
             .andExpect { status { isOk() }; jsonPath("$.status") { value("ACCEPTED") } }

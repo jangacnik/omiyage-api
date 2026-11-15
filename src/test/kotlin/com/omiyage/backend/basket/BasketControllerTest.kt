@@ -1,5 +1,6 @@
 package com.omiyage.backend.basket
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.common.Currency
@@ -94,7 +95,7 @@ class BasketControllerTest {
     @Test
     fun `add returns 201 with the created line`() {
         val request = AddBasketLineRequest(customTitle = "Kit Kat", currency = Currency.JPY, quantity = 2)
-        every { service.add(match { it.id == userId }, request) } returns sampleLine(quantity = 2)
+        every { service.add(match { it.id == userId }, request) } returns sampleLine(quantity = 2).right()
 
         mockMvc.post("/api/basket/lines") {
             header("Authorization", "Bearer ${token()}")
@@ -122,7 +123,7 @@ class BasketControllerTest {
     fun `update returns the updated line`() {
         val lineId = UUID.randomUUID()
         val request = UpdateBasketLineRequest(quantity = 5)
-        every { service.update(match { it.id == userId }, lineId, request) } returns sampleLine(quantity = 5)
+        every { service.update(match { it.id == userId }, lineId, request) } returns sampleLine(quantity = 5).right()
 
         mockMvc.put("/api/basket/lines/$lineId") {
             header("Authorization", "Bearer ${token()}")
@@ -137,7 +138,7 @@ class BasketControllerTest {
     @Test
     fun `remove returns 204 and delegates to the service`() {
         val lineId = UUID.randomUUID()
-        every { service.remove(any(), lineId) } just Runs
+        every { service.remove(any(), lineId) } returns Unit.right()
 
         mockMvc.delete("/api/basket/lines/$lineId") { header("Authorization", "Bearer ${token()}") }
             .andExpect { status { isNoContent() } }
@@ -157,7 +158,7 @@ class BasketControllerTest {
 
     @Test
     fun `confirm returns the created order`() {
-        every { service.confirm(match { it.id == userId }) } returns sampleOrder()
+        every { service.confirm(match { it.id == userId }) } returns sampleOrder().right()
 
         mockMvc.post("/api/basket/confirm") { header("Authorization", "Bearer ${token()}") }
             .andExpect {
@@ -171,7 +172,7 @@ class BasketControllerTest {
     @Test
     fun `addToOrder passes the order id to the service`() {
         val orderId = UUID.randomUUID()
-        every { service.addToOrder(match { it.id == userId }, orderId) } returns sampleOrder()
+        every { service.addToOrder(match { it.id == userId }, orderId) } returns sampleOrder().right()
 
         mockMvc.post("/api/basket/add-to-order") {
             header("Authorization", "Bearer ${token()}")

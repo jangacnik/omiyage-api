@@ -1,5 +1,8 @@
 package com.omiyage.backend.auth
 
+import com.omiyage.backend.errors.statusCode
+import com.omiyage.backend.errors.failureOf
+import com.omiyage.backend.errors.orFail
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.omiyage.backend.PostgresIntegrationTest
 import com.sun.net.httpserver.HttpExchange
@@ -75,14 +78,14 @@ class AuthIntegrationTest : PostgresIntegrationTest() {
             )
         }
 
-        assertEquals("signed-token", authService.login("bob", "hunter2", "1.2.3.4"))
+        assertEquals("signed-token", authService.login("bob", "hunter2", "1.2.3.4").orFail())
     }
 
     @Test
     fun `surfaces invalid credentials as 401`() {
         loginHandler = { it.respondJson(401, """{"error":"invalid credentials"}""") }
 
-        val exception = assertThrows(ResponseStatusException::class.java) { authService.login("bob", "wrong", "1.2.3.4") }
+        val exception = failureOf { authService.login("bob", "wrong", "1.2.3.4") }
         assertEquals(401, exception.statusCode.value())
     }
 
@@ -96,7 +99,7 @@ class AuthIntegrationTest : PostgresIntegrationTest() {
             )
         }
 
-        val exception = assertThrows(ResponseStatusException::class.java) { authService.login("bob", "hunter2", "1.2.3.4") }
+        val exception = failureOf { authService.login("bob", "hunter2", "1.2.3.4") }
         assertEquals(403, exception.statusCode.value())
     }
 }

@@ -1,5 +1,8 @@
 package com.omiyage.backend.auth
 
+import com.omiyage.backend.web.toHttpFailure
+import com.omiyage.backend.errors.orFail
+import com.omiyage.backend.errors.errorOrFail
 import com.omiyage.backend.config.MeishiProperties
 import com.omiyage.backend.config.MeishiRestClientConfig
 import com.sun.net.httpserver.HttpExchange
@@ -50,13 +53,13 @@ class MeishiAuthClientExchangeTest {
 
     private fun exchange() = client.exchangeCode("omiyage", "the-code", "the-verifier", "https://omiyage.example/auth/callback")
 
-    private fun statusOfFailure(): Int = assertThrows<ResponseStatusException> { exchange() }.statusCode.value()
+    private fun statusOfFailure(): Int = exchange().errorOrFail().toHttpFailure().status.value()
 
     @Test
     fun `posts the grant as a form and returns the access token`() {
         handler = { it.respondJson(200, """{"access_token":"jwt","token_type":"Bearer","expires_in":600}""") }
 
-        assertEquals("jwt", exchange())
+        assertEquals("jwt", exchange().orFail())
         assertEquals("application/x-www-form-urlencoded", contentType)
         assertEquals(
             mapOf(

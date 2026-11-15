@@ -1,5 +1,6 @@
 package com.omiyage.backend.catalog
 
+import com.omiyage.backend.web.getOrRespond
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -26,11 +27,11 @@ class AdminItemTemplateController(private val service: ItemTemplateService) {
 
     @PatchMapping("/{id}")
     fun update(@PathVariable id: UUID, @Valid @RequestBody request: ItemTemplateRequest): ItemTemplateDto =
-        service.update(id, request)
+        service.update(id, request).getOrRespond()
 
     @DeleteMapping("/{id}")
     fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
-        service.delete(id)
+        service.delete(id).getOrRespond()
         return ResponseEntity.noContent().build()
     }
 }

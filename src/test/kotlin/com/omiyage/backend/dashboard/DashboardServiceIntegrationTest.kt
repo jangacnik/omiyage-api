@@ -1,5 +1,6 @@
 package com.omiyage.backend.dashboard
 
+import com.omiyage.backend.errors.orFail
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.common.Condition
@@ -65,9 +66,9 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
                     CreateOrderItemRequest(title = "Not yet bought", condition = Condition.NEW, currency = Currency.JPY, maxPrice = BigDecimal("500")),
                 ),
             ),
-        )
+        ).orFail()
         // Simulate the first item having actually been charged for less than its budgeted max.
-        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, actualPrice = null, soldPrice = BigDecimal("800"))
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, actualPrice = null, soldPrice = BigDecimal("800")).orFail()
 
         val entry = dashboardService.userDashboard("Bearer irrelevant").single()
 
@@ -87,16 +88,16 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
             CreateOrderRequest(
                 items = listOf(CreateOrderItemRequest(title = "X", condition = Condition.NEW, currency = Currency.JPY, maxPrice = BigDecimal("2000"))),
             ),
-        )
-        orderService.adminMarkItemPaid(order.id, order.items[0].id, true)
+        ).orFail()
+        orderService.adminMarkItemPaid(order.id, order.items[0].id, true).orFail()
 
         val cancelled = orderService.create(
             principal,
             CreateOrderRequest(
                 items = listOf(CreateOrderItemRequest(title = "Y", condition = Condition.NEW, currency = Currency.JPY, maxPrice = BigDecimal("9999"))),
             ),
-        )
-        orderService.cancelOwn(cancelled.id, principal)
+        ).orFail()
+        orderService.cancelOwn(cancelled.id, principal).orFail()
 
         val entry = dashboardService.userDashboard("Bearer irrelevant").single()
 
@@ -112,12 +113,12 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
         val open = orderService.create(
             principal,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Open", condition = Condition.NEW, currency = Currency.JPY))),
-        )
+        ).orFail()
         val delivered = orderService.create(
             principal,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Delivered", condition = Condition.NEW, currency = Currency.JPY))),
-        )
-        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED)
+        ).orFail()
+        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED).orFail()
 
         val entry = dashboardService.userDashboard("Bearer irrelevant").single()
 
@@ -140,11 +141,11 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
             CreateOrderRequest(
                 items = listOf(CreateOrderItemRequest(title = "X", condition = Condition.NEW, currency = Currency.JPY)),
             ),
-        )
-        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, actualPrice = null, soldPrice = BigDecimal("1200"))
+        ).orFail()
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, actualPrice = null, soldPrice = BigDecimal("1200")).orFail()
         // Admin-only path, unlike cancelOwn, has no guard against cancelling an order with
         // already-bought items - the money charged for them must still show up as owed.
-        orderService.updateStatus(order.id, com.omiyage.backend.order.OrderStatus.CANCELLED)
+        orderService.updateStatus(order.id, com.omiyage.backend.order.OrderStatus.CANCELLED).orFail()
 
         val entry = dashboardService.userDashboard("Bearer irrelevant").single()
 
@@ -178,7 +179,7 @@ class DashboardServiceIntegrationTest : PostgresIntegrationTest() {
         orderService.create(
             principal,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "X", condition = Condition.NEW, currency = Currency.JPY))),
-        )
+        ).orFail()
 
         val entries = dashboardService.userDashboard("Bearer irrelevant")
 

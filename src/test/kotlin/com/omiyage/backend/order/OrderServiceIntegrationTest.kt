@@ -1,5 +1,8 @@
 package com.omiyage.backend.order
 
+import com.omiyage.backend.errors.statusCode
+import com.omiyage.backend.errors.failureOf
+import com.omiyage.backend.errors.orFail
 import com.omiyage.backend.PostgresIntegrationTest
 import com.omiyage.backend.catalog.InventoryItemRequest
 import com.omiyage.backend.catalog.InventoryService
@@ -62,7 +65,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     private fun singleItemOrder(principal: MeishiPrincipal = user(), title: String = "A") = orderService.create(
         principal,
         CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = title, condition = Condition.NEW, currency = Currency.JPY))),
-    )
+    ).orFail()
 
     @Test
     fun `creates an order with a custom item and JIT-provisions the user profile`() {
@@ -78,7 +81,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
             ),
         )
 
-        val order = orderService.create(principal, request)
+        val order = orderService.create(principal, request).orFail()
 
         assertEquals(OrderStatus.REQUESTED, order.status)
         assertEquals(1, order.items.size)
@@ -97,8 +100,8 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `submitting the same order twice in a row returns the first order instead of a duplicate`() {
         val owner = user()
 
-        val first = orderService.create(owner, customRequest("Frieren card", "Frieren Cards"))
-        val second = orderService.create(owner, customRequest("  frieren CARD ", " Frieren Cards "))
+        val first = orderService.create(owner, customRequest("Frieren card", "Frieren Cards")).orFail()
+        val second = orderService.create(owner, customRequest("  frieren CARD ", " Frieren Cards ")).orFail()
 
         assertEquals(first.id, second.id)
         assertEquals(1, orderRepository.findByUserId(owner.id, org.springframework.data.domain.Pageable.unpaged()).content.size)
@@ -108,9 +111,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `a different nickname or quantity is a separate order`() {
         val owner = user()
 
-        val base = orderService.create(owner, customRequest("Frieren card", "A"))
-        val otherNickname = orderService.create(owner, customRequest("Frieren card", "B"))
-        val otherQuantity = orderService.create(owner, customRequest("Frieren card", "A", quantity = 2))
+        val base = orderService.create(owner, customRequest("Frieren card", "A")).orFail()
+        val otherNickname = orderService.create(owner, customRequest("Frieren card", "B")).orFail()
+        val otherQuantity = orderService.create(owner, customRequest("Frieren card", "A", quantity = 2)).orFail()
 
         assertEquals(3, setOf(base.id, otherNickname.id, otherQuantity.id).size)
     }
@@ -118,10 +121,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `a cancelled order does not block ordering the same thing again`() {
         val owner = user()
-        val first = orderService.create(owner, customRequest("Frieren card"))
-        orderService.cancelOwn(first.id, owner)
+        val first = orderService.create(owner, customRequest("Frieren card")).orFail()
+        orderService.cancelOwn(first.id, owner).orFail()
 
-        val again = orderService.create(owner, customRequest("Frieren card"))
+        val again = orderService.create(owner, customRequest("Frieren card")).orFail()
 
         assertNotEquals(first.id, again.id)
     }
@@ -130,7 +133,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `a custom request does not touch inventory`() {
         val before = inventoryItemRepository.count()
 
-        orderService.create(user(), customRequest("Not in inventory card"))
+        orderService.create(user(), customRequest("Not in inventory card")).orFail()
 
         assertEquals(before, inventoryItemRepository.count())
     }
@@ -149,9 +152,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                     ),
                 ),
             ),
-        )
+        ).orFail()
 
-        orderService.adminAddItemToInventory(order.id, order.items[0].id)
+        orderService.adminAddItemToInventory(order.id, order.items[0].id).orFail()
 
         val inventoryItem = inventoryItemRepository.findAll().single { it.title == "Manual add card" }
         assertEquals(0, inventoryItem.stockQuantity)
@@ -165,9 +168,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
             CreateOrderRequest(
                 items = listOf(CreateOrderItemRequest(title = "Mystery snack box", condition = Condition.NEW, currency = Currency.JPY)),
             ),
-        )
+        ).orFail()
 
-        orderService.adminAddItemToInventory(order.id, order.items[0].id)
+        orderService.adminAddItemToInventory(order.id, order.items[0].id).orFail()
 
         val inventoryItem = inventoryItemRepository.findAll().single { it.title == "Mystery snack box" }
         assertEquals(0, BigDecimal.ZERO.compareTo(inventoryItem.priceAmount))
@@ -175,10 +178,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Test
     fun `adding the same custom item to inventory twice is a conflict`() {
-        val order = orderService.create(user(), customRequest("Twice card"))
-        orderService.adminAddItemToInventory(order.id, order.items[0].id)
+        val order = orderService.create(user(), customRequest("Twice card")).orFail()
+        orderService.adminAddItemToInventory(order.id, order.items[0].id).orFail()
 
-        val error = assertThrows(ResponseStatusException::class.java) {
+        val error = failureOf {
             orderService.adminAddItemToInventory(order.id, order.items[0].id)
         }
 
@@ -195,13 +198,13 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 priceAmount = BigDecimal("10"),
                 currency = Currency.EUR,
             ),
-        )
+        ).orFail()
         val order = orderService.create(
             user(),
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = inventoryItem.id, currency = Currency.EUR))),
-        )
+        ).orFail()
 
-        val error = assertThrows(ResponseStatusException::class.java) {
+        val error = failureOf {
             orderService.adminAddItemToInventory(order.id, order.items[0].id)
         }
 
@@ -215,7 +218,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
             items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)),
         )
 
-        val order = orderService.adminCreate(targetUserId, request)
+        val order = orderService.adminCreate(targetUserId, request).orFail()
 
         assertEquals(targetUserId, order.userId)
         assertEquals(1, orderService.listMine(MeishiPrincipal(targetUserId, "whoever", Role.USER), org.springframework.data.domain.Pageable.unpaged()).content.size)
@@ -228,14 +231,14 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
             items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)),
         )
 
-        val order = orderService.create(user(), request)
+        val order = orderService.create(user(), request).orFail()
 
         assertEquals("Grandma's gifts", order.nickname)
 
         val blank = orderService.create(
             user(),
             request.copy(nickname = "   "),
-        )
+        ).orFail()
         assertNull(blank.nickname)
     }
 
@@ -249,12 +252,12 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 priceAmount = BigDecimal("500"),
                 currency = Currency.JPY,
             ),
-        )
+        ).orFail()
 
         val order = orderService.create(
             user(),
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY))),
-        )
+        ).orFail()
 
         assertEquals(item.id, order.items[0].inventoryItemId)
         assertEquals("Kit Kat matcha", order.items[0].title)
@@ -271,12 +274,12 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 boughtPrice = BigDecimal("300"),
             ),
-        )
+        ).orFail()
 
         val order = orderService.adminCreate(
             user().id,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY))),
-        )
+        ).orFail()
 
         assertEquals(BigDecimal("500"), order.items[0].soldPrice)
         assertEquals(BigDecimal("300"), order.items[0].actualPrice)
@@ -294,14 +297,14 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 3,
             ),
-        )
+        ).orFail()
 
         orderService.create(
             user(),
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
-        )
+        ).orFail()
 
-        assertEquals(1, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(1, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -315,15 +318,15 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 1,
             ),
-        )
+        ).orFail()
 
         val order = orderService.create(
             user(),
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 5))),
-        )
+        ).orFail()
 
         assertEquals(1, order.items.size)
-        assertEquals(0, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(0, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -337,16 +340,16 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 0,
             ),
-        )
+        ).orFail()
         val owner = user()
         val order = orderService.create(
             owner,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 3))),
-        )
+        ).orFail()
 
-        orderService.cancelOwn(order.id, owner)
+        orderService.cancelOwn(order.id, owner).orFail()
 
-        assertEquals(0, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(0, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -360,17 +363,17 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 5,
             ),
-        )
+        ).orFail()
         val owner = user()
         val order = orderService.create(
             owner,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
-        )
-        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+        ).orFail()
+        assertEquals(3, inventoryService.getById(item.id).orFail().stockQuantity)
 
-        orderService.removeOwnItem(order.id, order.items[0].id, owner)
+        orderService.removeOwnItem(order.id, order.items[0].id, owner).orFail()
 
-        assertEquals(5, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(5, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -384,17 +387,17 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 5,
             ),
-        )
+        ).orFail()
         val owner = user()
         val order = orderService.create(
             owner,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
-        )
-        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+        ).orFail()
+        assertEquals(3, inventoryService.getById(item.id).orFail().stockQuantity)
 
-        orderService.cancelOwn(order.id, owner)
+        orderService.cancelOwn(order.id, owner).orFail()
 
-        assertEquals(5, inventoryService.getById(item.id).stockQuantity)
+        assertEquals(5, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
@@ -408,31 +411,31 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 currency = Currency.JPY,
                 stockQuantity = 5,
             ),
-        )
+        ).orFail()
         val owner = user()
         val order = orderService.create(
             owner,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(inventoryItemId = item.id, currency = Currency.JPY, quantity = 2))),
-        )
-        assertEquals(3, inventoryService.getById(item.id).stockQuantity)
+        ).orFail()
+        assertEquals(3, inventoryService.getById(item.id).orFail().stockQuantity)
 
-        orderService.updateOwnItem(order.id, order.items[0].id, owner, UpdateOwnOrderItemRequest(quantity = 4))
-        assertEquals(1, inventoryService.getById(item.id).stockQuantity)
+        orderService.updateOwnItem(order.id, order.items[0].id, owner, UpdateOwnOrderItemRequest(quantity = 4)).orFail()
+        assertEquals(1, inventoryService.getById(item.id).orFail().stockQuantity)
 
-        orderService.updateOwnItem(order.id, order.items[0].id, owner, UpdateOwnOrderItemRequest(quantity = 1))
-        assertEquals(4, inventoryService.getById(item.id).stockQuantity)
+        orderService.updateOwnItem(order.id, order.items[0].id, owner, UpdateOwnOrderItemRequest(quantity = 1)).orFail()
+        assertEquals(4, inventoryService.getById(item.id).orFail().stockQuantity)
     }
 
     @Test
     fun `rejects a custom item with no title`() {
         val request = CreateOrderRequest(items = listOf(CreateOrderItemRequest(currency = Currency.JPY)))
-        assertThrows(ResponseStatusException::class.java) { orderService.create(user(), request) }
+        failureOf { orderService.create(user(), request) }
     }
 
     @Test
     fun `rejects a custom item with no condition`() {
         val request = CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Something", currency = Currency.JPY)))
-        assertThrows(ResponseStatusException::class.java) { orderService.create(user(), request) }
+        failureOf { orderService.create(user(), request) }
     }
 
     @Test
@@ -441,10 +444,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val order = orderService.create(
             owner,
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "X", condition = Condition.NEW, currency = Currency.JPY))),
-        )
+        ).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.getById(order.id, user()) }
-        assertEquals(order.id, orderService.getById(order.id, owner).id)
+        failureOf { orderService.getById(order.id, user()) }
+        assertEquals(order.id, orderService.getById(order.id, owner).orFail().id)
     }
 
     @Test
@@ -452,9 +455,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val order = orderService.create(
             user(),
             CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "X", condition = Condition.NEW, currency = Currency.JPY))),
-        )
+        ).orFail()
 
-        assertEquals(order.id, orderService.getById(order.id, admin()).id)
+        assertEquals(order.id, orderService.getById(order.id, admin()).orFail().id)
     }
 
     @Test
@@ -467,10 +470,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                     CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY),
                 ),
             ),
-        )
-        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS)
+        ).orFail()
+        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS).orFail()
 
-        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"))
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450")).orFail()
 
         val boughtItem = updated.items.first { it.id == order.items[0].id }
         val untouchedItem = updated.items.first { it.id == order.items[1].id }
@@ -491,10 +494,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                     CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY),
                 ),
             ),
-        )
+        ).orFail()
 
-        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
-        val updated = orderService.updateItem(order.id, order.items[1].id, OrderItemStatus.BOUGHT, BigDecimal("300"), BigDecimal("300"))
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700")).orFail()
+        val updated = orderService.updateItem(order.id, order.items[1].id, OrderItemStatus.BOUGHT, BigDecimal("300"), BigDecimal("300")).orFail()
 
         val firstItem = updated.items.first { it.id == order.items[0].id }
         val secondItem = updated.items.first { it.id == order.items[1].id }
@@ -507,7 +510,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `actualPrice is always stored as JPY and soldPrice as EUR, regardless of the item's own currency`() {
         val order = singleItemOrder()
 
-        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700")).orFail()
 
         val item = updated.items[0]
         assertEquals(Currency.JPY, item.actualPriceCurrency)
@@ -520,7 +523,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val order = singleItemOrder()
 
         // Bought for 450 JPY = 4.50 EUR at 100 JPY/EUR, sold for 700 EUR -> profit 695.50 EUR.
-        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700")).orFail()
 
         assertEquals(BigDecimal("695.50"), updated.items[0].profit)
     }
@@ -533,9 +536,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
             CreateOrderRequest(
                 items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY, quantity = 3)),
             ),
-        )
+        ).orFail()
 
-        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700")).orFail()
 
         assertEquals(BigDecimal("750.00"), updated.items[0].profit)
         assertEquals(BigDecimal("750.00"), updated.profit)
@@ -544,9 +547,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `an item with no soldPrice yet has no profit`() {
         val order = singleItemOrder()
-        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS)
+        orderService.updateStatus(order.id, OrderStatus.IN_PROGRESS).orFail()
 
-        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"))
+        val updated = orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450")).orFail()
 
         assertNull(updated.items[0].profit)
         assertEquals(BigDecimal.ZERO, updated.profit)
@@ -556,9 +559,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `getById exposes soldPrice but never profit to the owning user`() {
         val owner = user()
         val order = singleItemOrder(owner)
-        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700")).orFail()
 
-        val fetched = orderService.getById(order.id, owner)
+        val fetched = orderService.getById(order.id, owner).orFail()
 
         assertEquals(BigDecimal("700"), fetched.items[0].soldPrice)
         assertNull(fetched.items[0].profit)
@@ -570,9 +573,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         exchangeRateService.setRate(BigDecimal("1.0000")) // 1:1 - this test is about visibility, not conversion.
         val owner = user()
         val order = singleItemOrder(owner)
-        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700"))
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"), BigDecimal("700")).orFail()
 
-        val fetched = orderService.getById(order.id, admin())
+        val fetched = orderService.getById(order.id, admin()).orFail()
 
         assertEquals(BigDecimal("700"), fetched.items[0].soldPrice)
         assertEquals(BigDecimal("250.00"), fetched.items[0].profit)
@@ -582,8 +585,8 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `listMine only returns the caller's orders`() {
         val owner = user()
-        orderService.create(owner, CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY))))
-        orderService.create(user(), CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY))))
+        orderService.create(owner, CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "A", condition = Condition.NEW, currency = Currency.JPY)))).orFail()
+        orderService.create(user(), CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY)))).orFail()
 
         val page = orderService.listMine(owner, PageRequest.of(0, 20))
 
@@ -596,8 +599,8 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val sent = singleItemOrder(title = "sent")
         val delivered = singleItemOrder(title = "delivered")
         val open = singleItemOrder(title = "open")
-        orderService.updateStatus(sent.id, OrderStatus.SENT)
-        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED)
+        orderService.updateStatus(sent.id, OrderStatus.SENT).orFail()
+        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED).orFail()
         val everything = PageRequest.of(0, 100)
 
         val none = orderRepository.findFiltered(null, emptySet(), everything)
@@ -622,7 +625,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
             order.id,
             owner,
             CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY),
-        )
+        ).orFail()
 
         assertEquals(2, updated.items.size)
     }
@@ -631,9 +634,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `a user cannot add an item to a closed order`() {
         val owner = user()
         val order = singleItemOrder(owner)
-        orderService.updateStatus(order.id, OrderStatus.SENT)
+        orderService.updateStatus(order.id, OrderStatus.SENT).orFail()
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.addOwnItem(order.id, owner, CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY))
         }
     }
@@ -642,13 +645,13 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `a user cannot edit or remove items on a closed order`() {
         val owner = user()
         val order = singleItemOrder(owner)
-        orderService.updateStatus(order.id, OrderStatus.DELIVERED)
+        orderService.updateStatus(order.id, OrderStatus.DELIVERED).orFail()
         val itemId = order.items[0].id
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.updateOwnItem(order.id, itemId, owner, UpdateOwnOrderItemRequest(title = "Renamed"))
         }
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.removeOwnItem(order.id, itemId, owner)
         }
     }
@@ -656,15 +659,15 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `an admin can add, edit and remove items on someone else's order regardless of open status`() {
         val order = singleItemOrder()
-        orderService.updateStatus(order.id, OrderStatus.CANCELLED)
+        orderService.updateStatus(order.id, OrderStatus.CANCELLED).orFail()
 
-        val withNewItem = orderService.adminAddItem(order.id, CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY))
+        val withNewItem = orderService.adminAddItem(order.id, CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY)).orFail()
         assertEquals(2, withNewItem.items.size)
 
-        val edited = orderService.adminUpdateItemContent(order.id, order.items[0].id, UpdateOwnOrderItemRequest(title = "Renamed"))
+        val edited = orderService.adminUpdateItemContent(order.id, order.items[0].id, UpdateOwnOrderItemRequest(title = "Renamed")).orFail()
         assertEquals("Renamed", edited.items.first { it.id == order.items[0].id }.title)
 
-        val afterRemoval = orderService.adminRemoveItem(order.id, order.items[0].id)
+        val afterRemoval = orderService.adminRemoveItem(order.id, order.items[0].id).orFail()
         assertEquals(1, afterRemoval.items.size)
     }
 
@@ -672,18 +675,18 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `an admin can delete an order`() {
         val order = singleItemOrder()
 
-        orderService.adminDelete(order.id)
+        orderService.adminDelete(order.id).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.getById(order.id, admin()) }
+        failureOf { orderService.getById(order.id, admin()) }
     }
 
     @Test
     fun `deleting the last order on a shipment deletes the shipment too`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null)).orFail()
 
-        orderService.adminDelete(solo.id)
+        orderService.adminDelete(solo.id).orFail()
 
         assertFalse(shipmentRepository.existsById(shipment.id))
     }
@@ -693,9 +696,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
-        orderService.adminDelete(a.id)
+        orderService.adminDelete(a.id).orFail()
 
         assertTrue(shipmentRepository.existsById(shipment.id))
     }
@@ -705,9 +708,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
-        orderService.updateStatus(source.id, OrderStatus.CANCELLED)
+        orderService.updateStatus(source.id, OrderStatus.CANCELLED).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.mergeMine(owner, listOf(target.id, source.id)) }
+        failureOf { orderService.mergeMine(owner, listOf(target.id, source.id)) }
     }
 
     @Test
@@ -715,9 +718,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
-        orderService.updateStatus(target.id, OrderStatus.DELIVERED)
+        orderService.updateStatus(target.id, OrderStatus.DELIVERED).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.mergeMine(owner, listOf(target.id, source.id)) }
+        failureOf { orderService.mergeMine(owner, listOf(target.id, source.id)) }
     }
 
     @Test
@@ -725,9 +728,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null)).orFail()
 
-        val merged = orderService.mergeMine(owner, listOf(target.id, source.id))
+        val merged = orderService.mergeMine(owner, listOf(target.id, source.id)).orFail()
 
         assertEquals(shipment.id, merged.shipmentId)
         assertTrue(shipmentRepository.existsById(shipment.id))
@@ -738,10 +741,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
-        val targetShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(target.id), notes = null))
-        val sourceShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null))
+        val targetShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(target.id), notes = null)).orFail()
+        val sourceShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(source.id), notes = null)).orFail()
 
-        val merged = orderService.mergeMine(owner, listOf(target.id, source.id))
+        val merged = orderService.mergeMine(owner, listOf(target.id, source.id)).orFail()
 
         assertEquals(targetShipment.id, merged.shipmentId)
         assertFalse(shipmentRepository.existsById(sourceShipment.id))
@@ -752,9 +755,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
-        orderService.submitForShipping(target.id, owner)
+        orderService.submitForShipping(target.id, owner).orFail()
 
-        val merged = orderService.mergeMine(owner, listOf(source.id, target.id))
+        val merged = orderService.mergeMine(owner, listOf(source.id, target.id)).orFail()
 
         assertEquals(target.id, merged.id)
         assertEquals(OrderStatus.PREPARING_SHIPPING, merged.status)
@@ -767,10 +770,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        orderService.submitForShipping(a.id, owner)
-        orderService.submitForShipping(b.id, owner)
+        orderService.submitForShipping(a.id, owner).orFail()
+        orderService.submitForShipping(b.id, owner).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.mergeMine(owner, listOf(a.id, b.id)) }
+        failureOf { orderService.mergeMine(owner, listOf(a.id, b.id)) }
     }
 
     @Test
@@ -779,11 +782,11 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val target = singleItemOrder(owner, "target")
         val source = singleItemOrder(owner, "source")
 
-        val merged = orderService.adminMerge(listOf(target.id, source.id))
+        val merged = orderService.adminMerge(listOf(target.id, source.id)).orFail()
 
         assertEquals(target.id, merged.id)
         assertEquals(2, merged.items.size)
-        assertThrows(ResponseStatusException::class.java) { orderService.getById(source.id, admin()) }
+        failureOf { orderService.getById(source.id, admin()) }
     }
 
     @Test
@@ -791,10 +794,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val a = singleItemOrder(user(), "a")
         val b = singleItemOrder(user(), "b")
 
-        assertThrows(ResponseStatusException::class.java) { orderService.adminMerge(listOf(a.id, b.id)) }
+        failureOf { orderService.adminMerge(listOf(a.id, b.id)) }
         // Neither order was touched - both still exist independently.
-        assertEquals(1, orderService.getById(a.id, admin()).items.size)
-        assertEquals(1, orderService.getById(b.id, admin()).items.size)
+        assertEquals(1, orderService.getById(a.id, admin()).orFail().items.size)
+        assertEquals(1, orderService.getById(b.id, admin()).orFail().items.size)
     }
 
     private fun twoItemOrder(principal: MeishiPrincipal) = orderService.create(
@@ -805,7 +808,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                 CreateOrderItemRequest(title = "B", condition = Condition.NEW, currency = Currency.JPY),
             ),
         ),
-    )
+    ).orFail()
 
     @Test
     fun `admin can move an item onto an existing order of the same user`() {
@@ -813,7 +816,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val source = twoItemOrder(owner)
         val target = singleItemOrder(owner, "target")
 
-        val moved = orderService.adminMoveItems(source.id, listOf(source.items[0].id), target.id)
+        val moved = orderService.adminMoveItems(source.id, listOf(source.items[0].id), target.id).orFail()
 
         assertEquals(1, moved.source.items.size)
         assertEquals(2, moved.target.items.size)
@@ -825,7 +828,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val source = twoItemOrder(owner)
 
-        val moved = orderService.adminMoveItems(source.id, listOf(source.items[0].id), null)
+        val moved = orderService.adminMoveItems(source.id, listOf(source.items[0].id), null).orFail()
 
         assertEquals(1, moved.source.items.size)
         assertEquals(1, moved.target.items.size)
@@ -837,7 +840,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val source = twoItemOrder(user())
         val target = singleItemOrder(user(), "target")
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.adminMoveItems(source.id, listOf(source.items[0].id), target.id)
         }
     }
@@ -846,7 +849,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `admin cannot move every item out of the source order`() {
         val source = twoItemOrder(user())
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.adminMoveItems(source.id, source.items.map { it.id }, null)
         }
     }
@@ -855,7 +858,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `admin can set a nickname on any user's order`() {
         val order = singleItemOrder(user())
 
-        val updated = orderService.adminUpdateNickname(order.id, "Grandma's Gifts")
+        val updated = orderService.adminUpdateNickname(order.id, "Grandma's Gifts").orFail()
 
         assertEquals("Grandma's Gifts", updated.nickname)
     }
@@ -864,10 +867,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `admin nickname is trimmed, and blank clears it`() {
         val order = singleItemOrder(user())
 
-        val padded = orderService.adminUpdateNickname(order.id, "  Padded  ")
+        val padded = orderService.adminUpdateNickname(order.id, "  Padded  ").orFail()
         assertEquals("Padded", padded.nickname)
 
-        val cleared = orderService.adminUpdateNickname(order.id, "   ")
+        val cleared = orderService.adminUpdateNickname(order.id, "   ").orFail()
         assertNull(cleared.nickname)
     }
 
@@ -877,9 +880,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val solo = singleItemOrder(owner, "solo")
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val soloShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        val soloShipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null)).orFail()
 
-        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id, a.id, b.id), notes = null))
+        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id, a.id, b.id), notes = null)).orFail()
 
         assertEquals(soloShipment.id, combined.id)
         assertTrue(shipmentRepository.existsById(soloShipment.id))
@@ -892,10 +895,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
-        val shipmentB = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id), notes = null))
+        val shipmentA = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
+        val shipmentB = shipmentService.create(CreateShipmentRequest(orderIds = listOf(b.id), notes = null)).orFail()
 
-        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val combined = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
         assertEquals(shipmentA.id, combined.id)
         assertTrue(shipmentRepository.existsById(shipmentA.id))
@@ -907,9 +910,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        orderService.updateStatus(b.id, OrderStatus.SENT)
+        orderService.updateStatus(b.id, OrderStatus.SENT).orFail()
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
         }
     }
@@ -919,12 +922,12 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
-        shipmentService.assignOrder(a.id, null)
+        shipmentService.assignOrder(a.id, null).orFail()
         assertTrue(shipmentRepository.existsById(shipment.id))
 
-        shipmentService.assignOrder(b.id, null)
+        shipmentService.assignOrder(b.id, null).orFail()
         assertFalse(shipmentRepository.existsById(shipment.id))
     }
 
@@ -933,7 +936,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val order = singleItemOrder(owner)
 
-        val cancelled = orderService.cancelOwn(order.id, owner)
+        val cancelled = orderService.cancelOwn(order.id, owner).orFail()
 
         assertEquals(OrderStatus.CANCELLED, cancelled.status)
         assertFalse(cancelled.open)
@@ -942,18 +945,18 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     @Test
     fun `an admin cannot reopen a delivered or cancelled order but can move forward, cancel or undo one step`() {
         val delivered = singleItemOrder()
-        orderService.updateStatus(delivered.id, OrderStatus.IN_PROGRESS)
-        orderService.updateStatus(delivered.id, OrderStatus.REQUESTED)
-        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED)
-        assertThrows(ResponseStatusException::class.java) { orderService.updateStatus(delivered.id, OrderStatus.REQUESTED) }
+        orderService.updateStatus(delivered.id, OrderStatus.IN_PROGRESS).orFail()
+        orderService.updateStatus(delivered.id, OrderStatus.REQUESTED).orFail()
+        orderService.updateStatus(delivered.id, OrderStatus.DELIVERED).orFail()
+        failureOf { orderService.updateStatus(delivered.id, OrderStatus.REQUESTED) }
 
         val cancelled = singleItemOrder()
-        orderService.updateStatus(cancelled.id, OrderStatus.CANCELLED)
-        assertThrows(ResponseStatusException::class.java) { orderService.updateStatus(cancelled.id, OrderStatus.IN_PROGRESS) }
+        orderService.updateStatus(cancelled.id, OrderStatus.CANCELLED).orFail()
+        failureOf { orderService.updateStatus(cancelled.id, OrderStatus.IN_PROGRESS) }
 
         val skipped = singleItemOrder() // skipping steps forward is allowed
-        orderService.updateStatus(skipped.id, OrderStatus.SENT)
-        assertThrows(ResponseStatusException::class.java) { orderService.updateStatus(skipped.id, OrderStatus.REQUESTED) }
+        orderService.updateStatus(skipped.id, OrderStatus.SENT).orFail()
+        failureOf { orderService.updateStatus(skipped.id, OrderStatus.REQUESTED) }
     }
 
     @Test
@@ -961,20 +964,20 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val order = singleItemOrder(owner)
 
-        assertThrows(ResponseStatusException::class.java) { orderService.cancelOwn(order.id, user()) }
+        failureOf { orderService.cancelOwn(order.id, user()) }
 
-        orderService.updateStatus(order.id, OrderStatus.DELIVERED)
-        assertThrows(ResponseStatusException::class.java) { orderService.cancelOwn(order.id, owner) }
+        orderService.updateStatus(order.id, OrderStatus.DELIVERED).orFail()
+        failureOf { orderService.cancelOwn(order.id, owner) }
     }
 
     @Test
     fun `a user cannot cancel an order with a bought or shipped item, even while the order itself is still open`() {
         val owner = user()
         val order = singleItemOrder(owner)
-        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450"))
-        orderService.updateStatus(order.id, OrderStatus.PURCHASED)
+        orderService.updateItem(order.id, order.items[0].id, OrderItemStatus.BOUGHT, BigDecimal("450")).orFail()
+        orderService.updateStatus(order.id, OrderStatus.PURCHASED).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.cancelOwn(order.id, owner) }
+        failureOf { orderService.cancelOwn(order.id, owner) }
     }
 
     @Test
@@ -982,18 +985,18 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val order = singleItemOrder(owner)
         val itemId = order.items[0].id
-        orderService.updateItem(order.id, itemId, OrderItemStatus.SHIPPED, null)
+        orderService.updateItem(order.id, itemId, OrderItemStatus.SHIPPED, null).orFail()
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.updateOwnItem(order.id, itemId, owner, UpdateOwnOrderItemRequest(title = "Renamed"))
         }
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             orderService.removeOwnItem(order.id, itemId, owner)
         }
 
-        val edited = orderService.adminUpdateItemContent(order.id, itemId, UpdateOwnOrderItemRequest(title = "Renamed"))
+        val edited = orderService.adminUpdateItemContent(order.id, itemId, UpdateOwnOrderItemRequest(title = "Renamed")).orFail()
         assertEquals("Renamed", edited.items.first { it.id == itemId }.title)
-        val afterRemoval = orderService.adminRemoveItem(order.id, itemId)
+        val afterRemoval = orderService.adminRemoveItem(order.id, itemId).orFail()
         assertTrue(afterRemoval.items.isEmpty())
     }
 
@@ -1002,16 +1005,16 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
-        shipmentService.adminDelete(shipment.id)
+        shipmentService.adminDelete(shipment.id).orFail()
 
         assertFalse(shipmentRepository.existsById(shipment.id))
-        assertNull(orderService.getById(a.id, owner).shipmentId)
-        assertNull(orderService.getById(b.id, owner).shipmentId)
+        assertNull(orderService.getById(a.id, owner).orFail().shipmentId)
+        assertNull(orderService.getById(b.id, owner).orFail().shipmentId)
         // The order itself must still load cleanly - this is exactly the dangling-FK class of bug
         // fixed earlier for soft-deleted inventory items.
-        assertEquals(a.id, orderService.getById(a.id, owner).id)
+        assertEquals(a.id, orderService.getById(a.id, owner).orFail().id)
     }
 
     @Test
@@ -1019,7 +1022,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val order = singleItemOrder(owner)
 
-        val submitted = orderService.submitForShipping(order.id, owner)
+        val submitted = orderService.submitForShipping(order.id, owner).orFail()
 
         assertEquals(OrderStatus.PREPARING_SHIPPING, submitted.status)
         assertFalse(submitted.open)
@@ -1031,7 +1034,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val order = singleItemOrder(owner)
         assertNull(order.shipmentId)
 
-        val submitted = orderService.submitForShipping(order.id, owner)
+        val submitted = orderService.submitForShipping(order.id, owner).orFail()
 
         assertNotNull(submitted.shipmentId)
         assertTrue(shipmentRepository.existsById(submitted.shipmentId!!))
@@ -1044,23 +1047,23 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val other = user()
         val mine = singleItemOrder(owner, "mine")
         val theirs = singleItemOrder(other, "theirs")
-        shipmentService.create(CreateShipmentRequest(orderIds = listOf(mine.id, theirs.id), notes = null))
+        shipmentService.create(CreateShipmentRequest(orderIds = listOf(mine.id, theirs.id), notes = null)).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(theirs.id, other) }
+        failureOf { orderService.submitForShipping(theirs.id, other) }
 
-        val submitted = orderService.submitForShipping(theirs.id, owner)
+        val submitted = orderService.submitForShipping(theirs.id, owner).orFail()
         assertEquals(OrderStatus.PREPARING_SHIPPING, submitted.status)
         // Submitting moves the whole shipment, not just the order the owner happened to name.
-        assertEquals(OrderStatus.PREPARING_SHIPPING, orderService.getById(mine.id, owner).status)
+        assertEquals(OrderStatus.PREPARING_SHIPPING, orderService.getById(mine.id, owner).orFail().status)
     }
 
     @Test
     fun `submitting for shipping requires the order still be open`() {
         val owner = user()
         val order = singleItemOrder(owner)
-        orderService.updateStatus(order.id, OrderStatus.CANCELLED)
+        orderService.updateStatus(order.id, OrderStatus.CANCELLED).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(order.id, owner) }
+        failureOf { orderService.submitForShipping(order.id, owner) }
     }
 
     @Test
@@ -1079,9 +1082,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                     ),
                 ),
             ),
-        )
+        ).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(order.id, owner) }
+        failureOf { orderService.submitForShipping(order.id, owner) }
     }
 
     @Test
@@ -1102,13 +1105,13 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                     ),
                 ),
             ),
-        )
-        shipmentService.combine(listOf(mine.id, theirsWithPreorder.id))
+        ).orFail()
+        shipmentService.combine(listOf(mine.id, theirsWithPreorder.id)).orFail()
 
-        val submitted = orderService.submitForShipping(mine.id, owner)
+        val submitted = orderService.submitForShipping(mine.id, owner).orFail()
 
         assertEquals(OrderStatus.PREPARING_SHIPPING, submitted.status)
-        assertEquals(OrderStatus.REQUESTED, orderService.getById(theirsWithPreorder.id, other).status)
+        assertEquals(OrderStatus.REQUESTED, orderService.getById(theirsWithPreorder.id, other).orFail().status)
     }
 
     @Test
@@ -1122,11 +1125,11 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val theirs = singleItemOrder(other, "theirs")
         val orphanOwnerShipment = com.omiyage.backend.shipment.Shipment()
         val saved = shipmentRepository.save(orphanOwnerShipment)
-        shipmentService.assignOrder(mine.id, saved.id)
-        shipmentService.assignOrder(theirs.id, saved.id)
+        shipmentService.assignOrder(mine.id, saved.id).orFail()
+        shipmentService.assignOrder(theirs.id, saved.id).orFail()
 
-        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(mine.id, owner) }
-        assertThrows(ResponseStatusException::class.java) { orderService.submitForShipping(theirs.id, other) }
+        failureOf { orderService.submitForShipping(mine.id, owner) }
+        failureOf { orderService.submitForShipping(theirs.id, other) }
     }
 
     @Test
@@ -1134,12 +1137,12 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val order = singleItemOrder()
         val itemId = order.items[0].id
 
-        val paid = orderService.adminMarkItemPaid(order.id, itemId, true)
+        val paid = orderService.adminMarkItemPaid(order.id, itemId, true).orFail()
         val paidItem = paid.items.first { it.id == itemId }
         assertTrue(paidItem.paid)
         assertEquals(paidItem.paidAt != null, true)
 
-        val unpaid = orderService.adminMarkItemPaid(order.id, itemId, false)
+        val unpaid = orderService.adminMarkItemPaid(order.id, itemId, false).orFail()
         val unpaidItem = unpaid.items.first { it.id == itemId }
         assertFalse(unpaidItem.paid)
         assertNull(unpaidItem.paidAt)
@@ -1160,7 +1163,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
                     ),
                 ),
             ),
-        )
+        ).orFail()
         assertEquals("https://example.com/product", order.items[0].link)
 
         val edited = orderService.updateOwnItem(
@@ -1168,7 +1171,7 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
             order.items[0].id,
             owner,
             UpdateOwnOrderItemRequest(link = "https://example.com/updated"),
-        )
+        ).orFail()
         assertEquals("https://example.com/updated", edited.items[0].link)
     }
 
@@ -1176,12 +1179,12 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `cannot attach an order to a shipment that has already shipped`() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
-        orderService.submitForShipping(a.id, owner)
-        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
+        orderService.submitForShipping(a.id, owner).orFail()
+        shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
         val b = singleItemOrder(owner, "b")
 
-        assertThrows(ResponseStatusException::class.java) { shipmentService.assignOrder(b.id, shipment.id) }
+        failureOf { shipmentService.assignOrder(b.id, shipment.id) }
     }
 
     @Test
@@ -1190,13 +1193,13 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         // own status still says open, but its shipment has (somehow) already shipped.
         val owner = user()
         val a = singleItemOrder(owner, "a")
-        val created = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        val created = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
         val shipment = shipmentRepository.findById(created.id).get()
         shipment.status = ShipmentStatus.SHIPPED
         shipmentRepository.save(shipment)
         val b = singleItemOrder(owner, "b")
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
         }
     }
@@ -1205,9 +1208,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `cannot mark a shipment shipped while a member order is not yet ready`() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
 
-        assertThrows(ResponseStatusException::class.java) {
+        failureOf {
             shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
         }
     }
@@ -1216,10 +1219,10 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `can mark a shipment shipped once every member order has reached preparing-shipping`() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null))
-        orderService.submitForShipping(a.id, owner)
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id), notes = null)).orFail()
+        orderService.submitForShipping(a.id, owner).orFail()
 
-        val updated = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED))
+        val updated = shipmentService.update(shipment.id, UpdateShipmentRequest(status = ShipmentStatus.SHIPPED)).orFail()
 
         assertEquals(ShipmentStatus.SHIPPED, updated.status)
     }
@@ -1228,9 +1231,9 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
     fun `cancelling an order detaches it from its shipment, deleting the shipment once empty`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null)).orFail()
 
-        val cancelled = orderService.cancelOwn(solo.id, owner)
+        val cancelled = orderService.cancelOwn(solo.id, owner).orFail()
 
         assertEquals(OrderStatus.CANCELLED, cancelled.status)
         assertNull(cancelled.shipmentId)
@@ -1242,22 +1245,22 @@ class OrderServiceIntegrationTest : PostgresIntegrationTest() {
         val owner = user()
         val a = singleItemOrder(owner, "a")
         val b = singleItemOrder(owner, "b")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(a.id, b.id), notes = null)).orFail()
 
-        orderService.cancelOwn(a.id, owner)
+        orderService.cancelOwn(a.id, owner).orFail()
 
         assertTrue(shipmentRepository.existsById(shipment.id))
-        assertNull(orderService.getById(a.id, owner).shipmentId)
-        assertEquals(shipment.id, orderService.getById(b.id, owner).shipmentId)
+        assertNull(orderService.getById(a.id, owner).orFail().shipmentId)
+        assertEquals(shipment.id, orderService.getById(b.id, owner).orFail().shipmentId)
     }
 
     @Test
     fun `admin cancelling via status update also detaches the order from its shipment`() {
         val owner = user()
         val solo = singleItemOrder(owner, "solo")
-        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null))
+        val shipment = shipmentService.create(CreateShipmentRequest(orderIds = listOf(solo.id), notes = null)).orFail()
 
-        orderService.updateStatus(solo.id, OrderStatus.CANCELLED)
+        orderService.updateStatus(solo.id, OrderStatus.CANCELLED).orFail()
 
         assertFalse(shipmentRepository.existsById(shipment.id))
     }

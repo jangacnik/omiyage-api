@@ -1,5 +1,6 @@
 package com.omiyage.backend.shipment
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.config.MeishiProperties
@@ -129,7 +130,7 @@ class ShipmentControllersTest {
     @Test
     fun `mine get returns a shipment the caller belongs to`() {
         val shipment = shipmentOf(userId)
-        every { service.getById(shipment.id) } returns shipment
+        every { service.getById(shipment.id) } returns shipment.right()
         every { nicknames.nicknames(any()) } returns emptyList()
 
         mockMvc.get("/api/shipments/mine/${shipment.id}") { header("Authorization", bearer(userToken())) }
@@ -143,7 +144,7 @@ class ShipmentControllersTest {
     @Test
     fun `mine get returns 404 for a shipment the caller does not belong to`() {
         val shipment = shipmentOf(UUID.randomUUID())
-        every { service.getById(shipment.id) } returns shipment
+        every { service.getById(shipment.id) } returns shipment.right()
         every { nicknames.nicknames(any()) } returns emptyList()
 
         mockMvc.get("/api/shipments/mine/${shipment.id}") { header("Authorization", bearer(userToken())) }
@@ -153,7 +154,7 @@ class ShipmentControllersTest {
     @Test
     fun `mine rename passes the caller id and title to the service`() {
         val shipment = shipmentOf(userId, title = "New name")
-        every { service.renameMine(shipment.id, userId, "New name") } returns shipment
+        every { service.renameMine(shipment.id, userId, "New name") } returns shipment.right()
         every { nicknames.nicknames(any()) } returns emptyList()
 
         mockMvc.patch("/api/shipments/mine/${shipment.id}/title") {
@@ -178,7 +179,7 @@ class ShipmentControllersTest {
     @Test
     fun `mine shipping update passes destination and method to the service`() {
         val shipment = shipmentOf(userId).copy(destination = ShipmentDestination.AUSTRIA, shippingMethod = ShippingMethod.EMS)
-        every { service.updateShippingMine(shipment.id, userId, ShipmentDestination.AUSTRIA, ShippingMethod.EMS) } returns shipment
+        every { service.updateShippingMine(shipment.id, userId, ShipmentDestination.AUSTRIA, ShippingMethod.EMS) } returns shipment.right()
         every { nicknames.nicknames(any()) } returns emptyList()
 
         mockMvc.patch("/api/shipments/mine/${shipment.id}/shipping") {
@@ -195,7 +196,7 @@ class ShipmentControllersTest {
     @Test
     fun `mine mark-arrived delegates with the caller id`() {
         val shipment = shipmentOf(userId)
-        every { service.markArrivedMine(shipment.id, userId) } returns shipment
+        every { service.markArrivedMine(shipment.id, userId) } returns shipment.right()
         every { nicknames.nicknames(any()) } returns emptyList()
 
         mockMvc.post("/api/shipments/mine/${shipment.id}/mark-arrived") { header("Authorization", bearer(userToken())) }
@@ -243,7 +244,7 @@ class ShipmentControllersTest {
         val shipment = shipmentOf(userId)
         every { service.listActive() } returns listOf(shipment)
         every { service.listDelivered() } returns listOf(shipment, shipment)
-        every { service.getById(shipment.id) } returns shipment
+        every { service.getById(shipment.id) } returns shipment.right()
 
         mockMvc.get("/api/admin/shipments") { header("Authorization", bearer(adminToken())) }
             .andExpect { status { isOk() }; jsonPath("$.length()") { value(1) } }
@@ -256,7 +257,7 @@ class ShipmentControllersTest {
     @Test
     fun `admin create returns 201`() {
         val request = CreateShipmentRequest(orderIds = listOf(UUID.randomUUID()), title = "New")
-        every { service.create(request) } returns shipmentOf(userId, title = "New")
+        every { service.create(request) } returns shipmentOf(userId, title = "New").right()
 
         mockMvc.post("/api/admin/shipments") {
             header("Authorization", bearer(adminToken()))
@@ -281,7 +282,7 @@ class ShipmentControllersTest {
     fun `admin update returns the updated shipment`() {
         val shipment = shipmentOf(userId).copy(status = ShipmentStatus.SHIPPED, trackingNumber = "EE123")
         val request = UpdateShipmentRequest(status = ShipmentStatus.SHIPPED, trackingNumber = "EE123")
-        every { service.update(shipment.id, request) } returns shipment
+        every { service.update(shipment.id, request) } returns shipment.right()
 
         mockMvc.patch("/api/admin/shipments/${shipment.id}") {
             header("Authorization", bearer(adminToken()))
@@ -297,7 +298,7 @@ class ShipmentControllersTest {
     @Test
     fun `admin delete returns 204 and delegates`() {
         val id = UUID.randomUUID()
-        every { service.adminDelete(id) } just Runs
+        every { service.adminDelete(id) } returns Unit.right()
 
         mockMvc.delete("/api/admin/shipments/$id") { header("Authorization", bearer(adminToken())) }
             .andExpect { status { isNoContent() } }
@@ -308,7 +309,7 @@ class ShipmentControllersTest {
     @Test
     fun `admin combine merges the given shipments`() {
         val ids = listOf(UUID.randomUUID(), UUID.randomUUID())
-        every { service.combineShipments(ids, "Merged") } returns shipmentOf(userId, title = "Merged")
+        every { service.combineShipments(ids, "Merged") } returns shipmentOf(userId, title = "Merged").right()
 
         mockMvc.post("/api/admin/shipments/combine") {
             header("Authorization", bearer(adminToken()))
@@ -324,7 +325,7 @@ class ShipmentControllersTest {
     fun `admin split returns 201 with the new shipment`() {
         val sourceId = UUID.randomUUID()
         val orderIds = listOf(UUID.randomUUID())
-        every { service.splitOff(sourceId, orderIds, "Half") } returns shipmentOf(userId, title = "Half")
+        every { service.splitOff(sourceId, orderIds, "Half") } returns shipmentOf(userId, title = "Half").right()
 
         mockMvc.post("/api/admin/shipments/$sourceId/split") {
             header("Authorization", bearer(adminToken()))
@@ -339,7 +340,7 @@ class ShipmentControllersTest {
     @Test
     fun `admin markPaid passes the paid flag`() {
         val id = UUID.randomUUID()
-        every { service.adminMarkPaid(id, true) } returns shipmentOf(userId)
+        every { service.adminMarkPaid(id, true) } returns shipmentOf(userId).right()
 
         mockMvc.patch("/api/admin/shipments/$id/paid") {
             header("Authorization", bearer(adminToken()))

@@ -1,5 +1,6 @@
 package com.omiyage.backend.basket
 
+import com.omiyage.backend.web.getOrRespond
 import com.omiyage.backend.order.OrderDto
 import com.omiyage.backend.security.CurrentUser
 import jakarta.validation.Valid
@@ -25,22 +26,22 @@ class BasketController(private val service: BasketService) {
 
     @PostMapping("/lines")
     fun add(@Valid @RequestBody request: AddBasketLineRequest): ResponseEntity<BasketLineDto> =
-        ResponseEntity.status(HttpStatus.CREATED).body(service.add(CurrentUser.principal(), request))
+        ResponseEntity.status(HttpStatus.CREATED).body(service.add(CurrentUser.principal(), request).getOrRespond())
 
     @PutMapping("/lines/{id}")
     fun update(@PathVariable id: UUID, @Valid @RequestBody request: UpdateBasketLineRequest): BasketLineDto =
-        service.update(CurrentUser.principal(), id, request)
+        service.update(CurrentUser.principal(), id, request).getOrRespond()
 
     @DeleteMapping("/lines/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun remove(@PathVariable id: UUID) = service.remove(CurrentUser.principal(), id)
+    fun remove(@PathVariable id: UUID) = service.remove(CurrentUser.principal(), id).getOrRespond()
 
     @PostMapping("/confirm")
-    fun confirm(): OrderDto = service.confirm(CurrentUser.principal())
+    fun confirm(): OrderDto = service.confirm(CurrentUser.principal()).getOrRespond()
 
     @PostMapping("/add-to-order")
     fun addToOrder(@Valid @RequestBody request: AddBasketToOrderRequest): OrderDto =
-        service.addToOrder(CurrentUser.principal(), request.orderId!!)
+        service.addToOrder(CurrentUser.principal(), request.orderId!!).getOrRespond()
 
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)

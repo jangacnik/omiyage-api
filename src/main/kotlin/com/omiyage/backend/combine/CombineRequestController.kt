@@ -1,5 +1,6 @@
 package com.omiyage.backend.combine
 
+import com.omiyage.backend.web.getOrRespond
 import com.omiyage.backend.security.CurrentUser
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -20,7 +21,7 @@ class CombineRequestController(private val service: CombineRequestService) {
     @PostMapping
     fun create(@Valid @RequestBody request: CreateCombineRequestRequest): ResponseEntity<CombineRequestDto> =
         ResponseEntity.status(HttpStatus.CREATED)
-            .body(service.create(CurrentUser.principal(), request.requesterOrderId, request.targetShipmentId))
+            .body(service.create(CurrentUser.principal(), request.requesterOrderId, request.targetShipmentId).getOrRespond())
 
     @GetMapping("/incoming")
     fun incoming(): List<CombineRequestDto> = service.listIncoming(CurrentUser.principal())
@@ -29,11 +30,11 @@ class CombineRequestController(private val service: CombineRequestService) {
     fun outgoing(): List<CombineRequestDto> = service.listOutgoing(CurrentUser.principal())
 
     @PostMapping("/{id}/accept")
-    fun accept(@PathVariable id: UUID): CombineRequestDto = service.accept(CurrentUser.principal(), id)
+    fun accept(@PathVariable id: UUID): CombineRequestDto = service.accept(CurrentUser.principal(), id).getOrRespond()
 
     @PostMapping("/{id}/decline")
-    fun decline(@PathVariable id: UUID): CombineRequestDto = service.decline(CurrentUser.principal(), id)
+    fun decline(@PathVariable id: UUID): CombineRequestDto = service.decline(CurrentUser.principal(), id).getOrRespond()
 
     @DeleteMapping("/{id}")
-    fun cancel(@PathVariable id: UUID): CombineRequestDto = service.cancel(CurrentUser.principal(), id)
+    fun cancel(@PathVariable id: UUID): CombineRequestDto = service.cancel(CurrentUser.principal(), id).getOrRespond()
 }

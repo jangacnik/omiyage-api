@@ -1,5 +1,6 @@
 package com.omiyage.backend.order
 
+import arrow.core.right
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.omiyage.backend.common.Currency
@@ -82,7 +83,7 @@ class OrderControllerTest {
     @Test
     fun `create returns the created order`() {
         val request = CreateOrderRequest(items = listOf(CreateOrderItemRequest(title = "Kit Kat", currency = Currency.JPY)))
-        every { service.create(any(), request) } returns sampleOrder()
+        every { service.create(any(), request) } returns sampleOrder().right()
 
         mockMvc.post("/api/orders") {
             header("Authorization", "Bearer ${token()}")
@@ -108,7 +109,7 @@ class OrderControllerTest {
     @Test
     fun `getById returns the order`() {
         val order = sampleOrder()
-        every { service.getById(order.id, any()) } returns order
+        every { service.getById(order.id, any()) } returns order.right()
 
         mockMvc.get("/api/orders/${order.id}") { header("Authorization", "Bearer ${token()}") }
             .andExpect {

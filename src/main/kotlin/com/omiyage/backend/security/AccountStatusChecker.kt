@@ -3,7 +3,6 @@ package com.omiyage.backend.security
 import com.omiyage.backend.auth.MeishiAuthClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -43,12 +42,12 @@ class AccountStatusChecker(private val meishi: MeishiAuthClient, private val clo
     // is denied but not cached.
     private fun fetch(token: String, id: UUID): Entry? =
         try {
-            val me = meishi.getMe(token)
-            Entry(me.status == "FROZEN", me.role, clock.instant()).also { cache[id] = it }
-        } catch (e: ResponseStatusException) {
-            // Not cached: the token may just be stale (e.g. after a secret rotation) and the user
-            // can log in again right away.
-            Entry(frozen = true, role = null, checkedAt = clock.instant())
+            meishi.getMe(token).fold(
+                // Not cached: the token may just be stale (e.g. after a secret rotation) and the user
+                // can log in again right away.
+                { Entry(frozen = true, role = null, checkedAt = clock.instant()) },
+                { me -> Entry(me.status == "FROZEN", me.role, clock.instant()).also { cache[id] = it } },
+            )
         } catch (e: Exception) {
             log.warn("account status check skipped, meishi unavailable: {}", e.javaClass.simpleName)
             null
