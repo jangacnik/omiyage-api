@@ -101,11 +101,10 @@ class AuthErrorContractTest : ErrorContractTest() {
         assertError(login(), 401, "unauthorized", "invalid credentials")
     }
 
-    // Pins today's behaviour for issue #108 (MeishiApi's 429 is reported as 401); the fix is a separate PR.
     @Test
-    fun `login throttled by MeishiApi is currently 401 - issue 108`() {
+    fun `login throttled by MeishiApi is 429`() {
         loginHandler = { it.respond(429, """{"error":"slow down"}""") }
-        assertError(login(), 401, "unauthorized", "invalid credentials")
+        assertError(login(), 429, "too_many_requests", "too many login attempts")
     }
 
     @Test
