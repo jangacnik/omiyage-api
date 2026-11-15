@@ -3,6 +3,7 @@ package com.omiyage.backend.web
 import arrow.core.left
 import arrow.core.right
 import com.omiyage.backend.errors.AuthError
+import com.omiyage.backend.errors.BotAuthError
 import com.omiyage.backend.errors.MediaError
 import com.omiyage.backend.errors.UserError
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -42,5 +43,10 @@ class DomainErrorMapperTest {
             HttpFailure(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts", retryAfterSeconds = 12),
             AuthError.UpstreamRateLimited(12).toHttpFailure(),
         )
+    }
+
+    @Test
+    fun `a bot auth failure is a bare 401`() {
+        assertEquals(HttpFailure(HttpStatus.UNAUTHORIZED, "unauthorized"), BotAuthError.BadSignature.toHttpFailure())
     }
 }

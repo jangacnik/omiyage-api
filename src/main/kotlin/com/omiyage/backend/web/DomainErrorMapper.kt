@@ -3,6 +3,7 @@ package com.omiyage.backend.web
 import arrow.core.Either
 import com.omiyage.backend.errors.AuthError
 import com.omiyage.backend.errors.BasketError
+import com.omiyage.backend.errors.BotAuthError
 import com.omiyage.backend.errors.CatalogError
 import com.omiyage.backend.errors.CombineError
 import com.omiyage.backend.errors.DomainError
@@ -32,6 +33,7 @@ fun DomainError.toHttpFailure(): HttpFailure = when (this) {
     is CombineError -> combineFailure()
     is AuthError -> authFailure()
     is UserError -> userFailure()
+    is BotAuthError -> failure(HttpStatus.UNAUTHORIZED, "unauthorized")
 }
 
 private fun failure(status: HttpStatus, message: String) = HttpFailure(status, message)
