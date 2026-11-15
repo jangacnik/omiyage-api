@@ -256,10 +256,14 @@ class OrderWebhookTest {
         val webhook = webhook()
         webhook.stop()
 
-        LogCapture(OrderWebhook::class.java.name).use { capture ->
-            webhook.onOrderEvent(pending())
+        val pending = pending()
 
-            assertThat(capture.events.single().formattedMessage).contains("reason=shutting_down")
+        LogCapture(OrderWebhook::class.java.name).use { capture ->
+            webhook.onOrderEvent(pending)
+
+            // The logger is shared by the whole class, so only look at this event's own line.
+            assertThat(capture.events.map { it.formattedMessage }.filter { it.contains("eventId=${pending.event.eventId} ") })
+                .singleElement().asString().contains("reason=shutting_down")
         }
         assertThat(receiver.nothingWithin(100)).isTrue()
     }
