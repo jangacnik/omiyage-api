@@ -16,7 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 const val BOT_PATH_PATTERN = "/api/bot/**"
 
-/** Its own filter chain, ahead of the JWT one: /api/bot/** takes a signed request instead of a token,
+/** Its own filter chain, ahead of the JWT one: the bot API path prefix takes a signed request instead of a token,
  *  and anything without a verified signature is a 401. */
 @Configuration
 class BotSecurityConfig(private val verifier: RequestSignatureVerifier, private val objectMapper: ObjectMapper) {
