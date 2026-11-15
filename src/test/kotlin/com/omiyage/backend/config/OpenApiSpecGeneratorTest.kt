@@ -12,6 +12,7 @@ import com.omiyage.backend.combine.CombineRequestService
 import com.omiyage.backend.dashboard.DashboardService
 import com.omiyage.backend.media.MediaService
 import com.omiyage.backend.order.OrderService
+import com.omiyage.backend.order.UnshippedOrderService
 import com.omiyage.backend.security.JwtAuthenticationFilter
 import com.omiyage.backend.security.JwtVerifier
 import com.omiyage.backend.security.SecurityConfig
@@ -70,6 +71,7 @@ class OpenApiSpecGeneratorTest {
     @MockkBean lateinit var dashboardService: DashboardService
     @MockkBean lateinit var mediaService: MediaService
     @MockkBean lateinit var orderService: OrderService
+    @MockkBean lateinit var unshippedOrderService: UnshippedOrderService
     @MockkBean lateinit var shipmentService: ShipmentService
     @MockkBean lateinit var exchangeRateService: ExchangeRateService
     @MockkBean lateinit var shippingRateService: ShippingRateService

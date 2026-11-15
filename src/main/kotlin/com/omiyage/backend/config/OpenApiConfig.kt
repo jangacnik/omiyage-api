@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 private const val BEARER_SCHEME = "bearerAuth"
+private const val SIGNATURE_SCHEME = "requestSignature"
 
 @Configuration
 class OpenApiConfig {
@@ -21,6 +22,14 @@ class OpenApiConfig {
                 .addSecuritySchemes(
                     BEARER_SCHEME,
                     SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT"),
+                )
+                .addSecuritySchemes(
+                    SIGNATURE_SCHEME,
+                    SecurityScheme()
+                        .type(SecurityScheme.Type.APIKEY)
+                        .`in`(SecurityScheme.In.HEADER)
+                        .name("X-Omiyage-Signature")
+                        .description("HMAC-SHA256 of the request, with the X-Omiyage-Timestamp header (Unix seconds). See docs/bot-orders.md."),
                 )
                 .addSchemas(
                     "Error",

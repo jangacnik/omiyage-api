@@ -1740,6 +1740,46 @@
             "tags" : [ "basket-controller" ]
           }
         },
+        "/api/bot/orders" : {
+          "get" : {
+            "operationId" : "listUnshipped",
+            "parameters" : [ {
+              "in" : "query",
+              "name" : "page",
+              "required" : false,
+              "schema" : {
+                "type" : "integer",
+                "format" : "int32",
+                "default" : 0
+              }
+            }, {
+              "in" : "query",
+              "name" : "size",
+              "required" : false,
+              "schema" : {
+                "type" : "integer",
+                "format" : "int32",
+                "default" : 25
+              }
+            } ],
+            "responses" : {
+              "200" : {
+                "content" : {
+                  "*/*" : {
+                    "schema" : {
+                      "$ref" : "#/components/schemas/PageResponseBotOrderDto"
+                    }
+                  }
+                },
+                "description" : "OK"
+              }
+            },
+            "security" : [ {
+              "requestSignature" : [ ]
+            } ],
+            "tags" : [ "bot-order-controller" ]
+          }
+        },
         "/api/categories" : {
           "get" : {
             "operationId" : "list_4",
@@ -3065,6 +3105,33 @@
               }
             }
           },
+          "BotOrderDto" : {
+            "type" : "object",
+            "properties" : {
+              "createdAt" : {
+                "type" : "string",
+                "format" : "date-time"
+              },
+              "id" : {
+                "type" : "string",
+                "format" : "uuid"
+              },
+              "itemCount" : {
+                "type" : "integer",
+                "format" : "int32"
+              },
+              "nickname" : {
+                "type" : "string"
+              },
+              "reference" : {
+                "type" : "string"
+              },
+              "status" : {
+                "type" : "string",
+                "enum" : [ "REQUESTED", "IN_PROGRESS", "PURCHASED", "PREPARING_SHIPPING", "SENT", "DELIVERED", "CANCELLED" ]
+              }
+            }
+          },
           "BrowsableShipmentDto" : {
             "type" : "object",
             "properties" : {
@@ -3837,6 +3904,36 @@
               }
             }
           },
+          "PageResponseBotOrderDto" : {
+            "type" : "object",
+            "properties" : {
+              "content" : {
+                "type" : "array",
+                "items" : {
+                  "$ref" : "#/components/schemas/BotOrderDto"
+                }
+              },
+              "hasNext" : {
+                "type" : "boolean"
+              },
+              "page" : {
+                "type" : "integer",
+                "format" : "int32"
+              },
+              "size" : {
+                "type" : "integer",
+                "format" : "int32"
+              },
+              "totalElements" : {
+                "type" : "integer",
+                "format" : "int64"
+              },
+              "totalPages" : {
+                "type" : "integer",
+                "format" : "int32"
+              }
+            }
+          },
           "PageResponseInventoryItemDto" : {
             "type" : "object",
             "properties" : {
@@ -4474,6 +4571,12 @@
             "bearerFormat" : "JWT",
             "scheme" : "bearer",
             "type" : "http"
+          },
+          "requestSignature" : {
+            "description" : "HMAC-SHA256 of the request, with the X-Omiyage-Timestamp header (Unix seconds). See docs/bot-orders.md.",
+            "in" : "header",
+            "name" : "X-Omiyage-Signature",
+            "type" : "apiKey"
           }
         }
       }
