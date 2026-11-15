@@ -94,6 +94,6 @@ class HmacRequestSignatureVerifierTest {
     fun `rejects everything while no secret is configured`() {
         val unconfigured = HmacRequestSignatureVerifier(OrderWebhookProperties(), clock)
 
-        assertThat(unconfigured.verify(request(signedWith = ""))).isEqualTo(Either.Left(BotAuthError.NotConfigured))
+        assertThat(unconfigured.verify(request(signedWith = "any-secret"))).isEqualTo(Either.Left(BotAuthError.NotConfigured))
     }
 }

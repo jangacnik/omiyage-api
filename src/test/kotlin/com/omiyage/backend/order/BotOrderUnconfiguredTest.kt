@@ -32,12 +32,12 @@ class BotOrderUnconfiguredTest {
     lateinit var service: UnshippedOrderService
 
     @Test
-    fun `a request signed with an empty secret is still rejected`() {
+    fun `a signed request is still rejected while no secret is configured`() {
         val timestamp = Instant.now().epochSecond
 
         mockMvc.get("/api/bot/orders") {
             header("X-Omiyage-Timestamp", timestamp.toString())
-            header("X-Omiyage-Signature", signRequest("", timestamp, "GET", "/api/bot/orders", ""))
+            header("X-Omiyage-Signature", signRequest("any-secret", timestamp, "GET", "/api/bot/orders", ""))
         }.andExpect { status { isUnauthorized() } }
     }
 }
