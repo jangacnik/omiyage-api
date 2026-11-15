@@ -240,7 +240,8 @@ class OrderWebhookTest {
         LogCapture(OrderWebhook::class.java.name).use { capture ->
             OrderWebhook(OrderWebhookProperties(receiver.url, ""), profiles, admin, objectMapper)
 
-            assertThat(capture.events.map { it.formattedMessage })
+            // The logger is shared by the whole class, so a delivery attempt another test left running can log here too.
+            assertThat(capture.events.map { it.formattedMessage }.filter { it.startsWith("order webhook url is set") })
                 .containsExactly("order webhook url is set but the secret is not, so no order events are sent")
         }
     }
