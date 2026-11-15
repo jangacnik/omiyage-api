@@ -19,6 +19,8 @@ data class MeishiTokenResponse(val token: String)
 data class MeishiOAuthTokenResponse(@JsonProperty("access_token") val accessToken: String?)
 data class MeishiUserResponse(val id: String, val nickname: String?, val role: String, val status: String)
 
+private const val MAX_RETRY_AFTER_SECONDS = 3600L
+
 @Component
 class MeishiAuthClient(private val client: RestClient) {
 
@@ -31,7 +33,8 @@ class MeishiAuthClient(private val client: RestClient) {
                 .body<MeishiTokenResponse>()
         } catch (e: org.springframework.web.client.HttpClientErrorException) {
             if (e.statusCode.value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
-                return AuthError.UpstreamRateLimited(e.responseHeaders?.getFirst(HttpHeaders.RETRY_AFTER)?.toLongOrNull()?.takeIf { it >= 0 }).left()
+                val retryAfter = e.responseHeaders?.getFirst(HttpHeaders.RETRY_AFTER)?.toLongOrNull()?.takeIf { it >= 0 }
+                return AuthError.UpstreamRateLimited(retryAfter?.let { minOf(it, MAX_RETRY_AFTER_SECONDS) }).left()
             }
             return AuthError.InvalidCredentials.left()
         }

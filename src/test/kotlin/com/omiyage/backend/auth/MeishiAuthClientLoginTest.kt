@@ -91,6 +91,20 @@ class MeishiAuthClientLoginTest {
         assertEquals(HttpFailure(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts", retryAfterSeconds = 37), failure())
     }
 
+    @Test
+    fun `a Retry-After above an hour is capped at 3600 seconds`() {
+        handler = { it.respondJson(429, """{"error":"too many requests"}""", mapOf("Retry-After" to "999999")) }
+
+        assertEquals(HttpFailure(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts", retryAfterSeconds = 3600), failure())
+    }
+
+    @Test
+    fun `a Retry-After of exactly an hour is unchanged`() {
+        handler = { it.respondJson(429, """{"error":"too many requests"}""", mapOf("Retry-After" to "3600")) }
+
+        assertEquals(HttpFailure(HttpStatus.TOO_MANY_REQUESTS, "too many login attempts", retryAfterSeconds = 3600), failure())
+    }
+
     @ParameterizedTest
     @ValueSource(strings = ["Wed, 21 Oct 2026 07:28:00 GMT", "soon", "-5", ""])
     fun `a Retry-After that is not a non-negative number of seconds is dropped`(value: String) {
