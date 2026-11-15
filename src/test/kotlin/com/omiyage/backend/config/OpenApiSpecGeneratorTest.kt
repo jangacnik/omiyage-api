@@ -20,6 +20,8 @@ import com.omiyage.backend.shipment.ShipmentService
 import com.omiyage.backend.shipment.ShippingRateService
 import com.omiyage.backend.user.MeishiNicknameClient
 import com.omiyage.backend.user.MeishiProfileClient
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.fail
 import org.springdoc.core.configuration.SpringDocConfiguration
@@ -85,6 +87,19 @@ class OpenApiSpecGeneratorTest {
             Files.createDirectories(path.parent)
             Files.writeString(path, generated)
             fail("$SPEC_PATH was out of date and has been regenerated. Commit it:\nOPENAPI-BEGIN\n$generated\nOPENAPI-END")
+        }
+    }
+
+    @Test
+    fun `isPreorder is documented under the key the wire format uses, never as preorder`() {
+        val generated = mockMvc.get("/v3/api-docs").andReturn().response.contentAsString
+        val schemas = ObjectMapper().readTree(generated).path("components").path("schemas")
+        val withPreorderFlag = listOf("InventoryItemDto", "InventoryItemRequest", "OrderItemDto", "CreateOrderItemRequest")
+
+        withPreorderFlag.forEach { name ->
+            val properties = schemas.path(name).path("properties")
+            assertTrue(properties.has("isPreorder"), "$name documents isPreorder")
+            assertFalse(properties.has("preorder"), "$name does not document preorder")
         }
     }
 }
