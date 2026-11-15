@@ -62,6 +62,6 @@ jobs:
           rm -rf gitops
           git clone "https://ci-bot:${{ secrets.CI_TOKEN }}@gitea.gacnikhome.duckdns.org/tcg/homelab-gitops.git" gitops
           cd gitops
-          sed -i "s/newTag:.*/newTag: $TAG/" apps/omiyage-api/kustomization.yaml
+          sed -i "s/newTag:.*/newTag: \"$TAG\"/" apps/omiyage-api/kustomization.yaml
           git -c user.name=ci-bot -c user.email=ci-bot@gacnikhome.duckdns.org commit -qam "omiyage-api: $TAG"
           for i in 1 2 3 4 5; do git pull --rebase -q && git push -q && break; sleep 3; done
