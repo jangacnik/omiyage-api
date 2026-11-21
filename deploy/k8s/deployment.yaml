@@ -71,7 +71,7 @@ spec:
             - name: MEISHI_API_URL
               value: "http://meishi-api.default.svc.cluster.local:8080"
             - name: FRONTEND_ORIGIN
-              value: "https://omiyage.gacnikhome.duckdns.org"
+              value: "https://omiyage.gacnik.dev"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
