@@ -53,6 +53,7 @@ interface OrderRepository : JpaRepository<Order, UUID> {
     // persistence context, so a caller reading one of these orders again in the same transaction
     // would otherwise see the stale (pre-detach) shipment reference.
     @Modifying(clearAutomatically = true)
+    @Query(nativeQuery = true)
     fun detachShipment(@Param("shipmentId") shipmentId: UUID): Int
 }
 
