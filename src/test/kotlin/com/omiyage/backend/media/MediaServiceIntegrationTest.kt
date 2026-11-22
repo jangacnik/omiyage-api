@@ -11,6 +11,7 @@ import com.omiyage.backend.security.Role
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -28,6 +29,9 @@ class MediaServiceIntegrationTest : PostgresIntegrationTest() {
 
     @Autowired
     lateinit var mediaRepository: MediaRepository
+
+    @Autowired
+    lateinit var objectStore: ObjectStore
 
     private val jpegBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 1, 2, 3)
     private val admin = MeishiPrincipal(UUID.randomUUID(), "root", Role.ADMIN)
@@ -47,9 +51,12 @@ class MediaServiceIntegrationTest : PostgresIntegrationTest() {
         assertTrue(key.endsWith(".jpeg"))
         val stored = mediaService.get(key).orFail()
         assertEquals("image/jpeg", stored.contentType)
-        assertArrayEquals(jpegBytes, stored.data)
-        assertEquals(uploader.id, stored.uploaderId)
-        assertEquals(jpegBytes.size.toLong(), stored.sizeBytes)
+        assertArrayEquals(jpegBytes, stored.bytes)
+        assertArrayEquals(jpegBytes, objectStore.get(key))
+        val row = mediaRepository.findById(key).orElseThrow()
+        assertNull(row.data)
+        assertEquals(uploader.id, row.uploaderId)
+        assertEquals(jpegBytes.size.toLong(), row.sizeBytes)
     }
 
     @Test
@@ -108,9 +115,25 @@ class MediaServiceIntegrationTest : PostgresIntegrationTest() {
         mediaRepository.save(Media(oldKey, "image/jpeg", jpegBytes, createdAt = OffsetDateTime.now().minusDays(3)))
         val recentKey = mediaService.upload(MockMultipartFile("file", "photo.jpg", "image/jpeg", jpegBytes), admin).orFail()
 
-        mediaRepository.purgeUnreferencedBefore(OffsetDateTime.now().minusDays(1))
+        objectStore.put(oldKey, "image/jpeg", jpegBytes)
+
+        mediaService.purgeUnreferencedBefore(OffsetDateTime.now().minusDays(1))
 
         assertFalse(mediaRepository.existsById(oldKey))
+        assertNull(objectStore.get(oldKey))
         assertTrue(mediaRepository.existsById(recentKey))
+    }
+
+    @Test
+    fun `legacy images stored in Postgres move to the object store and stay readable`() {
+        val legacyKey = "uploads/${UUID.randomUUID()}.jpeg"
+        mediaRepository.save(Media(legacyKey, "image/jpeg", jpegBytes))
+
+        assertArrayEquals(jpegBytes, mediaService.get(legacyKey).orFail().bytes)
+        mediaService.moveLegacyImagesToObjectStore()
+
+        assertArrayEquals(jpegBytes, objectStore.get(legacyKey))
+        assertNull(mediaRepository.findById(legacyKey).orElseThrow().data)
+        assertArrayEquals(jpegBytes, mediaService.get(legacyKey).orFail().bytes)
     }
 }

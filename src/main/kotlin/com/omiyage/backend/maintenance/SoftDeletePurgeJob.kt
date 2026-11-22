@@ -4,7 +4,7 @@ import com.omiyage.backend.catalog.CategoryRepository
 import com.omiyage.backend.catalog.InventoryItemImageRepository
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.combine.CombineRequestRepository
-import com.omiyage.backend.media.MediaRepository
+import com.omiyage.backend.media.MediaService
 import com.omiyage.backend.order.OrderItemRepository
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.shipment.ShipmentRepository
@@ -28,7 +28,7 @@ class SoftDeletePurgeJob(
     private val inventoryItemImages: InventoryItemImageRepository,
     private val categories: CategoryRepository,
     private val combineRequests: CombineRequestRepository,
-    private val media: MediaRepository,
+    private val media: MediaService,
     @Value("\${omiyage.maintenance.soft-delete-retention-days}") private val retentionDays: Long,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)

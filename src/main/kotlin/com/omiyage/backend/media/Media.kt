@@ -17,8 +17,9 @@ class Media(
     @Column(name = "content_type", nullable = false)
     val contentType: String,
 
-    @Column(name = "data", nullable = false)
-    val data: ByteArray,
+    /** Only set on rows from before object storage, until LegacyMediaMigration moves them. */
+    @Column(name = "data")
+    val data: ByteArray? = null,
 
     @Column(name = "created_at", nullable = false)
     val createdAt: OffsetDateTime = OffsetDateTime.now(),
@@ -27,5 +28,5 @@ class Media(
     val uploaderId: UUID? = null,
 
     @Column(name = "size_bytes", nullable = false)
-    val sizeBytes: Long = data.size.toLong(),
+    val sizeBytes: Long = data?.size?.toLong() ?: 0L,
 )

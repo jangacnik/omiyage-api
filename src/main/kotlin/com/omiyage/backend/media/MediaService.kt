@@ -33,8 +33,11 @@ private fun ByteArray.startsWith(vararg prefix: Int): Boolean =
 private fun ByteArray.hasAt(offset: Int, text: String): Boolean =
     size >= offset + text.length && text.indices.all { this[offset + it] == text[it].code.toByte() }
 
+/** Image bytes and the content type to serve them with. */
+class StoredImage(val contentType: String, val bytes: ByteArray)
+
 @Service
-class MediaService(private val repository: MediaRepository) {
+class MediaService(private val repository: MediaRepository, private val store: ObjectStore) {
 
     private val events = LoggerFactory.getLogger("events")
 
@@ -47,13 +50,33 @@ class MediaService(private val repository: MediaRepository) {
         ensure(contentType == file.contentType) { MediaError.ContentTypeMismatch }
 
         val key = "uploads/${UUID.randomUUID()}.${contentType.substringAfter('/')}"
-        repository.save(Media(objectKey = key, contentType = contentType, data = bytes, uploaderId = uploader.id))
+        store.put(key, contentType, bytes)
+        repository.save(Media(objectKey = key, contentType = contentType, uploaderId = uploader.id, sizeBytes = bytes.size.toLong()))
         events.info("media_uploaded key={} contentType={} sizeBytes={} uploaderId={}", key, contentType, bytes.size, uploader.id)
         key
     }
 
-    fun get(key: String): Either<DomainError, Media> = either {
-        ensureNotNull(repository.findById(key).getOrNull()) { MediaError.ImageNotFound }
+    fun get(key: String): Either<DomainError, StoredImage> = either {
+        val media = ensureNotNull(repository.findById(key).getOrNull()) { MediaError.ImageNotFound }
+        val bytes = ensureNotNull(store.get(key) ?: media.data) { MediaError.ImageNotFound }
+        StoredImage(media.contentType, bytes)
+    }
+
+    fun purgeUnreferencedBefore(cutoff: OffsetDateTime): Int {
+        val keys = repository.findUnreferencedKeysBefore(cutoff)
+        keys.forEach(store::delete)
+        repository.deleteAllByIdInBatch(keys)
+        return keys.size
+    }
+
+    fun moveLegacyImagesToObjectStore(): Int {
+        val keys = repository.findKeysWithLegacyData()
+        keys.forEach { key ->
+            val media = repository.findById(key).orElseThrow()
+            store.put(key, media.contentType, checkNotNull(media.data))
+            repository.clearLegacyData(key)
+        }
+        return keys.size
     }
 
     fun requireExisting(keys: Collection<String>): Either<DomainError, Unit> = either {

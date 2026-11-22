@@ -25,6 +25,8 @@ dependencies {
     implementation("io.micrometer:micrometer-registry-prometheus")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("io.arrow-kt:arrow-core:2.2.1.1")
+    implementation(platform("software.amazon.awssdk:bom:2.46.7"))
+    implementation("software.amazon.awssdk:s3")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     // Spring MVC binds request bodies with Boot's Jackson 3 mapper, which only applies Kotlin
     // constructor defaults (isPreorder = false, quantity = 1) when this module is on the classpath.

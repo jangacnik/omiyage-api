@@ -4,7 +4,7 @@ import com.omiyage.backend.catalog.CategoryRepository
 import com.omiyage.backend.catalog.InventoryItemImageRepository
 import com.omiyage.backend.catalog.InventoryItemRepository
 import com.omiyage.backend.combine.CombineRequestRepository
-import com.omiyage.backend.media.MediaRepository
+import com.omiyage.backend.media.MediaService
 import com.omiyage.backend.order.OrderItemRepository
 import com.omiyage.backend.order.OrderRepository
 import com.omiyage.backend.shipment.ShipmentRepository
@@ -29,7 +29,7 @@ class SoftDeletePurgeJobTest {
     private val inventoryItemImages = mockk<InventoryItemImageRepository>()
     private val categories = mockk<CategoryRepository>()
     private val combineRequests = mockk<CombineRequestRepository>()
-    private val media = mockk<MediaRepository>()
+    private val media = mockk<MediaService>()
 
     private val retentionCutoffs = mutableListOf<OffsetDateTime>()
     private val mediaCutoff = mutableListOf<OffsetDateTime>()

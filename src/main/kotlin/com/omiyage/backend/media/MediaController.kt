@@ -34,16 +34,16 @@ class MediaController(private val service: MediaService) {
     /** Public because img tags cannot send the JWT. Keys are random UUIDs and never reused, so responses are immutable. */
     @GetMapping("/uploads/{filename}")
     fun download(@PathVariable filename: String): ResponseEntity<ByteArray> {
-        val media = either<DomainError, Media> {
+        val image = either<DomainError, StoredImage> {
             ensure(DOWNLOAD_FILENAME_FORMAT.matches(filename)) { MediaError.ImageNotFound }
             service.get("uploads/$filename").bind()
         }.getOrRespond()
         return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType(media.contentType))
+            .contentType(MediaType.parseMediaType(image.contentType))
             .cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable())
             .header("X-Content-Type-Options", "nosniff")
             .header("Content-Security-Policy", "default-src 'none'")
             .header("Content-Disposition", "inline")
-            .body(media.data)
+            .body(image.bytes)
     }
 }
